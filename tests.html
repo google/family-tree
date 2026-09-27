@@ -13225,6 +13225,226 @@ const m3 = tree.all.find(n => n.id === '3');
         }
     }
 
+    // Kuttappan's row says "3 daughters". Nisha is recorded F; Neena's gender cell
+    // was cleared. Neena's own "1 son; 1 daughter" ghosts made the builder slot
+    // her as their father by row order (row 81, above her husband Bobby on row 84)
+    // and stamp her male on the spot, before the deduction loop could weigh her
+    // father's head count. As a man she could not fill a daughter slot, so a
+    // ghost "Kuttappan Daughter 3" was added, numbered 3 although it sat between
+    // daughters 1 and 3.
+    //
+    // A declared count is direct evidence and must outrank row order, the weakest
+    // gender signal. When it leaves only one kind of slot open, every ungendered
+    // child is of that kind. A ghost that is still needed takes the ordinal of
+    // its birth-order position among the siblings of its role.
+    section('201. Declared Child Counts Outrank Row Order; Leftover Ghosts Take Their Birth-Order Ordinal');
+
+    {
+        try {
+            const kuttappanRows201 = ({ freeForm = '3 daughters', neenaGender = '', neethuGender = '' } = {}) => [
+                { _sourceId: 'Deepa', _sheetRow: 63, Name: 'Kuttappan', 'Year of Birth': '1945', Mother: 'Mariyakkutty', Father: 'Thomas', Spouse: 'Elsamma', 'Free Form': freeForm },
+                { _sourceId: 'Deepa', _sheetRow: 68, Name: 'Elsamma', AGE: '76' },
+                { _sourceId: 'Deepa', _sheetRow: 80, Name: 'Nisha', AGE: '47', Mother: 'Elsamma', Father: 'Kuttappan', Spouse: 'Joji', Gender: 'F', 'Free Form': '1 girl; 1 boy' },
+                { _sourceId: 'Deepa', _sheetRow: 81, Name: 'Neena', AGE: '42', Mother: 'Elsamma', Father: 'Kuttappan', Spouse: 'Bobby', Gender: neenaGender, 'Free Form': '1 son; 1 daughter' },
+                { _sourceId: 'Deepa', _sheetRow: 82, Name: 'Neethu', AGE: '38', Mother: 'Elsamma', Father: 'Kuttappan', Spouse: 'R', Gender: neethuGender, 'Free Form': '1 son - 10 years old' },
+                { _sourceId: 'Deepa', _sheetRow: 84, Name: 'Bobby', Spouse: 'Neena' },
+                { _sourceId: 'Deepa', _sheetRow: 85, Name: 'Joji', Spouse: 'Nisha' },
+                { _sourceId: 'Deepa', _sheetRow: 86, Name: 'R' }
+            ];
+            const family201 = (options) => {
+                const tree = buildTree(kuttappanRows201(options));
+                const byName = (name) => tree.all.find(n => n.name === name);
+                return { tree, byName, kids: byName('Kuttappan').children.map(id => tree.get(id)) };
+            };
+
+            // (A) The reported sheet.
+            const reported201 = family201();
+            assertEqual('Test 201.01: "3 daughters" leaves Kuttappan with exactly his three listed children',
+                reported201.kids.map(c => c.name).join(', '), 'Nisha, Neena, Neethu');
+            assertEqual('Test 201.02: No ghost daughter is added', reported201.kids.some(c => c.isGhost), false);
+            assertEqual('Test 201.03: Neena can only fill a daughter slot, so she is female', reported201.byName('Neena').gender, 'F');
+            assertEqual('Test 201.04: So can Neethu', reported201.byName('Neethu').gender, 'F');
+            assertEqual('Test 201.05: The three daughters take ordinals 1-3 in birth order',
+                reported201.kids.map(c => c._siblingOrdinal && c._siblingOrdinal.num).join(','), '1,2,3');
+            const neena201 = reported201.byName('Neena');
+            const bobby201 = reported201.byName('Bobby');
+            assertEqual('Test 201.06: Neena\'s husband Bobby is male', bobby201.gender, 'M');
+            assertEqual('Test 201.07: Bobby is one SPOUSAL_GENDER_OFFSET older than Neena',
+                bobby201.bestYob, neena201.bestYob - GAPS.SPOUSAL_GENDER_OFFSET);
+            const neenaKids201 = neena201.children.map(id => reported201.tree.get(id));
+            assertEqual('Test 201.08: Neena\'s free-form son and daughter have her as mother and Bobby as father',
+                neenaKids201.length === 2 && neenaKids201.every(c => c.momId === neena201.id && c.fatherId === bobby201.id), true);
+
+            // Deducing the daughters must give the same tree as recording them.
+            const summary201 = (family) => ['Nisha', 'Neena', 'Neethu', 'Bobby', 'Joji', 'R', 'Neena Daughter', 'Neena Son']
+                .map(name => { const n = family.byName(name); return `${name}:${n.gender}:${n.bestYob}`; }).join(' ');
+            assertEqual('Test 201.09: Genders and birth years match the sheet where Neena and Neethu are recorded F',
+                summary201(reported201), summary201(family201({ freeForm: '', neenaGender: 'F', neethuGender: 'F' })));
+
+            // (B) Neena recorded M: one daughter is genuinely missing. The ghost for her
+            // falls between Nisha and Neethu by birth order, so she is daughter 2.
+            const forced201 = family201({ neenaGender: 'M', neethuGender: 'F' });
+            assertEqual('Test 201.10: A recorded son leaves one daughter ghost, placed and numbered by birth order',
+                forced201.kids.map(c => c.name).join(', '), 'Nisha, Kuttappan Daughter 2, Neena, Neethu');
+            assertEqual('Test 201.11: There is no "Kuttappan Daughter 3"',
+                forced201.tree.all.some(n => n.name === 'Kuttappan Daughter 3'), false);
+            assertEqual('Test 201.12: Neena keeps her recorded gender', forced201.byName('Neena').gender, 'M');
+            assertEqual('Test 201.13: Nisha is daughter 1 and Neethu daughter 3',
+                [forced201.byName('Nisha')._siblingOrdinal.num, forced201.byName('Neethu')._siblingOrdinal.num].join(','), '1,3');
+
+            // (C) A mixed statement forces a gender only once the other gender's slots are full.
+            const varkeyGenders201 = (freeForm, genders) => {
+                const names = ['Kichu', 'Tintu', 'Chikku'].slice(0, genders.length);
+                const tree = buildTree([
+                    { _sourceId: 'Deepa', _sheetRow: 10, Name: 'Varkey', 'Year of Birth': '1940', Spouse: 'Mariya', 'Free Form': freeForm },
+                    { _sourceId: 'Deepa', _sheetRow: 11, Name: 'Mariya', 'Year of Birth': '1944' },
+                    ...names.map((name, i) => ({ _sourceId: 'Deepa', _sheetRow: 12 + i, Name: name, Mother: 'Mariya', Father: 'Varkey', Gender: genders[i] }))
+                ]);
+                return names.map(name => tree.all.find(n => n.name === name).gender || '-').join('');
+            };
+            assertEqual('Test 201.14: "2 daughters, 1 son" with the son recorded makes the other two daughters',
+                varkeyGenders201('2 daughters, 1 son', ['M', '', '']), 'MFF');
+            assertEqual('Test 201.15: "1 daughter, 2 sons" with the daughter recorded makes the other two sons',
+                varkeyGenders201('1 daughter, 2 sons', ['F', '', '']), 'FMM');
+            assertEqual('Test 201.16: "2 daughters, 2 sons" leaves a daughter slot and a son slot open, so no one is gendered',
+                varkeyGenders201('2 daughters, 2 sons', ['', 'F']), '-F');
+
+            // (D) Statements that are not an exhaustive head count gender no one.
+            assertEqual('Test 201.17: "2 more daughters" comes on top of the listed children',
+                varkeyGenders201('2 more daughters', ['', '']), '--');
+            assertEqual('Test 201.18: "3 children" names no gender', varkeyGenders201('3 children', ['', '', '']), '---');
+
+            // (E) A parent gendered early by her own parent's count keeps her free-form children.
+            const aneeshaFamily201 = (aneeshaGender) => {
+                const tree = buildTree([
+                    { _sourceId: 'Deepa', _sheetRow: 75, Name: 'Saju', AGE: '58', Mother: 'Thankamma', Spouse: 'Jessy', 'Free Form': '2 daughters' },
+                    { _sourceId: 'Deepa', _sheetRow: 78, Name: 'Aneesha', Mother: 'Jessy', Father: 'Saju', Gender: aneeshaGender, 'Free Form': '2 daughters' },
+                    { _sourceId: 'Deepa', _sheetRow: 79, Name: 'Annu', Mother: 'Jessy', Father: 'Saju', Gender: 'F' }
+                ]);
+                const aneesha = tree.all.find(n => n.name === 'Aneesha');
+                return { aneesha, kids: aneesha.children.map(id => tree.get(id)) };
+            };
+            const aneesha201 = aneeshaFamily201('');
+            assertEqual('Test 201.19: Saju\'s "2 daughters" makes Aneesha female', aneesha201.aneesha.gender, 'F');
+            assertEqual('Test 201.20: Aneesha still holds both of her own free-form daughters',
+                aneesha201.kids.map(c => c.name).join(', '), 'Aneesha Daughter 1, Aneesha Daughter 2');
+            assertEqual('Test 201.21: Their birth years match the sheet where Aneesha is recorded F',
+                aneesha201.kids.map(c => c.bestYob).join(','), aneeshaFamily201('F').kids.map(c => c.bestYob).join(','));
+
+            // (F) Until an ungendered couple is gendered, the spousal age gap follows row
+            // order (husband on the earlier row), not "same age". Assuming the same age
+            // left Jesmi's brothers and parents, derived from her in the meantime, one
+            // SPOUSAL_GENDER_OFFSET too old even after Jesmi herself was corrected.
+            const jesmiYobs201 = (jesmiGender) => {
+                const tree = buildTree([
+                    { _sourceId: 'Deepa', _sheetRow: 142, Name: 'Neville', 'Year of Birth': '1980', Spouse: 'Jesmi', 'Free Form': 'one daughter, one son' },
+                    { _sourceId: 'Deepa', _sheetRow: 146, Name: 'Jaseentha', Spouse: 'Jose' },
+                    { _sourceId: 'Deepa', _sheetRow: 148, Name: 'Jesmi Brother 1', 'Year of Death': '1990' },
+                    { _sourceId: 'Deepa', _sheetRow: 149, Name: 'Jesmi Brother 2' },
+                    { _sourceId: 'Deepa', _sheetRow: 150, Name: 'Jesmi', Mother: 'Jaseentha', Father: 'Jose', Spouse: 'Neville', Gender: jesmiGender }
+                ]);
+                return ['Jesmi', 'Jesmi Brother 1', 'Jesmi Brother 2', 'Jaseentha', 'Jose']
+                    .map(name => `${name}:${tree.all.find(n => n.name === name).bestYob}`).join(' ');
+            };
+            const jesmi201 = jesmiYobs201('');
+            assertEqual('Test 201.22: Jesmi (row 150) is one SPOUSAL_GENDER_OFFSET younger than Neville (row 142, b. 1980)',
+                jesmi201.split(' ')[0], `Jesmi:${1980 + GAPS.SPOUSAL_GENDER_OFFSET}`);
+            assertEqual('Test 201.23: Her family\'s birth years match the sheet where Jesmi is recorded F',
+                jesmi201, jesmiYobs201('F'));
+
+            // Unit: the slot rule behind (A)-(D).
+            const resolve201 = (declared, genders) =>
+                FamilyTreeBuilder._resolveDeclaredChildGender(declared, genders.map(gender => ({ gender })));
+            assertEqual('Test 201.24: No son slot, and every child fits a daughter slot → F', resolve201({ F: 3, M: 0 }, ['F', '', '']), 'F');
+            assertEqual('Test 201.25: Son slots full → the rest are daughters', resolve201({ F: 2, M: 1 }, ['M', '', '']), 'F');
+            assertEqual('Test 201.26: Daughter slots full → the rest are sons', resolve201({ F: 1, M: 2 }, ['F', '', '']), 'M');
+            assertEqual('Test 201.27: Both kinds of slot open → nothing is forced', resolve201({ F: 2, M: 2 }, ['', 'F']), '');
+            assertEqual('Test 201.28: More children than slots → nothing is forced', resolve201({ F: 2, M: 0 }, ['', '', '']), '');
+            assertEqual('Test 201.29: A recorded son contradicts "3 daughters" → nothing is forced', resolve201({ F: 3, M: 0 }, ['F', 'M', '']), '');
+            assertEqual('Test 201.30: Every child already gendered → nothing to do', resolve201({ F: 2, M: 0 }, ['F', 'F']), '');
+
+            // Unit: the row-order spousal offset behind (F).
+            const offset201 = FamilyTreeBuilder._spousalYobOffsetByRowOrder;
+            assertEqual('Test 201.31: Known partner on the earlier row is the husband → the other is younger',
+                offset201({ _sheetRow: 142 }, { _sheetRow: 150 }), GAPS.SPOUSAL_GENDER_OFFSET);
+            assertEqual('Test 201.32: Known partner on the later row is the wife → the other is older',
+                offset201({ _sheetRow: 150 }, { _sheetRow: 142 }), -GAPS.SPOUSAL_GENDER_OFFSET);
+            assertEqual('Test 201.33: A ghost partner is assumed to be the same age',
+                offset201({ _sheetRow: 81 }, { isGhost: true, _sheetRow: 90 }), 0);
+            assertEqual('Test 201.34: Unknown or equal rows → same age',
+                [offset201({}, { _sheetRow: 5 }), offset201({ _sheetRow: 5 }, { _sheetRow: 5 })].join(','), '0,0');
+        } catch (e) {
+            assertEqual('Test 201 execution failed', e.message, '');
+        }
+    }
+
+    // A child created from a parent's own note ("Aneesha Daughter 1" from Aneesha's
+    // "2 daughters") is slotted as that parent's daughter or son when it is created,
+    // from the parent's gender at that moment. A spouseless parent whose gender is only
+    // deduced later (from Saju's "2 daughters") must still end up as the child's mother
+    // or father, giving the child the same ancestors as when the gender is recorded.
+    section('202. Free-Form Children Get Their Mother Or Father Link When The Parent\'s Gender Is Deduced');
+
+    {
+        try {
+            const spouselessParent202 = ({ name, gender, sibling, siblingGender, count }) => {
+                const tree = buildTree([
+                    { _sourceId: 'Deepa', _sheetRow: 75, Name: 'Saju', AGE: '58', Mother: 'Thankamma', Spouse: 'Jessy', 'Free Form': count },
+                    { _sourceId: 'Deepa', _sheetRow: 78, Name: name, Mother: 'Jessy', Father: 'Saju', Gender: gender, 'Free Form': count },
+                    { _sourceId: 'Deepa', _sheetRow: 79, Name: sibling, Mother: 'Jessy', Father: 'Saju', Gender: siblingGender }
+                ]);
+                const parent = tree.all.find(n => n.name === name);
+                const nameOf = (id) => (tree.get(id) ? tree.get(id).name : '-');
+                const kids = parent.children.map(id => tree.get(id));
+                return {
+                    gender: parent.gender,
+                    links: kids.map(c => `${c.name}: mother ${nameOf(c.momId)}, father ${nameOf(c.fatherId)}`).join('; '),
+                    ancestors: kids.map(c => nameOf(tree.getOldestAncestor(c.id))).join(', '),
+                    yobs: kids.map(c => c.bestYob).join(', ')
+                };
+            };
+            const flat202 = (family) => [family.gender, family.links, family.ancestors, family.yobs].join(' | ');
+
+            // (A) Mother: Aneesha has no spouse and no recorded gender.
+            const aneesha202 = (gender) => spouselessParent202({ name: 'Aneesha', gender, sibling: 'Annu', siblingGender: 'F', count: '2 daughters' });
+            const aneeshaDeduced202 = aneesha202('');
+            assertEqual('Test 202.01: Saju\'s "2 daughters" makes Aneesha female', aneeshaDeduced202.gender, 'F');
+            assertEqual('Test 202.02: Her free-form daughters have her as mother',
+                aneeshaDeduced202.links, 'Aneesha Daughter 1: mother Aneesha, father -; Aneesha Daughter 2: mother Aneesha, father -');
+            assertEqual('Test 202.03: Their oldest ancestor is Thankamma, not the ghost itself',
+                aneeshaDeduced202.ancestors, 'Thankamma, Thankamma');
+            assertEqual('Test 202.04: Links, oldest ancestors and birth years match the sheet where Aneesha is recorded F',
+                flat202(aneeshaDeduced202), flat202(aneesha202('F')));
+
+            // (B) Father: the same with sons.
+            const anish202 = (gender) => spouselessParent202({ name: 'Anish', gender, sibling: 'Arun', siblingGender: 'M', count: '2 sons' });
+            const anishDeduced202 = anish202('');
+            assertEqual('Test 202.05: Saju\'s "2 sons" makes Anish male, and his free-form sons have him as father',
+                `${anishDeduced202.gender} | ${anishDeduced202.links}`, 'M | Anish Son 1: mother -, father Anish; Anish Son 2: mother -, father Anish');
+            assertEqual('Test 202.06: Links, oldest ancestors and birth years match the sheet where Anish is recorded M',
+                flat202(anishDeduced202), flat202(anish202('M')));
+
+            // Unit: the linking step acts only on a known gender and never overwrites a link.
+            const builder202 = new FamilyTreeBuilder([], {});
+            const link202 = (parent, child) => {
+                builder202.nodeMap = { a: { id: 'a', name: 'A', ...parent } };
+                const n = { id: 'c', _namedParentId: 'a', ...child };
+                const changed = builder202._linkChildToGenderedNamedParent(n);
+                return `${changed} mother=${n.momId || '-'}/${n.mom || '-'} father=${n.fatherId || '-'}/${n.father || '-'}`;
+            };
+            assertEqual('Test 202.07: A named mother fills the empty mother slot', link202({ gender: 'F' }, {}), 'true mother=a/A father=-/-');
+            assertEqual('Test 202.08: A named father fills the empty father slot', link202({ gender: 'M' }, {}), 'true mother=-/- father=a/A');
+            assertEqual('Test 202.09: Unknown gender → no slot is filled', link202({}, {}), 'false mother=-/- father=-/-');
+            assertEqual('Test 202.10: Another recorded mother is kept', link202({ gender: 'F' }, { momId: 'b', mom: 'B' }), 'false mother=b/B father=-/-');
+            assertEqual('Test 202.11: A parent already in the other slot is left to the inverted-slot correction',
+                link202({ gender: 'F' }, { fatherId: 'a', father: 'A' }), 'false mother=-/- father=a/A');
+            assertEqual('Test 202.12: A parent younger than MIN_PARENTAL_AGE at the birth is not linked',
+                link202({ gender: 'F', yob: 2000 }, { yob: 2000 + GAPS.MIN_PARENTAL_AGE - 1 }), 'false mother=-/- father=-/-');
+        } catch (e) {
+            assertEqual('Test 202 execution failed', e.message, '');
+        }
+    }
+
     // ══════════════════════════════════════════════════════════════════════════
     //  SUMMARY
     // ══════════════════════════════════════════════════════════════════════════

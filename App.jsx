@@ -8791,12 +8791,43 @@ ${b64Jsx}
             return FamilyTreeBuilder._inferHusbandYobFromWife(known, unknown, kYob);
         }
 
-        // Unknown gender fallback: assume same age
+        // Unknown gender fallback. Borrow the tie-breaker that partner gender inference applies
+        // later (husband on the earlier row, see _disambiguatePartnerGendersBySeniority) rather
+        // than assuming the same age: relatives whose birth years are derived from this guess
+        // before the couple is gendered keep them even after the guess is corrected.
         if (!unknown._inferredYob) {
-            unknown._inferredYob = kYob;
+            unknown._inferredYob = kYob + FamilyTreeBuilder._spousalYobOffsetByRowOrder(known, unknown);
             return true;
         }
         return false;
+    }
+
+    /**
+     * Returns the birth-year offset of an ungendered partner relative to a partner with a known
+     * birth year, following the sheet convention that a husband is listed on an earlier row than
+     * his wife. A ghost has no row of its own, so a couple with a ghost partner, or whose rows
+     * are equal or unknown, is assumed to be the same age.
+     *
+     * @param {Object} known - Partner with a known birth year
+     * @param {Object} unknown - Partner whose birth year is being inferred
+     * @returns {number} `+SPOUSAL_GENDER_OFFSET` if `known` is on the earlier row (the husband),
+     *     `-SPOUSAL_GENDER_OFFSET` if it is on the later row, otherwise 0
+     *
+     * @example
+     * FamilyTreeBuilder._spousalYobOffsetByRowOrder({ _sheetRow: 142 }, { _sheetRow: 150 });
+     * // => 2 (the row-142 partner is taken to be the husband, so the row-150 wife is 2 years younger)
+     *
+     * @example
+     * FamilyTreeBuilder._spousalYobOffsetByRowOrder({ _sheetRow: 81 }, { isGhost: true, _sheetRow: 81 });
+     * // => 0 (ghost partner: same age)
+     */
+    static _spousalYobOffsetByRowOrder(known, unknown) {
+        if (known.isGhost || unknown.isGhost) return 0;
+        const kRow = FamilyTreeBuilder.getNodeSheetRow(known);
+        const uRow = FamilyTreeBuilder.getNodeSheetRow(unknown);
+        if (!kRow || !uRow || kRow === uRow) return 0;
+        const offset = FamilyTreeBuilder.GENERATIONAL_GAPS.SPOUSAL_GENDER_OFFSET;
+        return kRow < uRow ? offset : -offset;
     }
 
     /**
@@ -11033,6 +11064,9 @@ ${b64Jsx}
      * // no-op on empty list
      */
     _runSingleDeductionCycle(deduplicated) {
+        // Declared child counts ("3 daughters") first: they are direct evidence, and the
+        // spouse ages and partner genders derived next must build on them, not race them.
+        this.inferDeclaredChildGenders();
         this.inferYobs(deduplicated);
         this.inferGenders(deduplicated);
         this.inferLocations(deduplicated);
@@ -11110,6 +11144,7 @@ ${b64Jsx}
         this._sortParentChildrenChronologically();
         this.inferYobs(Object.values(this.nodeMap));
         this._sortParentChildrenChronologically();
+        this._renumberUnmergedFreeFormGhosts();
         this.ensureEveryParentHasPartner(deduplicated);
         this.mergeDisconnectedRoots(deduplicated);
         this.inferDeaths(Object.values(this.nodeMap));
@@ -11426,17 +11461,24 @@ ${b64Jsx}
      * Resolves parent/spouse roles by spreadsheet row-order convention when both parent and spouse names
      * are gender-neutral (traditional genealogical sheets list husband on an earlier row than wife).
      *
+     * The role is only provisional, so the parent's gender is deliberately left unset. Row order
+     * is the weakest gender signal a sheet offers. Stamping it this early would let it outrank a
+     * stronger fact that is only weighed later, such as the parent's own parent writing
+     * "3 daughters". The deduction loop re-derives the same answer when nothing better exists
+     * (`_disambiguatePartnerGendersBySeniority`: age first, then row), and
+     * `_correctInvertedParentAssignment` re-slots the child once genders are known.
+     *
      * @param {Object} n - Child node being linked
      * @param {Object} pNode - Named parent node with gender-neutral name and spouse
      * @returns {void}
      *
      * @example
      * builder._assignParentRoleByRowOrder(childNode, wifeOnLaterRow);
-     * // => assigns wifeOnLaterRow as mother ('F') and earlier-row spouse as father
+     * // => provisionally slots wifeOnLaterRow as mother and the earlier-row spouse as father
      *
      * @example
      * builder._assignParentRoleByRowOrder(childNode, husbandOnEarlierRow);
-     * // => assigns husbandOnEarlierRow as father ('M') and later-row spouse as mother
+     * // => provisionally slots husbandOnEarlierRow as father; husbandOnEarlierRow.gender stays unset
      */
     _assignParentRoleByRowOrder(n, pNode) {
         const pRow = FamilyTreeBuilder.getNodeSheetRow(pNode);
@@ -11444,13 +11486,11 @@ ${b64Jsx}
         const spRow = spCandidate ? FamilyTreeBuilder.getNodeSheetRow(spCandidate) : null;
         if (!pRow || !spRow || pRow === spRow) return;
         if (pRow > spRow) {
-            pNode.gender = 'F';
             n.mom = pNode.name;
             n.momId = pNode.id;
             n.father = pNode.spouse;
             if (spCandidate) n.fatherId = spCandidate.id;
         } else {
-            pNode.gender = 'M';
             n.father = pNode.name;
             n.fatherId = pNode.id;
             if (this._isSpouseEligibleAsMother(pNode, pNode.spouse)) {
@@ -12891,6 +12931,105 @@ ${b64Jsx}
                 - (FamilyTreeBuilder._parseNumberedSiblingRole(b)?.num || 0));
             const targets = FamilyTreeBuilder._claimRealsForGenderGroup(gender, group.length, bySeniority, claimed);
             targets.forEach((real, idx) => this._mergeGhostIntoRealChild(real, group[idx], parentNode, unanimous));
+        }
+    }
+
+    /**
+     * Renumbers the free-form child ghosts that no real child absorbed, so each
+     * one's ordinal matches its birth order among siblings of the same role.
+     *
+     * "3 daughters" on Kuttappan's row expands into "Kuttappan Daughter 1..3"
+     * before any real child is matched. If only Nisha (1979) and Neethu (1988)
+     * absorb a ghost, the survivor is simply the ordinal left over, "Daughter 3",
+     * even when its inferred birth year (~1982) draws it between them. Once the
+     * final birth years are known, the daughters are put in birth order and
+     * numbered 1..N again. The survivor becomes "Kuttappan Daughter 2", and the
+     * ordinals the real daughters inherited, which sibling sorting reads, move
+     * with it.
+     *
+     * Numbering that the sheet states itself is never changed: a role is skipped
+     * when a real child's own name is "<Parent> Daughter <N>".
+     *
+     * @returns {boolean} True if any ghost was renamed or any ordinal changed
+     *
+     * @example
+     * // Nisha (1979, ordinal 1), ghost "Kuttappan Daughter 3" (~1982), Neethu (1988, ordinal 2)
+     * builder._renumberUnmergedFreeFormGhosts();
+     * // => true; the ghost becomes "Kuttappan Daughter 2" and Neethu's ordinal becomes 3
+     *
+     * @example
+     * // Annu (1985, ordinal 1), ghost "Saju Daughter 2" (~1990)
+     * builder._renumberUnmergedFreeFormGhosts();
+     * // => false; the numbering already follows birth order
+     */
+    _renumberUnmergedFreeFormGhosts() {
+        let changed = false;
+        const birthYear = (c) => c.yob || c._inferredYob || 9999;
+        for (const parent of Object.values(this.nodeMap)) {
+            if (!parent || !parent.children || parent.children.length === 0) continue;
+            const kids = parent.children.map(id => this.nodeMap[id]).filter(Boolean);
+            const survivorsByRole = new Map();
+            kids.forEach(c => {
+                if (!c.isGhost || !c._fromFreeForm || c._isAdditional || c._namedParentId !== parent.id) return;
+                if (!FamilyTreeBuilder._isGenericNumberedChildName(c.name, [parent.name])) return;
+                const parsed = FamilyTreeBuilder._parseNumberedSiblingRole(c.name);
+                if (!parsed) return;
+                if (!survivorsByRole.has(parsed.role)) survivorsByRole.set(parsed.role, []);
+                survivorsByRole.get(parsed.role).push(c);
+            });
+
+            const reals = kids.filter(c => !c.isGhost);
+            for (const [role, survivors] of survivorsByRole) {
+                const sheetNumbersRole = reals.some(c => FamilyTreeBuilder._isGenericNumberedChildName(c.name, [parent.name])
+                    && FamilyTreeBuilder._parseNumberedSiblingRole(c.name)?.role === role);
+                if (sheetNumbersRole) continue;
+
+                const members = [...reals.filter(c => c._siblingOrdinal?.role === role), ...survivors];
+                members.sort((a, b) => (birthYear(a) - birthYear(b)) || (kids.indexOf(a) - kids.indexOf(b)));
+                members.forEach((c, idx) => {
+                    const num = idx + 1;
+                    if (!c.isGhost) {
+                        if (c._siblingOrdinal.num === num) return;
+                        c._siblingOrdinal = { role, num };
+                    } else {
+                        if (FamilyTreeBuilder._parseNumberedSiblingRole(c.name).num === num) return;
+                        this._renameGhostNode(c, c.name.replace(/\d+$/, String(num)));
+                        c._nameChildNumber = num;
+                    }
+                    changed = true;
+                });
+            }
+        }
+        if (changed) this._sortParentChildrenChronologically();
+        return changed;
+    }
+
+    /**
+     * Renames a ghost node and keeps the builder's name index in step.
+     *
+     * @param {Object} node - Ghost node to rename
+     * @param {string} newName - Replacement display name
+     *
+     * @example
+     * builder._renameGhostNode(ghost, 'Kuttappan Daughter 2');
+     * // ghost.name === 'Kuttappan Daughter 2'; name2nodes['kuttappan daughter 2'] includes ghost
+     *
+     * @example
+     * builder._renameGhostNode(ghost, ghost.name);
+     * // no-op apart from re-indexing under the same key
+     */
+    _renameGhostNode(node, newName) {
+        const oldKey = (node.name || '').toLowerCase().trim();
+        const newKey = newName.toLowerCase().trim();
+        if (this.name2nodes && this.name2nodes[oldKey]) {
+            this.name2nodes[oldKey] = this.name2nodes[oldKey].filter(x => x !== node);
+            if (this.name2nodes[oldKey].length === 0) delete this.name2nodes[oldKey];
+        }
+        node.name = newName;
+        node._normName = newKey;
+        if (this.name2nodes) {
+            if (!this.name2nodes[newKey]) this.name2nodes[newKey] = [];
+            if (!this.name2nodes[newKey].includes(node)) this.name2nodes[newKey].push(node);
         }
     }
 
@@ -16637,9 +16776,7 @@ ${b64Jsx}
                     const c = this.nodeMap[cid];
                     if (!c) return false;
                     if (c.momId === p.id || c.fatherId === p.id) return true;
-                    const isUngendered = !p.gender || (p.gender !== 'M' && p.gender !== 'F');
-                    const bioCompatible = !(p.yob && c.yob && (c.yob - p.yob < FamilyTreeBuilder.GENERATIONAL_GAPS.MIN_PARENTAL_AGE));
-                    return Boolean(c._namedParentId === p.id && isUngendered && bioCompatible);
+                    return FamilyTreeBuilder._isHeldByNamedParent(c, p);
                 });
             }
         });
@@ -18879,15 +19016,42 @@ ${b64Jsx}
             if (n.fatherId && this.nodeMap[n.fatherId] && !this.nodeMap[n.fatherId].children.includes(n.id)) {
                 this.nodeMap[n.fatherId].children.push(n.id);
             }
-            if (n._namedParentId && this.nodeMap[n._namedParentId] && !this.nodeMap[n._namedParentId].children.includes(n.id)) {
-                const np = this.nodeMap[n._namedParentId];
-                const isUngendered = !np.gender || (np.gender !== 'M' && np.gender !== 'F');
-                const bioCompatible = !(np.yob && n.yob && (n.yob - np.yob < FamilyTreeBuilder.GENERATIONAL_GAPS.MIN_PARENTAL_AGE));
-                if (isUngendered && bioCompatible) {
-                    np.children.push(n.id);
-                }
+            const np = n._namedParentId && this.nodeMap[n._namedParentId];
+            if (np && !np.children.includes(n.id) && FamilyTreeBuilder._isHeldByNamedParent(n, np)) {
+                np.children.push(n.id);
             }
         });
+    }
+
+    /**
+     * Whether a child is still linked to the parent its name was derived from
+     * (Aneesha, for "Aneesha Daughter 1") when neither momId nor fatherId points
+     * at that parent.
+     *
+     * A named parent of unknown gender cannot be slotted as mother or father, so
+     * the name is the child's only link. When the parent's gender becomes known
+     * later, the link must survive until someone else fills that parent's slot.
+     * Otherwise a single mother whose gender is deduced late (from her own
+     * parent's "2 daughters") would lose the children her row declared.
+     *
+     * @param {Object} child - Child node carrying `_namedParentId`
+     * @param {Object} parent - Candidate named parent node
+     * @returns {boolean} True if the child belongs in the parent's children list
+     *
+     * @example
+     * FamilyTreeBuilder._isHeldByNamedParent({ _namedParentId: 'a' }, { id: 'a', gender: 'F' });
+     * // => true - no mother is recorded, so the named mother keeps the child
+     *
+     * @example
+     * FamilyTreeBuilder._isHeldByNamedParent({ _namedParentId: 'a', momId: 'b' }, { id: 'a', gender: 'F' });
+     * // => false - another mother holds the slot
+     */
+    static _isHeldByNamedParent(child, parent) {
+        if (!child || !parent || child._namedParentId !== parent.id) return false;
+        if (parent.yob && child.yob && child.yob - parent.yob < FamilyTreeBuilder.GENERATIONAL_GAPS.MIN_PARENTAL_AGE) return false;
+        if (parent.gender === 'F') return !child.momId;
+        if (parent.gender === 'M') return !child.fatherId;
+        return true;
     }
 
     /**
@@ -19267,6 +19431,44 @@ ${b64Jsx}
     }
 
     /**
+     * Links a child to the parent it was created from (`_namedParentId`) once that parent's
+     * gender is known: a mother fills the empty `momId`, a father the empty `fatherId`.
+     *
+     * A ghost's parent slot is picked when the ghost is created, from the parent's gender at
+     * that moment. A spouseless parent with no gender yet therefore leaves both slots empty
+     * (Aneesha's own "2 daughters"). Her gender is deduced only later (Saju's "2 daughters"),
+     * so without this step her ghost daughters would have no mother, although recording her
+     * GENDER as F gives them one. Parents with a spouse don't need it: row order slots their
+     * children provisionally, and `_correctInvertedParentAssignment` fixes the slot later.
+     *
+     * Never overwrites a link. The slot must be empty, the child must not already hold the
+     * parent in the other slot, and the MIN_PARENTAL_AGE check of `_isHeldByNamedParent` applies.
+     *
+     * @param {Object} n - Child node
+     * @returns {boolean} True if a parent slot was filled
+     *
+     * @example
+     * // Aneesha: gender deduced F, no spouse; her ghost "Aneesha Daughter 1" has no parent links
+     * builder._linkChildToGenderedNamedParent(aneeshaDaughter1);
+     * // => true; aneeshaDaughter1.momId === aneesha.id and aneeshaDaughter1.mom === 'Aneesha'
+     *
+     * @example
+     * // The named parent's gender is still unknown
+     * builder._linkChildToGenderedNamedParent(childOfUngenderedParent);
+     * // => false; both slots stay empty
+     */
+    _linkChildToGenderedNamedParent(n) {
+        const parent = n && n._namedParentId && this.nodeMap[n._namedParentId];
+        if (!parent || n.momId === parent.id || n.fatherId === parent.id) return false;
+        const slot = { F: ['momId', 'mom'], M: ['fatherId', 'father'] }[parent.gender];
+        if (!slot || !FamilyTreeBuilder._isHeldByNamedParent(n, parent)) return false;
+        const [idKey, nameKey] = slot;
+        n[idKey] = parent.id;
+        n[nameKey] = parent.name;
+        return true;
+    }
+
+    /**
      * Deduces gender for a node and its immediate relatives based on parental roles and spouse types.
      *
      * @param {Object} n - Domain Person instance
@@ -19319,6 +19521,7 @@ ${b64Jsx}
      */
     _inferRoleGenders(nodes) {
         nodes.forEach(n => this._correctInvertedParentAssignment(n));
+        nodes.forEach(n => this._linkChildToGenderedNamedParent(n));
         nodes.forEach(n => this._inferNodeGendersFromRoles(n));
     }
 
@@ -19478,6 +19681,105 @@ ${b64Jsx}
                 }
             }
         });
+    }
+
+    /**
+     * Genders a parent's ungendered children when the parent's free-form
+     * statement leaves them only one kind of slot to fill.
+     *
+     * "3 daughters" on Kuttappan's row expands into three daughter ghosts. If
+     * his real children are Nisha (F), Neena (?) and Neethu (?), there is no son
+     * slot at all, so Neena and Neethu can only be two of the three daughters.
+     * The same count settles a mixed statement once one gender's slots are full:
+     * with "2 daughters, 1 son" and a known son, the rest are daughters. While a
+     * daughter slot and a son slot are both open, which one a child fills is a
+     * guess (Manesh's "2 daughters, 2 sons"), so nothing is assigned.
+     *
+     * A declared count is direct evidence, so this runs at the top of every
+     * deduction cycle, before spouse ages and partner genders are derived from
+     * the weaker age and row-order heuristics.
+     *
+     * Statements that are not an exhaustive head count are ignored: "2 more
+     * daughters" (`_isAdditional`) comes on top of the listed children, and
+     * "3 children" names no gender. So is a statement that known genders
+     * contradict (more known sons than declared sons), because it cannot be
+     * describing every listed child.
+     *
+     * @returns {boolean} True if any child's gender was assigned
+     *
+     * @example
+     * // Kuttappan: "3 daughters"; children Nisha (F), Neena (?) and Neethu (?)
+     * builder.inferDeclaredChildGenders();
+     * // => true; Neena.gender === 'F' and Neethu.gender === 'F'
+     *
+     * @example
+     * // Manesh: "2 daughters, 2 sons"; children John (?) and Mary (F)
+     * builder.inferDeclaredChildGenders();
+     * // => false; John could fill a daughter slot or a son slot
+     */
+    inferDeclaredChildGenders() {
+        const declaredByParent = new Map();
+        const childrenByParent = new Map();
+        for (const n of Object.values(this.nodeMap)) {
+            if (!n) continue;
+            if (n.isGhost) {
+                if (!n._fromFreeForm || n._isAdditional || !this.nodeMap[n._namedParentId]) continue;
+                const tally = declaredByParent.get(n._namedParentId) || { F: 0, M: 0, genderless: 0 };
+                const gender = FamilyTreeBuilder._ghostDeclaredGender(n);
+                if (gender) tally[gender]++;
+                else tally.genderless++;
+                declaredByParent.set(n._namedParentId, tally);
+                continue;
+            }
+            new Set([n.momId, n.fatherId]).forEach(pid => {
+                if (!pid) return;
+                if (!childrenByParent.has(pid)) childrenByParent.set(pid, []);
+                childrenByParent.get(pid).push(n);
+            });
+        }
+
+        let changed = false;
+        for (const [parentId, tally] of declaredByParent) {
+            if (tally.genderless > 0) continue;
+            const kids = childrenByParent.get(parentId) || [];
+            const gender = FamilyTreeBuilder._resolveDeclaredChildGender(tally, kids);
+            if (!gender) continue;
+            kids.forEach(c => {
+                if (c.gender === 'F' || c.gender === 'M') return;
+                c.gender = gender;
+                changed = true;
+            });
+        }
+        return changed;
+    }
+
+    /**
+     * Decides which gender, if any, every ungendered child of a parent must
+     * have, given the daughters and sons the parent declared.
+     *
+     * @param {{F: number, M: number}} declared - Declared daughter (F) and son (M) counts
+     * @param {Object[]} kids - The parent's real (non-ghost) children
+     * @returns {'F'|'M'|''} The gender forced on all ungendered children, or '' if none is
+     *
+     * @example
+     * FamilyTreeBuilder._resolveDeclaredChildGender({ F: 3, M: 0 }, [{ gender: 'F' }, {}, {}]);
+     * // => 'F' - there is no son slot, and all 3 children fit the 3 daughter slots
+     *
+     * @example
+     * FamilyTreeBuilder._resolveDeclaredChildGender({ F: 2, M: 2 }, [{}, { gender: 'F' }]);
+     * // => '' - a daughter slot and a son slot are both still open
+     */
+    static _resolveDeclaredChildGender(declared, kids) {
+        const known = { F: 0, M: 0 };
+        let unknown = 0;
+        kids.forEach(c => {
+            if (c.gender === 'F' || c.gender === 'M') known[c.gender]++;
+            else unknown++;
+        });
+        if (unknown === 0 || known.F > declared.F || known.M > declared.M) return '';
+        if (known.M === declared.M && known.F + unknown <= declared.F) return 'F';
+        if (known.F === declared.F && known.M + unknown <= declared.M) return 'M';
+        return '';
     }
 
     /**
