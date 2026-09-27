@@ -194,6 +194,8 @@ try {
     const matchesPersonFilterSrc = extractFunction(source, 'matchesPersonFilter');
     const filterBadgeConfigSrc = "const FILTER_BADGE_CONFIG = Object.freeze(" + extractBlock(source, "{\n    family: {") + ");";
     const getPersonCardThemeSrc = extractFunction(source, 'getPersonCardTheme');
+    const extractSheetIdFromUrlSrc = extractFunction(source, 'extractSheetIdFromUrl');
+    const resolveInitialSheetUrlSrc = extractFunction(source, 'resolveInitialSheetUrl');
 
     const [
         CSVParser, Person, FamilyTree, FamilyTreeBuilder,
@@ -202,7 +204,8 @@ try {
         shouldRerootForPerson, matchesPersonFilter, FILTER_BADGE_CONFIG,
         getPersonCardTheme, executeBackgroundTreeTransition,
         computeLayoutAnchorShift, computeUpdatedTreeLayout,
-        findBestAnchorNode, calculateShiftedCamera
+        findBestAnchorNode, calculateShiftedCamera,
+        resolveInitialSheetUrl
     ] = new Function(`
         ${csvParserSrc}
         ${personSrc}
@@ -243,6 +246,9 @@ try {
         ${matchesPersonFilterSrc}
         ${filterBadgeConfigSrc}
         ${getPersonCardThemeSrc}
+        const DEFAULT_URL = 'https://docs.google.com/spreadsheets/d/1ZDpcz2ACmG63dUjHLfoHZSW7-dG51FbzaJVcqHYdkEI/edit?usp=sharing';
+        ${extractSheetIdFromUrlSrc}
+        ${resolveInitialSheetUrlSrc}
         FamilyTreeBuilder.matchesPersonFilter = matchesPersonFilter;
         FamilyTreeBuilder.FILTER_BADGE_CONFIG = FILTER_BADGE_CONFIG;
         FamilyTreeBuilder.computeFilterHighlightedIds = function(tree, activeFilter) {
@@ -264,7 +270,8 @@ try {
             shouldRerootForPerson, matchesPersonFilter, FILTER_BADGE_CONFIG,
             getPersonCardTheme, executeBackgroundTreeTransition,
             computeLayoutAnchorShift, computeUpdatedTreeLayout,
-            findBestAnchorNode, calculateShiftedCamera
+            findBestAnchorNode, calculateShiftedCamera,
+            resolveInitialSheetUrl
         ];
     `)();
 
@@ -13442,6 +13449,48 @@ const m3 = tree.all.find(n => n.id === '3');
                 link202({ gender: 'F', yob: 2000 }, { yob: 2000 + GAPS.MIN_PARENTAL_AGE - 1 }), 'false mother=-/- father=-/-');
         } catch (e) {
             assertEqual('Test 202 execution failed', e.message, '');
+        }
+    }
+
+    // ══════════════════════════════════════════════════════════════════════════
+    //  203. Dynamic Google Sheet ID Resolution from URL Query Parameters
+    // ══════════════════════════════════════════════════════════════════════════
+    section('203. Dynamic Google Sheet ID Resolution from URL Query Parameters (?id=...)');
+    {
+        try {
+            // Test 203.01: ?id=<rootSheetId> resolves to root Google Sheets edit URL
+            const urlWithRootId = resolveInitialSheetUrl('?id=1ZDpcz2ACmG63dUjHLfoHZSW7-dG51FbzaJVcqHYdkEI');
+            assertEqual('Test 203.01: ?id=<rootSheetId> resolves to root Google Sheets edit URL',
+                urlWithRootId, 'https://docs.google.com/spreadsheets/d/1ZDpcz2ACmG63dUjHLfoHZSW7-dG51FbzaJVcqHYdkEI/edit');
+
+            // Test 203.02: ?id=<customId> resolves to custom Google Sheets edit URL
+            const customId = '1BxiMVs0XRA5nFMdKvBdBZjgmUUqptlbs74OgvE2upms';
+            const urlCustom = resolveInitialSheetUrl(`?id=${customId}`);
+            assertEqual('Test 203.02: ?id=<customId> resolves to custom Google Sheets edit URL',
+                urlCustom, `https://docs.google.com/spreadsheets/d/${customId}/edit`);
+
+            // Test 203.03: ?sheet=<id> resolves correctly
+            assertEqual('Test 203.03: ?sheet=<id> resolves correctly',
+                resolveInitialSheetUrl(`?sheet=${customId}`), `https://docs.google.com/spreadsheets/d/${customId}/edit`);
+
+            // Test 203.04: ?url=<fullUrl> resolves directly
+            assertEqual('Test 203.04: ?url=<fullUrl> resolves directly',
+                resolveInitialSheetUrl(`?url=https://docs.google.com/spreadsheets/d/${customId}/edit`), `https://docs.google.com/spreadsheets/d/${customId}/edit`);
+
+            // Test 203.05: Fallback to DEFAULT_URL when empty query string is passed
+            const defaultUrlExpected = 'https://docs.google.com/spreadsheets/d/1ZDpcz2ACmG63dUjHLfoHZSW7-dG51FbzaJVcqHYdkEI/edit?usp=sharing';
+            assertEqual('Test 203.05: Empty query string falls back to DEFAULT_URL',
+                resolveInitialSheetUrl(''), defaultUrlExpected);
+
+            // Test 203.06: Fallback to DEFAULT_URL when unrelated query string is passed
+            assertEqual('Test 203.06: Unrelated query string falls back to DEFAULT_URL',
+                resolveInitialSheetUrl('?other=foo'), defaultUrlExpected);
+
+            // Test 203.07: Fallback to DEFAULT_URL when null is passed
+            assertEqual('Test 203.07: Null query string falls back to DEFAULT_URL',
+                resolveInitialSheetUrl(null), defaultUrlExpected);
+        } catch (e) {
+            assertEqual('Test 203 execution failed', e.message, '');
         }
     }
 

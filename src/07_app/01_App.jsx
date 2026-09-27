@@ -34,7 +34,7 @@ function useAppCoreState() {
     const panels = useAppPanels(data.isLoading);
     const sidebar = useSidebarResize(360);
     const treeStats = useMemo(() => data.tree.getStats(), [data.tree]);
-    const [sheetUrl, setSheetUrl] = useState(DEFAULT_URL);
+    const [sheetUrl, setSheetUrl] = useState(() => resolveInitialSheetUrl());
     return { isStandalone, ...data, ...nav, ...panels, ...sidebar, treeStats, sheetUrl, setSheetUrl };
 }
 

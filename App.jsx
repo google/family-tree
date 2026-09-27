@@ -43975,6 +43975,50 @@ function useAppPanels(isLoading) {
  *     appendLog: () => {}, handleImport: () => {}
  *   });
  */
+/**
+ * Resolves the initial spreadsheet URL from URL search parameters ('id', 'sheet', 'url', 'sheetId'),
+ * falling back to DEFAULT_URL if no query parameter is provided.
+ *
+ * @param {string|null} [searchString=null] - Optional search query string override
+ * @returns {string} Fully qualified Google Sheets URL to load
+ *
+ * @example
+ * // Given URL: https://google.github.io/family-tree/?id=1ZDpcz2ACmG63dUjHLfoHZSW7-dG51FbzaJVcqHYdkEI
+ * resolveInitialSheetUrl('?id=1ZDpcz2ACmG63dUjHLfoHZSW7-dG51FbzaJVcqHYdkEI');
+ * // => 'https://docs.google.com/spreadsheets/d/1ZDpcz2ACmG63dUjHLfoHZSW7-dG51FbzaJVcqHYdkEI/edit'
+ */
+function resolveInitialSheetUrl(searchString = null) {
+    try {
+        const query = searchString !== null
+            ? searchString
+            : (typeof window !== 'undefined' && window.location ? window.location.search : '');
+        if (query) {
+            const params = new URLSearchParams(query);
+            const rawParam = params.get('id') || params.get('sheet') || params.get('url') || params.get('sheetId');
+            if (rawParam && rawParam.trim()) {
+                const trimmed = rawParam.trim();
+                const sheetId = extractSheetIdFromUrl(trimmed);
+                if (sheetId) {
+                    return `https://docs.google.com/spreadsheets/d/${sheetId}/edit`;
+                }
+                if (trimmed.startsWith('http')) {
+                    return trimmed;
+                }
+            }
+        }
+    } catch (err) {
+        console.warn('Could not parse URL search parameters for spreadsheet ID:', err);
+    }
+    return DEFAULT_URL;
+}
+
+/**
+ * Initializes the tree dataset on application mount.
+ * Checks for embedded standalone datasets first, then imports from the resolved initial URL.
+ *
+ * @param {Object} options - Initialization options and dispatchers
+ * @returns {boolean} Whether an embedded dataset was loaded
+ */
 function initializeTreeDataset({
     setTree, setSheetUrl, setFocusId, setIsSidebarVisible,
     centerOnPerson, appendLog, handleImport
@@ -43997,7 +44041,8 @@ function initializeTreeDataset({
         return true; // Completely avoid fetching Google Sheets
     }
 
-    handleImport(DEFAULT_URL);
+    const initialUrl = resolveInitialSheetUrl();
+    handleImport(initialUrl);
     return false;
 }
 
@@ -45316,7 +45361,7 @@ function useAppCoreState() {
     const panels = useAppPanels(data.isLoading);
     const sidebar = useSidebarResize(360);
     const treeStats = useMemo(() => data.tree.getStats(), [data.tree]);
-    const [sheetUrl, setSheetUrl] = useState(DEFAULT_URL);
+    const [sheetUrl, setSheetUrl] = useState(() => resolveInitialSheetUrl());
     return { isStandalone, ...data, ...nav, ...panels, ...sidebar, treeStats, sheetUrl, setSheetUrl };
 }
 

@@ -161,7 +161,8 @@ if (!skipAst && ast) {
         'isNaN', 'isFinite', 'encodeURIComponent', 'decodeURIComponent', 'encodeURI', 'decodeURI',
         'React', 'ReactDOM', 'useState', 'useEffect', 'useCallback', 'useMemo', 'useRef', 'useLayoutEffect',
         'useReducer', 'useContext', 'Babel', 'htmlToImage', 'L', 'exports', 'module', 'require', 'globalThis',
-        'XMLHttpRequest', 'undefined', 'Infinity', 'escape', 'atob', 'unescape', 'btoa', 'Buffer', 'AbortController'
+        'XMLHttpRequest', 'undefined', 'Infinity', 'escape', 'atob', 'unescape', 'btoa', 'Buffer', 'AbortController',
+        'URLSearchParams'
     ]);
 
     traverse(ast, {
