@@ -1,190 +1,168 @@
-# Family Tree Web App — Developer & Gemini Guide
+# Family Tree Web App — Developer & Architecture Guide
 
-This document outlines the architectural principles, testing framework, automated quality checks, and pair-programming best practices for developing the Family Tree web application.
+This document details the modular architecture, interactive UI systems, genealogical inference pipeline, multi-stage testing framework, and automated quality gates for developing the Family Tree web application.
+
+For end-user feature documentation, button references, and Google Sheets formatting examples, see [README.md](README.md).
 
 ---
 
 ## 1. Core Architectural Invariants
 
-1. **Zero-Build Development (`index.html`)**:
-   - The app runs directly in any modern browser via `http://localhost:8000/`.
-   - In-browser Babel Standalone dynamically transpiles `App.jsx` with zero npm/webpack/vite build step.
-   - Any architectural changes or refactoring must **never** break direct browser loading from `index.html`.
+1. **Zero-Build Browser Execution (`index.html` + `App.jsx`)**:
+   - The application runs directly in any modern browser via `http://localhost:8000/` or GitHub Pages (`https://google.github.io/family-tree/`).
+   - In-browser Babel Standalone transpiles `App.jsx` on the fly with zero webpack/vite runtime dependencies.
+   - Developers edit modular files under `src/` and run `node scripts/bundle.mjs` (or `node scripts/run_tests.mjs`, which bundles automatically) to produce the consolidated `App.jsx` artifact.
 
 2. **Single-File Deliverable & Offline Standalone App Export**:
-   - The app provides an offline export feature (`executeStandaloneAppExport`) that bundles genealogical data, assets, and source code into a single, self-contained `.html` deliverable.
-   - `App.jsx` serves as the consolidated artifact read by both `index.html` and the standalone exporter.
+   - `executeStandaloneAppExport` embeds the active lineage dataset, styles, and `App.jsx` source code into a single self-contained `.html` file that works 100% offline.
 
-3. **Strict Code Quality Gates**:
-   - **40-Line Function Limit**: Zero functions, arrow functions, or class methods may exceed 40 lines (`loc.end - loc.start + 1 <= 40`).
-   - **100% JSDoc Coverage**: All top-level functions, classes, and exported components must have JSDoc blocks (`/** ... */`).
-   - **>= 2 Examples per JSDoc**: Every JSDoc block must contain at least 2 distinct `@example` tags.
-   - **Zero Undeclared Variables**: Every identifier reference must resolve to a valid scope binding or recognized global.
+3. **Strict Code Quality Gates (`scripts/audit_quality.mjs`)**:
+   - **40-Line Function Limit**: Every function declaration, function expression, arrow component, and class method in `App.jsx` must be `<= 40` lines (`loc.end.line - loc.start.line + 1 <= 40`).
+   - **100% JSDoc Coverage**: Every top-level function, component, and class must have a JSDoc comment block (`/** ... */`).
+   - **>= 2 `@example` Blocks per JSDoc**: Every JSDoc comment must contain at least 2 distinct `@example` tags (and no legacy `Example:` / `Examples:` prose).
+   - **Zero Undeclared Variables**: AST scope analysis (`@babel/traverse`) verifies that every identifier resolves to a declared binding or whitelisted browser global.
 
 ---
 
-## 2. Multi-Tier Automated Test Runner (`scripts/run_tests.mjs`)
+## 2. Interactive Rich-Text Button Documentation System
 
-The test suite validates the app across 4 progressive tiers:
+Every `<button>` across the UI displays a rich-text documentation popover with usage examples when hovered (`src/06_ui/10_TopNavigation.jsx`).
+
+### Architecture & Key Functions
+
+1. **`BUTTON_DOCUMENTATION_CATALOG`**:
+   - Central dictionary mapping button titles/keys (e.g., `'Import Google Sheet from Clipboard URL'`, `'Zoom In'`, `'Expand Children'`, `'Ask AI'`) to structured documentation entries:
+     ```javascript
+     {
+         title: 'Zoom In Canvas',
+         badge: 'Camera • Magnify (+)',
+         summary: 'Increases **canvas magnification** (`1.3x` per step) around the viewport center...',
+         examples: [
+             { label: 'Read Detailed Card Badges', detail: 'Click **Zoom In** (or scroll up) to read nicknames...' },
+             { label: 'Dense Cohort Inspection', detail: 'Magnify large 8+ sibling families...' }
+         ]
+     }
+     ```
+2. **`resolveButtonDocumentation(docKey, buttonText)`**:
+   - Resolves exact matches from `BUTTON_DOCUMENTATION_CATALOG`, dynamic filter prefixes via `resolveDynamicFilterButtonDoc` (`Filter by Family: <X>`, `Filter by Location: <X>`, `Filter by Career: <X>`), and contextual labels via `resolveContextualButtonDoc` (`Locations (42)`, `Rule`, `AI`, `Hide Directory`, etc.).
+3. **`renderRichDocText(text)`**:
+   - Parses lightweight markdown tokens (`**bold**` and `` `inline code` ``) into styled `<strong>` and `<code>` React elements inside the popover.
+4. **`buildHoveredButtonDocState(btn)` & `restoreButtonNativeTitle(btn)`**:
+   - When a user hovers over a `<button>`, `buildHoveredButtonDocState` stashes any native `title` attribute into `data-orig-title` and removes `title` while hovered so the browser's plain-text native tooltip never overlaps the rich-text popover. When the pointer leaves (`restoreButtonNativeTitle`), the `title` attribute is restored cleanly.
+5. **`computeButtonDocPosition(rect, viewportW, viewportH)` & `<ButtonDocTooltipOverlay />`**:
+   - Places the `340px` popover card below top-bar buttons or above bottom-bar buttons and clamps horizontal/vertical coordinates within viewport margins (`12px`).
+
+---
+
+## 3. Dynamic URL Query Parameter Loading (`?id=...`)
+
+`resolveInitialSheetUrl(searchStr)` in `src/06_ui/11_CanvasViewport.jsx` inspects `window.location.search` on startup so users can open any root Google Sheet via URL parameters:
+
+```javascript
+// Example 1: Passing a Google Spreadsheet ID via ?id=
+resolveInitialSheetUrl('?id=1ZDpcz2ACmG63dUjHLfoHZSW7-dG51FbzaJVcqHYdkEI');
+// => 'https://docs.google.com/spreadsheets/d/1ZDpcz2ACmG63dUjHLfoHZSW7-dG51FbzaJVcqHYdkEI/edit'
+
+// Example 2: Passing a full URL via ?url=
+resolveInitialSheetUrl('?url=https://docs.google.com/spreadsheets/d/1BxiMVs0XRA5nFMdKvBdBZjgmUUqptlbs74OgvE2upms/edit');
+// => 'https://docs.google.com/spreadsheets/d/1BxiMVs0XRA5nFMdKvBdBZjgmUUqptlbs74OgvE2upms/edit'
+```
+
+During bootstrap (`initializeTreeDataset`), if the resolved startup URL differs from `DEFAULT_URL` and its spreadsheet ID does not match the cached local tree, the app automatically triggers `handleImport(initialUrl, false, true)` to fetch the requested sheet live.
+
+---
+
+## 4. Multi-Tier Automated Test Runner (`scripts/run_tests.mjs`)
+
+The test suite validates the application across 4 progressive stages:
 
 | Tier / Stage | Description | Typical Latency | When to Use |
 | :--- | :--- | :--- | :--- |
 | **Stage 1** | Whole-file Babel AST parse (detects syntax errors, missing braces, invalid JSX) | ~400 ms | Every run (unless `--skip-ast`) |
-| **Stage 2** | AST Scope & Identifier Analysis (detects missing imports/variables) | ~800 ms | Every run (unless `--skip-ast`) |
-| **Stage 3** | Algorithmic Unit Tests (`tests.html`, 2,242+ tests across 174 sections) | ~1.5 s | Every run |
-| **Stage 4** | Headless Chrome E2E browser smoke test via CDP (mounts `<App />`, counts rendered cards) | ~15 s | Pre-commit / Final validation |
+| **Stage 2** | AST Scope & Identifier Analysis (detects undeclared variables/globals) | ~800 ms | Every run (unless `--skip-ast`) |
+| **Stage 3** | Algorithmic Unit Tests (`tests.html`, 2,636+ assertions across 204 sections) | ~1.5 s | Every run |
+| **Stage 4** | Headless Chrome E2E browser smoke test via CDP (mounts `<App />`, verifies rendered person cards) | ~12 s | Pre-commit / Final validation |
 
-### CLI Usage & Flags
+### CLI Usage Examples
 
 ```bash
 # 1. Fast Slice: Run only a single section during inner-loop debugging (<1s)
-node scripts/run_tests.mjs --section 188
-node scripts/run_tests.mjs --skip-ast --section 188
+node scripts/run_tests.mjs --skip-ast --section 204
 
-# 2. Grep Filter: Run tests matching a specific name or keyword
-node scripts/run_tests.mjs --grep "Jesmi"
-node scripts/run_tests.mjs --grep "Mariyama"
+# 2. Grep Filter: Run tests matching a specific keyword
+node scripts/run_tests.mjs --grep "Button Hover"
 
-# 3. Fast Mode: Run Stages 1, 2, 3 for all 2,242 tests (skips Headless Chrome, ~3-4s)
+# 3. Fast Mode: Run Stages 1, 2, 3 for all 2,636+ unit tests (~3s)
 node scripts/run_tests.mjs --fast
 
-# 4. Full Quality Gate: Run all 4 stages including Headless Chrome E2E (~20s)
-node scripts/run_tests.mjs --full
-# or simply:
+# 4. Full Quality Gate: Run all 4 stages including Headless Chrome E2E (~15s)
 node scripts/run_tests.mjs
 
-# 5. Fast Tests + Quality Audit:
-node scripts/run_tests.mjs --fast --audit
-
-# 6. List all available test sections with line numbers:
-node scripts/run_tests.mjs --list-sections
-```
-
----
-
-## 3. Automated Code Quality Auditor (`scripts/audit_quality.mjs`)
-
-Enforces the 40-line function limit, JSDoc coverage, example counts, scope integrity, and scans for brittle tests in `tests.html`.
-
-```bash
-# Standard quality audit against App.jsx (~2s):
+# 5. Code Quality Audit (<= 40 lines, 100% JSDoc, >= 2 @example tags, 0 undeclared vars)
 node scripts/audit_quality.mjs
-
-# Strict mode (fails if any brittle tests exist in tests.html):
-node scripts/audit_quality.mjs --strict
-
-# Verbose output (shows exact line numbers and warnings):
-node scripts/audit_quality.mjs --verbose
-
-# JSON output for programmatic tools/subagents:
-node scripts/audit_quality.mjs --json
 ```
-
----
-
-## 4. Gemini-Assisted Development Best Practices
-
-To maximize speed and eliminate turn latency when working with Gemini on this app:
-
-### 1. The TDD (Test-Driven Development) Loop
-1. **Identify or Write the Test First**:
-   - Add a new section at the bottom of `tests.html` (e.g. `section('189: ...')`) asserting the desired genealogical behavior with synthetic rows.
-2. **Run the Fast Slice**:
-   - Execute `node scripts/run_tests.mjs --skip-ast --section 189` (runs in **< 1.1s**).
-   - Confirm failure as expected.
-3. **Make Targeted Code Changes in `App.jsx`**:
-   - Edit the specific helper or deduction function.
-4. **Re-Run Fast Slice**:
-   - Confirm test passes in **< 1.1s**.
-5. **Run the Full Gate**:
-   - Run `node scripts/run_tests.mjs --fast --audit` before wrapping up to verify zero regressions across all 2,242 tests, 0 functions > 40 lines, and complete JSDoc coverage.
-
-### 2. Precise Prompting Template
-When requesting a fix or feature, provide:
-- **Person / Profile Names**: (e.g., "Kunjaagasthi, Mariyama, Kochuthresia")
-- **Spreadsheet Context**: (e.g., "Ollur sheet, rows 45–50")
-- **Expected vs Actual Invariant**: (e.g., "Mariyama is born ~1916 and Kochuthresia in 1922; Mariyama must sort on the left, but currently Kochuthresia sorts first because row number is used instead of effective birth year").
 
 ---
 
 ## 5. Source Architecture & Bundler (`src/` and `scripts/bundle.mjs`)
 
-The codebase is organized into modular files under `src/` while generating `App.jsx` in < 25ms:
+The codebase is organized into 36 modular files across 7 numbered directories under `src/`:
 
-```
+```text
 src/
-├── 00_header.jsx                 # License header & React imports (16 lines)
+├── 00_header.jsx                 # License header & React hook imports
 ├── 01_core/
-│   ├── 01_constants.jsx          # Demographic tokens, generational gap definitions (33 lines)
-│   ├── 02_DisjointSetForest.jsx  # Union-find with transactional rollback (212 lines)
-│   ├── 03_GenealogicalGraph.jsx  # Graph traversal, cycle detection, reachability (362 lines)
-│   └── 04_Icons.jsx              # SVG icons & DEFAULT_URL (27 lines)
+│   ├── 01_constants.jsx          # Demographic tokens, generational gap constants
+│   ├── 02_DisjointSetForest.jsx  # Union-find with transactional snapshot/rollback
+│   ├── 03_GenealogicalGraph.jsx  # Graph traversal, cycle detection, ancestor/descendant queries
+│   └── 04_Icons.jsx              # Vector SVG icons & DEFAULT_URL constant
 ├── 02_utils/
-│   ├── 01_ScriptLoader.jsx       # Dynamic script loader (54 lines)
-│   └── 02_CSVParser.jsx          # CSV tokenizer, headers, row mapping (355 lines)
+│   ├── 01_ScriptLoader.jsx       # Dynamic external script/stylesheet loader
+│   └── 02_CSVParser.jsx          # Multi-line CSV tokenizer, header detector, row mapper
 ├── 03_models/
-│   ├── 01_Person.jsx             # Person model, attributes, dates, relations (642 lines)
-│   └── 02_FamilyTree.jsx         # Family tree model, layout algorithms, contours (4,046 lines)
+│   ├── 01_Person.jsx             # Person domain model, lifespan badges, relative sorting
+│   └── 02_FamilyTree.jsx         # FamilyTree graph, 2D IntervalContour layout, SVG/A4 print composer
 ├── 04_builder/
-│   ├── 01_InvariantAuditor.jsx   # Graph integrity & anomaly auditor (50 lines)
-│   ├── 02_FamilyTreePipeline.jsx # Declarative 5-phase construction pipeline (48 lines)
-│   └── 03_FamilyTreeBuilder.jsx  # Demographic inference & candidate deduplication (15,879 lines)
+│   ├── 01_InvariantAuditor.jsx   # Graph integrity & biological anomaly auditor
+│   ├── 02_FamilyTreePipeline.jsx # Declarative 5-phase construction pipeline
+│   └── 03_FamilyTreeBuilder.jsx  # Entity resolution, ghost synthesis, YOB/gender/death deduction
 ├── 05_hooks/
-│   ├── 01_TreeDataCache.jsx      # Client-side cache & parallel CSV fetcher (1,518 lines)
-│   ├── 02_useAppLogs.jsx         # Tree audit & crawl logging hooks (507 lines)
-│   ├── 03_useAncestryData.jsx    # Sheet crawler & tree lifecycle state hook (1,082 lines)
-│   └── 04_useCanvasControls.jsx  # Wheel zoom, pinch, pan, camera clamping & framing (1,077 lines)
+│   ├── 01_TreeDataCache.jsx      # LocalStorage/embedded cache & parallel multi-sheet CSV crawler
+│   ├── 02_useAppLogs.jsx         # Audit & ingestion log formatters and state hooks
+│   ├── 03_useAncestryData.jsx    # Sheet crawler orchestration & live background sync
+│   └── 04_useCanvasControls.jsx  # Wheel zoom, two-finger pinch, pan, camera clamping & framing
 ├── 06_ui/
-│   ├── 01_theme.jsx              # UI theme metrics & card color schemes (285 lines)
-│   ├── 02_IntervalContour.jsx    # 2D Interval Profile Contour compaction (186 lines)
-│   ├── 03_CompactTreeView.jsx    # Tree canvas cards & SVG connectors (2,229 lines)
-│   ├── 04_AIAssistant.jsx        # Gemini AI Assistant drawer, settings & messages (2,837 lines)
-│   ├── 05_OmniSearch.jsx         # Global Cmd+K quick actions & search cards (524 lines)
-│   ├── 06_FilteredListView.jsx   # Filtered persons list & attribute chips (974 lines)
-│   ├── 07_PersonSidebar.jsx      # Slide-over person details & relationship panels (698 lines)
-│   ├── 08_QuickDirectory.jsx     # Places, Careers, and Families directory hierarchy (3,666 lines)
-│   ├── 09_FamilyMapView.jsx      # Leaflet geographic map view & pins (704 lines)
-│   ├── 10_TopNavigation.jsx      # Navbar, search trigger & action buttons (1,066 lines)
-│   └── 11_CanvasViewport.jsx     # Canvas gestures, timeline labels & generation grid (4,296 lines)
+│   ├── 01_theme.jsx              # Card color schemes, PersonCollapseButton, ZoomControls
+│   ├── 02_IntervalContour.jsx    # 2D horizontal interval profile contour compaction
+│   ├── 03_CompactTreeView.jsx    # PersonNode cards, marital bridges & bus-bar SVG connectors
+│   ├── 04_AIAssistant.jsx        # Deterministic GenealogyEngine + Gemini LLM assistant & settings
+│   ├── 05_OmniSearch.jsx         # Cmd+K OmniSearch classification & quick action shortcuts
+│   ├── 06_FilteredListView.jsx   # Filtered member list & category attribute chips
+│   ├── 07_PersonSidebar.jsx      # Resizable slide-over person biography, relatives & log drawer
+│   ├── 08_QuickDirectory.jsx     # Hierarchical Locations, Careers, and Families browser
+│   ├── 09_FamilyMapView.jsx      # Interactive Leaflet map view, custom pins & bottom controls
+│   ├── 10_TopNavigation.jsx      # Floating navbar, OmniSearch bar & ButtonDocTooltipOverlay
+│   └── 11_CanvasViewport.jsx     # Main canvas viewport, timeline cohorts & URL sheet resolution
 └── 07_app/
-    └── 01_App.jsx                # Main root App component (406 lines)
+    └── 01_App.jsx                # Root <App /> view model and layout shell
 ```
-
-### Bundler Commands
-```bash
-# Bundle src/ -> App.jsx (<25ms)
-node scripts/bundle.mjs
-
-# Verify App.jsx is in sync with src/
-node scripts/bundle.mjs --check
-
-# Watch src/ and auto-rebuild App.jsx on save
-node scripts/bundle.mjs --watch
-```
-*Note: `node scripts/run_tests.mjs` automatically executes `bundle.mjs` on every test run, so edits in `src/` are instantly and transparently reflected.*
 
 ---
 
-## 6. Architectural Refactoring Roadmap
+## 6. Deploying Updates to GitHub Pages (`./push.sh`)
 
-### Pillar B: Decouple Brittle Code-String Tests in `tests.html`
-- **Goal**: 153 tests in `tests.html` currently assert on exact source-code strings (e.g. `appCode.includes(...)`).
-- **Refactoring**: Migrate these tests to behavioral input/output assertions.
-  - *Before*: `assert('Test 147B', appCode.includes("cNode.momId = anchorNode.id..."))`
-  - *After*: Call `FamilyTreeBuilder._expandChildSpouseCompound` with test rows and assert that `cNode.momId` matches the anchor ID.
-- **Result**: Eliminates false-positive test failures during refactoring, freeing developers from arbitrary indentation and naming constraints.
+The repository includes an automated deployment script `push.sh` that:
+1. Runs `node scripts/bundle.mjs` to ensure `App.jsx` is freshly built from `src/`.
+2. Ensures `.nojekyll` is present so GitHub Pages serves all static files without Jekyll preprocessing.
+3. Syncs the workspace files (`index.html`, `App.jsx`, `src/`, `scripts/`, `tests.html`, `README.md`, `DEVELOPMENT_GUIDE.md`, etc.) to the local Git repository at `~/.family-tree-github`.
+4. Commits and pushes to `origin/main` on `https://github.com/google/family-tree`.
 
-### Pillar C: Declarative Demographic Rules Catalog
-- **Goal**: Consolidate scattered generational heuristics into a single typed constant object:
-  ```javascript
-  export const DEMOGRAPHIC_RULES = Object.freeze({
-      SPOUSAL_GENDER_OFFSET: 2,         // Husband inferred >= wife birth year + 2
-      MIN_BIOLOGICAL_PARENT_GAP: 15,    // Youngest biological parent age
-      MAX_BIOLOGICAL_MOTHER_GAP: 50,    // Oldest biological mother age
-      MAX_BIOLOGICAL_FATHER_GAP: 70,    // Oldest biological father age
-      DEFAULT_GENERATION_GAP: 25,       // Default child-to-parent gap
-      CENTENARIAN_LIFESPAN_CAP: 100,    // Deceased inference threshold
-      MAX_CONVERGENCE_PASSES: 30        // Safety convergence cap
-  });
-  ```
-- **Result**: Simplifies demographic tuning without modifying complex procedural loops.
+### Examples
+
+```bash
+# Deploy with an automatic timestamped commit message
+./push.sh
+
+# Deploy with an explicit commit description
+./push.sh "Add rich-text button hover documentation popovers and expand markdown guides"
+```

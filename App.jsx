@@ -12977,13 +12977,11 @@ ${b64Jsx}
                 if (!survivorsByRole.has(parsed.role)) survivorsByRole.set(parsed.role, []);
                 survivorsByRole.get(parsed.role).push(c);
             });
-
             const reals = kids.filter(c => !c.isGhost);
             for (const [role, survivors] of survivorsByRole) {
                 const sheetNumbersRole = reals.some(c => FamilyTreeBuilder._isGenericNumberedChildName(c.name, [parent.name])
                     && FamilyTreeBuilder._parseNumberedSiblingRole(c.name)?.role === role);
                 if (sheetNumbersRole) continue;
-
                 const members = [...reals.filter(c => c._siblingOrdinal?.role === role), ...survivors];
                 members.sort((a, b) => (birthYear(a) - birthYear(b)) || (kids.indexOf(a) - kids.indexOf(b)));
                 members.forEach((c, idx) => {
@@ -40950,6 +40948,547 @@ const TopNavigation = (props) => {
     );
 };
 
+const BUTTON_DOCUMENTATION_CATALOG = {
+    'Import Google Sheet from Clipboard URL': {
+        title: 'Import Google Sheet from Clipboard',
+        badge: 'Data Sync • Clipboard URL',
+        summary: 'Reads a **Google Sheets URL** or **Spreadsheet ID** from your clipboard (or prompts for one), crawls the root sheet and all linked branch tabs in **`Links`** in parallel, and rebuilds the family tree.',
+        examples: [
+            { label: 'Clipboard URL Sync', detail: 'Copy `https://docs.google.com/spreadsheets/d/1ZDpcz2.../edit` and click this button to import all linked family sheets.' },
+            { label: 'Direct URL Parameter', detail: 'Append `?id=1ZDpcz2ACmG63dUjHLfoHZSW7-dG51FbzaJVcqHYdkEI` to the app URL to load that root sheet automatically on startup.' }
+        ]
+    },
+    'Download Standalone Interactive App (.html)': {
+        title: 'Download Standalone Interactive App',
+        badge: 'Offline Export • .html',
+        summary: 'Packages the **entire interactive visualizer** and the currently focused lineage dataset into a single self-contained **`.html` file** that runs offline in any browser.',
+        examples: [
+            { label: 'Full Family Archive', detail: 'Focus on the root ancestor and click to download a complete offline `.html` bundle of all 240+ profiles.' },
+            { label: 'Scoped Sub-Branch App', detail: 'Select a specific grandparent first to export an offline interactive app scoped to their ancestral and descendant lineage.' }
+        ]
+    },
+    'Print Tree / Export A4 Landscape SVGs (10pt names)': {
+        title: 'Print Tree & A4 Landscape Family Atlas',
+        badge: 'Vector Print • 10pt SVG',
+        summary: 'Generates a **multi-page A4 landscape printable document** and **Family Atlas** with crisp vector SVG cards, calibrated so every person name renders at a readable **10pt physical font size**.',
+        examples: [
+            { label: 'Multi-Page Wall Poster', detail: 'Click to open the A4 print preview, print or save as **PDF**, and assemble tiled pages using the margin alignment guides.' },
+            { label: 'Branch Atlas Chapters', detail: 'Automatically partitions deep sub-branches into numbered **Atlas Chapters** with cross-page reference badges.' }
+        ]
+    },
+    'View Family Locations Map': {
+        title: 'View Family Locations Map',
+        badge: 'Geographic View • Leaflet',
+        summary: 'Switches the main viewport to an **interactive geographic map** plotting all ancestral villages, parishes, districts, and diaspora cities with **member count pins**.',
+        examples: [
+            { label: 'Regional Cluster Pins', detail: 'Click to explore family concentrations across **Kerala** (`Thrissur`, `Palakkad`, `Kottayam`), **Karnataka**, and global diaspora hubs.' },
+            { label: 'Interactive Pin Filtering', detail: 'Click any marker pin on the map to list all relatives associated with that town in the right-hand sidebar.' }
+        ]
+    },
+    'Switch to Family Tree Diagram': {
+        title: 'Switch to Family Tree Diagram',
+        badge: 'Tree Canvas • Timeline',
+        summary: 'Returns from the geographic map to the **chronological 2D family tree diagram**, preserving your active person focus, filter highlights, and timeline grid.',
+        examples: [
+            { label: 'Inspect Highlighted Town on Tree', detail: 'Select a town on the map, then click this button to see those residents highlighted across generational cohorts.' },
+            { label: 'Seamless View Toggle', detail: 'Switch back and forth between the **Map** and **Tree Diagram** without losing your navigation history.' }
+        ]
+    },
+    'Ask AI': {
+        title: 'AI Genealogy Assistant',
+        badge: 'Hybrid AI • Gemini + Rules',
+        summary: 'Opens the **AI Assistant** to answer natural-language questions about **kinship relationships**, **ancestral towns**, **lifespans**, and **tree statistics** using the deterministic rule engine or **Gemini LLM**.',
+        examples: [
+            { label: 'Kinship Path Tracing', detail: 'Ask `"How is Eliamma related to Vareeth?"` or `"Who are the children of Joseph and Thankamma?"`' },
+            { label: 'Demographic Superlatives', detail: 'Ask `"Who lived the longest?"` or `"Who all lived in Chalissery?"` to highlight matching cards on the canvas.' }
+        ]
+    },
+    'View Logs': {
+        title: 'Ingestion & Audit Logs',
+        badge: 'Diagnostics • Data Audit',
+        summary: 'Opens the **Logs** panel displaying live **parallel sheet crawl status**, **merged duplicate profiles**, **deduced birth/death years**, and **data consistency warnings** with clickable source links.',
+        examples: [
+            { label: 'Google Sheet Row Citations', detail: 'Click any `[SheetName:Row]` pill in the audit log to jump directly to that row in Google Sheets.' },
+            { label: 'Audit Biological & Name Warnings', detail: 'Inspect parent-child age-gap checks, ambiguous parent candidates, and unlinked subtree roots.' }
+        ]
+    },
+    'Search': {
+        title: 'Omni Search & Command Bar',
+        badge: 'Shortcut • Cmd/Ctrl + K',
+        summary: 'Expands the **Omni Search** bar to find **people by name or nickname**, filter by **location, family house, or career**, or send natural-language queries to the **AI Assistant**.',
+        examples: [
+            { label: 'Quick Person Jump', detail: 'Press `Cmd+K` (or `Ctrl+K`) and type `"Kochuthresia"` or `"Kunjappan"` to center the camera on their card.' },
+            { label: 'Attribute Spotlight', detail: 'Type `"Moonilavu"` or `"Teacher"` and press `Enter` to highlight all matching profiles across the tree.' }
+        ]
+    },
+    'Go Back': {
+        title: 'Navigate Back in History',
+        badge: 'History • Previous View',
+        summary: 'Steps backward to the **previously focused person** or **category filter** in your session navigation stack and centers the canvas camera on their card.',
+        examples: [
+            { label: 'Retrace Ancestor Steps', detail: 'After clicking from a child up to their parents and grandparents, click **Go Back** to return to the child.' },
+            { label: 'Restore Directory Filter', detail: 'Step back from an individual profile to the **Location** or **Family** filter list you were browsing earlier.' }
+        ]
+    },
+    'Go Forward': {
+        title: 'Navigate Forward in History',
+        badge: 'History • Next View',
+        summary: 'Steps forward in your **session navigation history** after using **Go Back**, restoring the next focused person or active directory filter.',
+        examples: [
+            { label: 'Redo Profile Focus', detail: 'Click **Go Forward** to return to the descendant or spouse profile you inspected before stepping back.' },
+            { label: 'Compare Distant Branches', detail: 'Alternate between **Go Back** and **Go Forward** to compare two branches across different generations.' }
+        ]
+    },
+    'Zoom In': {
+        title: 'Zoom In Canvas',
+        badge: 'Camera • Magnify (+)',
+        summary: 'Increases **canvas magnification** (`1.3x` per step) around the viewport center to inspect **person cards**, **lifespan recency badges**, and **marital/sibling connectors**.',
+        examples: [
+            { label: 'Read Detailed Card Badges', detail: 'Click **Zoom In** (or scroll up) to read nicknames, deduced `~YOB` badges, and multi-spouse connectors.' },
+            { label: 'Dense Cohort Inspection', detail: 'Magnify large 8+ sibling families to inspect individual birth order and spouse pairings.' }
+        ]
+    },
+    'Zoom Out': {
+        title: 'Zoom Out Canvas',
+        badge: 'Camera • Overview (−)',
+        summary: 'Decreases **canvas magnification** (`1 / 1.3x` per step) to reveal a broader **multi-generational bird’s-eye view** alongside the left-hand **century timeline**.',
+        examples: [
+            { label: 'Multi-Generation Panorama', detail: 'Click **Zoom Out** to view 6+ generations from the 1850s to the present day in a single viewport.' },
+            { label: 'Subtree Structure Comparison', detail: 'Zoom out to see how co-spouse and sibling subtrees pack horizontally without line crossings.' }
+        ]
+    },
+    'Reset to Root Person': {
+        title: 'Reset to Root Ancestor',
+        badge: 'Camera • Root Home',
+        summary: 'Selects the **oldest root ancestor** of the family tree, opens their profile details in the sidebar, and pans the camera to the **top of the lineage**.',
+        examples: [
+            { label: 'Jump to Founding Patriarch/Matriarch', detail: 'Click after exploring 5th-generation descendants to return immediately to the earliest ancestor.' },
+            { label: 'Restore Full Lineage Root', detail: 'Resets any sub-branch rerooting so the complete unified family tree is displayed.' }
+        ]
+    },
+    'Fit to Screen': {
+        title: 'Fit Entire Tree to Screen',
+        badge: 'Camera • Auto-Frame',
+        summary: 'Computes the **bounding box** of all currently visible person nodes, closes open sidebars for full screen width, and adjusts **zoom and pan** to fit the entire diagram.',
+        examples: [
+            { label: 'Auto-Frame Visible Tree', detail: 'Click **Fit to Screen** after expanding or collapsing branches to center and scale the active diagram.' },
+            { label: 'Clean Presentation View', detail: 'Automatically hides side panels and frames all visible generations beside the year timeline.' }
+        ]
+    },
+    'Expand Children': {
+        title: 'Expand Descendant Branch',
+        badge: 'Tree Node • Expand (+)',
+        summary: 'Uncollapses the hidden **children, spouses, and descendants** beneath this person card and smoothly reflows the layout while keeping the clicked card anchored in place.',
+        examples: [
+            { label: 'Reveal Hidden Descendants', detail: 'Click the **`+`** button on the bottom edge of a card to expand its immediate children and sub-branches.' },
+            { label: 'Anchored Camera Reflow', detail: 'The camera automatically compensates for layout shifts so the clicked ancestor stays stationary on screen.' }
+        ]
+    },
+    'Collapse Children': {
+        title: 'Collapse Descendant Branch',
+        badge: 'Tree Node • Collapse (−)',
+        summary: 'Folds all **descendant generations** beneath this person card into a compact collapsed state so you can focus on neighboring sibling or cousin lineages.',
+        examples: [
+            { label: 'Declutter Wide Branches', detail: 'Click **`−`** beneath an ancestor with 50+ descendants to compact the tree horizontally.' },
+            { label: 'Scoped Print Preparation', detail: 'Collapse unneeded branches before clicking **Print Tree** to generate a tailored A4 chart.' }
+        ]
+    },
+    'Close Panel': {
+        title: 'Close Sidebar Panel',
+        badge: 'Sidebar • Dismiss (✕)',
+        summary: 'Closes the right-hand **Person Details**, **Quick Directory**, or **AI Assistant** sidebar and clears active filter highlights on the tree canvas.',
+        examples: [
+            { label: 'Restore Full Canvas Width', detail: 'Click **`✕`** in the top-right corner of the sidebar to close the panel and view the full diagram.' },
+            { label: 'Clear Dimmed Filter Mode', detail: 'Closing an active filter list restores 100% opacity to all person cards on the canvas.' }
+        ]
+    },
+    'Close Log Panel': {
+        title: 'Close Ingestion & Audit Logs',
+        badge: 'Logs • Dismiss (✕)',
+        summary: 'Closes the **Logs** slide-over drawer and restores the floating **Top Navigation** toolbar and bottom-left **Zoom Controls**.',
+        examples: [
+            { label: 'Return to Interactive Tree', detail: 'Click **`✕`** after inspecting spreadsheet crawl metrics or biological audit warnings.' },
+            { label: 'Dismiss Manual Log View', detail: 'Closes the log drawer opened via the **View Logs** toolbar button.' }
+        ]
+    },
+    'Back to All Categories': {
+        title: 'Back to Directory Categories',
+        badge: 'Directory • All Categories',
+        summary: 'Returns from a filtered **Location**, **Career**, or **Family** member list back to the top-level **Quick Directory** tabs (`Locations`, `Careers`, `Families`).',
+        examples: [
+            { label: 'Browse Another Region or House', detail: 'Click the **`←`** button after viewing `"Chalissery"` residents to pick another town or family surname.' },
+            { label: 'Reset Active Filter', detail: 'Clears the active member filter and restores full-tree visibility on the canvas.' }
+        ]
+    },
+    'Open Directory': {
+        title: 'Open Quick Directory',
+        badge: 'Directory • Category Browser',
+        summary: 'Switches the sidebar from an individual **Person Details** card to the **Quick Directory** to browse everyone by **Locations**, **Careers**, or **Families**.',
+        examples: [
+            { label: 'Drill Down by Geography', detail: 'Click to explore hierarchical region trees (`India → Kerala → Thrissur → Chalissery`).' },
+            { label: 'Audit Surnames & Careers', detail: 'Browse alphabetical lists of all family house names and professions with member count badges.' }
+        ]
+    },
+    'Clear Conversation': {
+        title: 'Clear AI Conversation History',
+        badge: 'AI Chat • Reset',
+        summary: 'Clears all chat messages in the **AI Assistant** drawer, removes AI mention badges from canvas cards, and generates fresh **sample genealogy questions**.',
+        examples: [
+            { label: 'Reset Chat Session', detail: 'Click the trash icon to clear the conversation and start a new genealogy inquiry.' },
+            { label: 'Refresh Sample Prompts', detail: 'Generates a new set of clickable example questions tailored to your loaded family tree.' }
+        ]
+    },
+    'Configure Gemini API Key': {
+        title: 'Configure AI Engine & Gemini API Key',
+        badge: 'AI Settings • Gemini API',
+        summary: 'Opens the **AI Studio Settings** drawer to configure your **Gemini API Key**, select the API environment, or run live **connection diagnostics**.',
+        examples: [
+            { label: 'Save Gemini API Key', detail: 'Paste a Google AI Studio key (`AIza...`) and click **Save** to enable LLM-powered answers.' },
+            { label: 'Test Model Connectivity', detail: 'Click **Test API Connection** inside settings to verify available Gemini models and response latency.' }
+        ]
+    },
+    'Submit Query': {
+        title: 'Submit Question to AI Assistant',
+        badge: 'AI Chat • Send (Enter)',
+        summary: 'Sends your natural-language question to the active **AI Engine**, highlights mentioned relatives on the tree diagram, and renders clickable **profile links**.',
+        examples: [
+            { label: 'Ask Relationship Questions', detail: 'Type `"How is Pauly related to Annamkutty?"` and click **Submit** to trace their kinship path.' },
+            { label: 'Query Places & Eras', detail: 'Type `"Who all lived in Palakkad?"` to receive a formatted list and highlight those relatives on the tree.' }
+        ]
+    },
+    'Tree View': {
+        title: 'Switch to Family Tree Diagram',
+        badge: 'Map Bar • Tree View',
+        summary: 'Exits the **Family Locations Map** and returns to the **2D genealogical tree canvas** while preserving your active location or person selection.',
+        examples: [
+            { label: 'View Town Residents on Tree', detail: 'After clicking a town pin on the map, click **Tree View** to see where those relatives sit in the family tree.' },
+            { label: 'Quick Bottom-Bar Switch', detail: 'Provides one-click switching back to the tree diagram directly from the bottom map control bar.' }
+        ]
+    },
+    'Export CSV': {
+        title: 'Export Mapped Locations (.csv)',
+        badge: 'Map Bar • CSV Download',
+        summary: 'Downloads a **CSV file** listing all geocoded ancestral towns and diaspora locations, including **coordinates**, **resident counts**, and **member names**.',
+        examples: [
+            { label: 'Spreadsheet & GIS Export', detail: 'Click **Export CSV** to save `Family_Locations_Map.csv` for analysis in Google Sheets or GIS tools.' },
+            { label: 'Verify Geocoded Places', detail: 'Review exact latitude/longitude coordinates and resident lists for every plotted location.' }
+        ]
+    },
+    'Toggle Directory': {
+        title: 'Toggle Location Directory Sidebar',
+        badge: 'Map Bar • Directory Panel',
+        summary: 'Opens or closes the **Quick Directory** sidebar beside the map so you can browse **Country → State → District → Town** hierarchies and fly the map camera to any place.',
+        examples: [
+            { label: 'Fly Map to Selected Town', detail: 'Click **Show Directory** and select `"Thrissur"` or `"Moonilavu"` to animate the map directly to that pin.' },
+            { label: 'Maximize Map Viewport', detail: 'Click **Hide Directory** to collapse the sidebar and inspect the world map across the full screen.' }
+        ]
+    }
+};
+
+/**
+ * Resolves rich documentation for dynamic category filter buttons (`Filter by Family/Location/Career`).
+ *
+ * @param {string} key - Raw button title or doc key string.
+ * @returns {object|null} Documentation entry object or null if not a dynamic filter key.
+ *
+ * @example
+ * const doc = resolveDynamicFilterButtonDoc('Filter by Family: Parathottiyil');
+ *
+ * @example
+ * const locDoc = resolveDynamicFilterButtonDoc('Filter by Location: Chalissery');
+ */
+function resolveDynamicFilterButtonDoc(key) {
+    if (key.startsWith('Filter by Family:')) {
+        const val = key.slice('Filter by Family:'.length).trim() || 'Selected Family';
+        return {
+            title: `Filter by Family: ${val}`, badge: 'Family House • Filter',
+            summary: `Highlights all members belonging to the **\`${val}\`** family house (including patrilineally deduced descendants) and lists them in the sidebar.`,
+            examples: [
+                { label: 'Spotlight House Lineage', detail: `Click to highlight every **${val}** member on the tree canvas and dim unrelated branches.` },
+                { label: 'Directory Cross-Reference', detail: 'Opens the filtered member list sorted chronologically by birth cohort and generation.' }
+            ]
+        };
+    }
+    if (key.startsWith('Filter by Location:')) {
+        const val = key.slice('Filter by Location:'.length).trim() || 'Selected Location';
+        return {
+            title: `Filter by Location: ${val}`, badge: 'Geography • Filter',
+            summary: `Filters the family tree to spotlight everyone residing in or originating from **\`${val}\`**, automatically uncollapsing branches to reveal matches.`,
+            examples: [
+                { label: 'Highlight Town Residents', detail: `Click to highlight all relatives linked to **${val}** on the tree diagram and list them in the sidebar.` },
+                { label: 'View on Family Map', detail: 'Click the **Map** button while this filter is active to fly directly to this location pin.' }
+            ]
+        };
+    }
+    if (key.startsWith('Filter by Career:')) {
+        const val = key.slice('Filter by Career:'.length).trim() || 'Selected Career';
+        return {
+            title: `Filter by Career: ${val}`, badge: 'Vocation • Filter',
+            summary: `Highlights all family members whose recorded profession, vocation, or religious title matches **\`${val}\`**.`,
+            examples: [
+                { label: 'Vocation Cohort List', detail: `Click to list every relative with the career **"${val}"** sorted by birth year.` },
+                { label: 'Deduced Titles Included', detail: 'Includes both explicit `Job` cells and deduced vocations like `Priest` (`Fr.`) and `Nun` (`Sr.`).' }
+            ]
+        };
+    }
+    return null;
+}
+
+/**
+ * Resolves rich documentation for contextual buttons based on visible button label text.
+ *
+ * @param {string} text - Normalized visible text inside the button.
+ * @returns {object} Documentation entry with title, badge, summary, and examples.
+ *
+ * @example
+ * const tabDoc = resolveContextualButtonDoc('Locations (42)');
+ *
+ * @example
+ * const aiToggleDoc = resolveContextualButtonDoc('Rule');
+ */
+function resolveContextualButtonDoc(text) {
+    if (/^(Show|Hide)\s+Directory$/i.test(text)) return BUTTON_DOCUMENTATION_CATALOG['Toggle Directory'];
+    if (/^Locations\s*\(/i.test(text) || /^Careers\s*\(/i.test(text) || /^Families\s*\(/i.test(text)) {
+        const tabName = text.split('(')[0].trim();
+        return {
+            title: `Directory Tab: ${tabName}`, badge: 'Quick Directory • Category Tab',
+            summary: `Switches the **Quick Directory** browser to the **\`${tabName}\`** category tab, displaying member counts for each group.`,
+            examples: [
+                { label: `Browse ${tabName}`, detail: `Click **${text}** to list all ${tabName.toLowerCase()} in the family tree and click any row to filter the canvas.` },
+                { label: 'Instant Search Filtering', detail: 'Use the **Omni Search** bar at the top to filter items inside the active directory tab in real time.' }
+            ]
+        };
+    }
+    if (/^(AI|Rule)$/i.test(text)) {
+        return {
+            title: `Switch AI Engine Mode (${text.toUpperCase()})`, badge: 'AI Assistant • Engine Toggle',
+            summary: 'Toggles the **AI Assistant** between **`AI` (Gemini LLM)** for open-ended reasoning and **`Rule` (Deterministic Genealogy Engine)** for instant, zero-latency kinship and demographic answers.',
+            examples: [
+                { label: 'Rule Engine Mode', detail: 'Select **`Rule`** for instant, 100% deterministic answers to relationship, birth/death year, and location queries without an API key.' },
+                { label: 'Gemini LLM Mode', detail: 'Select **`AI`** (with a configured Gemini API key) for multi-hop narrative synthesis across the family graph.' }
+            ]
+        };
+    }
+    const clean = text ? text.slice(0, 48) : 'Interactive Control';
+    return {
+        title: `Select / Toggle: ${clean}`, badge: 'Interactive Control • Action',
+        summary: `Activates **\`${clean}\`**, updating the **focused profile or filter** in the sidebar and synchronizing the **canvas camera** or **directory tree**.`,
+        examples: [
+            { label: 'Focus & Synchronize View', detail: `Click **"${clean}"** to navigate directly to the selected person, relative, region, or query.` },
+            { label: 'History Tracking', detail: 'Your selection is added to the navigation history stack so you can step back with **Go Back** (`<`).' }
+        ]
+    };
+}
+
+/**
+ * Resolves a complete rich-text documentation payload for any button key or label.
+ *
+ * @param {string} [docKey=''] - Button title attribute or `data-doc-key` identifier.
+ * @param {string} [buttonText=''] - Fallback visible text inside the button.
+ * @returns {{ title: string, badge: string, summary: string, examples: Array<{ label: string, detail: string }> }}
+ *
+ * @example
+ * const doc = resolveButtonDocumentation('Zoom In', '');
+ *
+ * @example
+ * const filterDoc = resolveButtonDocumentation('Filter by Location: Kerala', 'Kerala');
+ */
+function resolveButtonDocumentation(docKey = '', buttonText = '') {
+    const key = String(docKey || '').trim();
+    const text = String(buttonText || '').replace(/\s+/g, ' ').trim();
+    if (key && BUTTON_DOCUMENTATION_CATALOG[key]) return BUTTON_DOCUMENTATION_CATALOG[key];
+    if (text && BUTTON_DOCUMENTATION_CATALOG[text]) return BUTTON_DOCUMENTATION_CATALOG[text];
+    const dynamicDoc = resolveDynamicFilterButtonDoc(key || text);
+    if (dynamicDoc) return dynamicDoc;
+    return resolveContextualButtonDoc(key || text);
+}
+
+/**
+ * Parses lightweight markdown tokens (`**bold**` and `` `code` ``) into styled React elements.
+ *
+ * @param {string} text - Rich-text markdown string.
+ * @returns {React.ReactNode} Array of strings and styled `<strong>` / `<code>` elements.
+ *
+ * @example
+ * const nodes = renderRichDocText('Press `Cmd+K` to open **Omni Search**.');
+ *
+ * @example
+ * const plain = renderRichDocText('Simple description text.');
+ */
+function renderRichDocText(text) {
+    if (!text) return null;
+    const parts = String(text).split(/(\*\*[^*]+\*\*|`[^`]+`)/g);
+    return parts.map((part, idx) => {
+        if (part.startsWith('**') && part.endsWith('**') && part.length > 4) {
+            return <strong key={idx} className="font-semibold text-slate-900">{part.slice(2, -2)}</strong>;
+        }
+        if (part.startsWith('`') && part.endsWith('`') && part.length > 2) {
+            return <code key={idx} className="font-mono text-[11px] font-semibold text-indigo-700 bg-indigo-50 border border-indigo-200/80 px-1 py-0.5 rounded">{part.slice(1, -1)}</code>;
+        }
+        return part;
+    });
+}
+
+/**
+ * Calculates clamped viewport coordinates (`left`, `top`, `placement`) for the button documentation popover.
+ *
+ * @param {{ left: number, top: number, right: number, bottom: number, width: number, height: number }} rect - Button bounding rect.
+ * @param {number} [viewportW=1280] - Current viewport width in pixels.
+ * @param {number} [viewportH=800] - Current viewport height in pixels.
+ * @returns {{ left: number, top: number, placement: string }} Clamped popover coordinates.
+ *
+ * @example
+ * const pos = computeButtonDocPosition({ left: 100, top: 20, right: 144, bottom: 64, width: 44, height: 44 }, 1280, 800);
+ *
+ * @example
+ * const bottomPos = computeButtonDocPosition({ left: 24, top: 720, right: 64, bottom: 760, width: 40, height: 40 }, 1280, 800);
+ */
+function computeButtonDocPosition(rect, viewportW = 1280, viewportH = 800) {
+    const cardW = 340, cardH = 248, gap = 10, margin = 12;
+    const r = rect || { left: 0, top: 0, right: 0, bottom: 0, width: 0, height: 0 };
+    const idealLeft = r.left + (r.width / 2) - (cardW / 2);
+    const left = Math.max(margin, Math.min(idealLeft, Math.max(margin, viewportW - cardW - margin)));
+    const placeBelow = (r.bottom + gap + cardH <= viewportH - margin) || (r.top < cardH + gap);
+    const top = placeBelow
+        ? Math.min(Math.max(margin, viewportH - cardH - margin), r.bottom + gap)
+        : Math.max(margin, r.top - cardH - gap);
+    return { left: Math.round(left), top: Math.round(top), placement: placeBelow ? 'bottom' : 'top' };
+}
+
+/**
+ * Extracts button documentation and suppresses native browser tooltip on the hovered button.
+ *
+ * @param {HTMLElement|null} btn - Hovered button DOM element.
+ * @returns {{ doc: object, pos: { left: number, top: number, placement: string } }|null}
+ *
+ * @example
+ * const payload = buildHoveredButtonDocState(document.querySelector('button'));
+ *
+ * @example
+ * const empty = buildHoveredButtonDocState(null);
+ */
+function buildHoveredButtonDocState(btn) {
+    if (!btn || btn.disabled) return null;
+    const nativeTitle = btn.getAttribute('title');
+    if (nativeTitle) {
+        btn.setAttribute('data-orig-title', nativeTitle);
+        btn.removeAttribute('title');
+    }
+    const rawKey = btn.getAttribute('data-doc-key') || btn.getAttribute('data-orig-title') || '';
+    const text = (btn.textContent || '').replace(/\s+/g, ' ').trim();
+    if (!rawKey && !text) return null;
+    const doc = resolveButtonDocumentation(rawKey, text);
+    const rect = typeof btn.getBoundingClientRect === 'function' ? btn.getBoundingClientRect() : null;
+    const pos = computeButtonDocPosition(rect, window.innerWidth || 1280, window.innerHeight || 800);
+    return { doc, pos };
+}
+
+/**
+ * Restores the stashed `data-orig-title` attribute back to `title` when hover ends.
+ *
+ * @param {HTMLElement|null} btn - Button element whose native title should be restored.
+ *
+ * @example
+ * restoreButtonNativeTitle(buttonEl);
+ *
+ * @example
+ * restoreButtonNativeTitle(null);
+ */
+function restoreButtonNativeTitle(btn) {
+    if (!btn || typeof btn.getAttribute !== 'function') return;
+    const orig = btn.getAttribute('data-orig-title');
+    if (orig && !btn.getAttribute('title')) {
+        btn.setAttribute('title', orig);
+    }
+}
+
+/**
+ * Global event hook that tracks button hover interactions and returns the active documentation popover state.
+ *
+ * @returns {{ doc: object, pos: { left: number, top: number, placement: string } }|null}
+ *
+ * @example
+ * const hoverDoc = useButtonDocHover();
+ *
+ * @example
+ * const state = useButtonDocHover();
+ * if (state) console.log(state.doc.title);
+ */
+function useButtonDocHover() {
+    const [hoverState, setHoverState] = useState(null);
+    const activeBtnRef = useRef(null);
+    useEffect(() => {
+        const clearHover = () => { restoreButtonNativeTitle(activeBtnRef.current); activeBtnRef.current = null; setHoverState(null); };
+        const onOver = (e) => {
+            const btn = e.target && typeof e.target.closest === 'function' ? e.target.closest('button') : null;
+            if (!btn || btn.disabled) { if (activeBtnRef.current) clearHover(); return; }
+            if (activeBtnRef.current === btn) return;
+            restoreButtonNativeTitle(activeBtnRef.current);
+            activeBtnRef.current = btn;
+            setHoverState(buildHoveredButtonDocState(btn));
+        };
+        const onOut = (e) => {
+            if (activeBtnRef.current && (!e.relatedTarget || !activeBtnRef.current.contains(e.relatedTarget))) clearHover();
+        };
+        document.addEventListener('pointerover', onOver, true);
+        document.addEventListener('pointerout', onOut, true);
+        document.addEventListener('pointerdown', clearHover, true);
+        window.addEventListener('wheel', clearHover, { passive: true });
+        return () => {
+            clearHover();
+            document.removeEventListener('pointerover', onOver, true);
+            document.removeEventListener('pointerout', onOut, true);
+            document.removeEventListener('pointerdown', clearHover, true);
+            window.removeEventListener('wheel', clearHover);
+        };
+    }, []);
+    return hoverState;
+}
+
+/**
+ * Floating rich-text documentation popover card rendered when hovering over any application button.
+ *
+ * @returns {React.ReactNode|null}
+ *
+ * @example
+ * <ButtonDocTooltipOverlay />
+ *
+ * @example
+ * <div className="relative"><ButtonDocTooltipOverlay /></div>
+ */
+const ButtonDocTooltipOverlay = () => {
+    const hoverState = useButtonDocHover();
+    if (!hoverState || !hoverState.doc) return null;
+    const { doc, pos } = hoverState;
+    return (
+        <div
+            role="tooltip"
+            data-testid="button-doc-popover"
+            className="fixed z-[9999] w-[340px] bg-white/98 backdrop-blur-xl border border-slate-200/90 rounded-2xl shadow-[0_16px_40px_rgba(15,23,42,0.18),0_4px_12px_rgba(15,23,42,0.08)] pointer-events-none overflow-hidden font-sans text-left transition-opacity duration-150"
+            style={{ left: `${pos.left}px`, top: `${pos.top}px` }}
+        >
+            <div className="bg-gradient-to-r from-slate-900 via-indigo-950 to-slate-900 px-3.5 py-2.5 flex items-center justify-between gap-2 border-b border-slate-800">
+                <div className="text-[12.5px] font-bold text-white truncate">{doc.title}</div>
+                <span className="text-[10px] font-semibold uppercase tracking-wider px-2 py-0.5 rounded-full bg-indigo-500/25 text-indigo-200 border border-indigo-400/30 shrink-0">{doc.badge}</span>
+            </div>
+            <div className="p-3.5 space-y-2.5">
+                <p className="text-[12px] leading-relaxed text-slate-600">{renderRichDocText(doc.summary)}</p>
+                {doc.examples && doc.examples.length > 0 && (
+                    <div className="space-y-1.5 pt-1 border-t border-slate-100">
+                        <div className="text-[10px] font-bold uppercase tracking-wider text-slate-400">Usage Examples</div>
+                        {doc.examples.map((ex, i) => (
+                            <div key={i} className="bg-slate-50/90 border border-slate-200/70 rounded-lg px-2.5 py-1.5 text-[11.5px] leading-snug text-slate-600">
+                                <span className="font-semibold text-indigo-700 mr-1">{ex.label}:</span>
+                                {renderRichDocText(ex.detail)}
+                            </div>
+                        ))}
+                    </div>
+                )}
+            </div>
+        </div>
+    );
+};
+
 /**
  * Floating zoom and camera framing controls overlay for the tree canvas.
  *
@@ -43968,13 +44507,6 @@ function useAppPanels(isLoading) {
  *     handleImport
  *   });
  *
- * @example
- *   const loaded = initializeTreeDataset({
- *     setTree: () => {}, setSheetUrl: () => {}, setFocusId: () => {},
- *     setIsSidebarVisible: () => {}, centerOnPerson: () => {},
- *     appendLog: () => {}, handleImport: () => {}
- *   });
- */
 /**
  * Resolves the initial spreadsheet URL from URL search parameters ('id', 'sheet', 'url', 'sheetId'),
  * falling back to DEFAULT_URL if no query parameter is provided.
@@ -43986,6 +44518,10 @@ function useAppPanels(isLoading) {
  * // Given URL: https://google.github.io/family-tree/?id=1ZDpcz2ACmG63dUjHLfoHZSW7-dG51FbzaJVcqHYdkEI
  * resolveInitialSheetUrl('?id=1ZDpcz2ACmG63dUjHLfoHZSW7-dG51FbzaJVcqHYdkEI');
  * // => 'https://docs.google.com/spreadsheets/d/1ZDpcz2ACmG63dUjHLfoHZSW7-dG51FbzaJVcqHYdkEI/edit'
+ *
+ * @example
+ * resolveInitialSheetUrl('');
+ * // => DEFAULT_URL
  */
 function resolveInitialSheetUrl(searchString = null) {
     try {
@@ -44018,6 +44554,19 @@ function resolveInitialSheetUrl(searchString = null) {
  *
  * @param {Object} options - Initialization options and dispatchers
  * @returns {boolean} Whether an embedded dataset was loaded
+ *
+ * @example
+ * initializeTreeDataset({
+ *   setTree, setSheetUrl, setFocusId, setIsSidebarVisible,
+ *   centerOnPerson, appendLog, handleImport
+ * });
+ *
+ * @example
+ * const loaded = initializeTreeDataset({
+ *   setTree: () => {}, setSheetUrl: () => {}, setFocusId: () => {},
+ *   setIsSidebarVisible: () => {}, centerOnPerson: () => {},
+ *   appendLog: () => {}, handleImport: () => {}
+ * });
  */
 function initializeTreeDataset({
     setTree, setSheetUrl, setFocusId, setIsSidebarVisible,
@@ -45708,6 +46257,7 @@ function useAppViewModel() {
 const AppRootView = ({ topNavProps, zoomProps, viewportProps, sidebarProps, showZoom }) => (
     <div className="flex h-screen w-screen bg-white overflow-hidden text-slate-800 relative" style={{ fontFamily: '"Google Sans", system-ui, -apple-system, sans-serif' }}>
         <GlobalAppStyles />
+        <ButtonDocTooltipOverlay />
         <TopNavigation {...topNavProps} />
         {showZoom && <ZoomControls {...zoomProps} />}
         <MainCanvasViewport {...viewportProps} />

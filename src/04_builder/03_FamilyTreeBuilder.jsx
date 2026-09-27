@@ -6487,13 +6487,11 @@ ${b64Jsx}
                 if (!survivorsByRole.has(parsed.role)) survivorsByRole.set(parsed.role, []);
                 survivorsByRole.get(parsed.role).push(c);
             });
-
             const reals = kids.filter(c => !c.isGhost);
             for (const [role, survivors] of survivorsByRole) {
                 const sheetNumbersRole = reals.some(c => FamilyTreeBuilder._isGenericNumberedChildName(c.name, [parent.name])
                     && FamilyTreeBuilder._parseNumberedSiblingRole(c.name)?.role === role);
                 if (sheetNumbersRole) continue;
-
                 const members = [...reals.filter(c => c._siblingOrdinal?.role === role), ...survivors];
                 members.sort((a, b) => (birthYear(a) - birthYear(b)) || (kids.indexOf(a) - kids.indexOf(b)));
                 members.forEach((c, idx) => {

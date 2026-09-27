@@ -381,6 +381,7 @@ function useAppViewModel() {
 const AppRootView = ({ topNavProps, zoomProps, viewportProps, sidebarProps, showZoom }) => (
     <div className="flex h-screen w-screen bg-white overflow-hidden text-slate-800 relative" style={{ fontFamily: '"Google Sans", system-ui, -apple-system, sans-serif' }}>
         <GlobalAppStyles />
+        <ButtonDocTooltipOverlay />
         <TopNavigation {...topNavProps} />
         {showZoom && <ZoomControls {...zoomProps} />}
         <MainCanvasViewport {...viewportProps} />

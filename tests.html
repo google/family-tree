@@ -196,6 +196,13 @@ try {
     const getPersonCardThemeSrc = extractFunction(source, 'getPersonCardTheme');
     const extractSheetIdFromUrlSrc = extractFunction(source, 'extractSheetIdFromUrl');
     const resolveInitialSheetUrlSrc = extractFunction(source, 'resolveInitialSheetUrl');
+    const buttonDocCatalogSrc = 'const BUTTON_DOCUMENTATION_CATALOG = ' + extractBlock(source, '{\n    \'Import Google Sheet from Clipboard URL\':') + ';';
+    const resolveDynamicFilterButtonDocSrc = extractFunction(source, 'resolveDynamicFilterButtonDoc');
+    const resolveContextualButtonDocSrc = extractFunction(source, 'resolveContextualButtonDoc');
+    const resolveButtonDocumentationSrc = extractFunction(source, 'resolveButtonDocumentation');
+    const computeButtonDocPositionSrc = extractFunction(source, 'computeButtonDocPosition');
+    const buildHoveredButtonDocStateSrc = extractFunction(source, 'buildHoveredButtonDocState');
+    const restoreButtonNativeTitleSrc = extractFunction(source, 'restoreButtonNativeTitle');
 
     const [
         CSVParser, Person, FamilyTree, FamilyTreeBuilder,
@@ -205,7 +212,9 @@ try {
         getPersonCardTheme, executeBackgroundTreeTransition,
         computeLayoutAnchorShift, computeUpdatedTreeLayout,
         findBestAnchorNode, calculateShiftedCamera,
-        resolveInitialSheetUrl
+        resolveInitialSheetUrl, BUTTON_DOCUMENTATION_CATALOG,
+        resolveButtonDocumentation, computeButtonDocPosition,
+        buildHoveredButtonDocState, restoreButtonNativeTitle
     ] = new Function(`
         ${csvParserSrc}
         ${personSrc}
@@ -249,6 +258,13 @@ try {
         const DEFAULT_URL = 'https://docs.google.com/spreadsheets/d/1ZDpcz2ACmG63dUjHLfoHZSW7-dG51FbzaJVcqHYdkEI/edit?usp=sharing';
         ${extractSheetIdFromUrlSrc}
         ${resolveInitialSheetUrlSrc}
+        ${buttonDocCatalogSrc}
+        ${resolveDynamicFilterButtonDocSrc}
+        ${resolveContextualButtonDocSrc}
+        ${resolveButtonDocumentationSrc}
+        ${computeButtonDocPositionSrc}
+        ${buildHoveredButtonDocStateSrc}
+        ${restoreButtonNativeTitleSrc}
         FamilyTreeBuilder.matchesPersonFilter = matchesPersonFilter;
         FamilyTreeBuilder.FILTER_BADGE_CONFIG = FILTER_BADGE_CONFIG;
         FamilyTreeBuilder.computeFilterHighlightedIds = function(tree, activeFilter) {
@@ -271,7 +287,9 @@ try {
             getPersonCardTheme, executeBackgroundTreeTransition,
             computeLayoutAnchorShift, computeUpdatedTreeLayout,
             findBestAnchorNode, calculateShiftedCamera,
-            resolveInitialSheetUrl
+            resolveInitialSheetUrl, BUTTON_DOCUMENTATION_CATALOG,
+            resolveButtonDocumentation, computeButtonDocPosition,
+            buildHoveredButtonDocState, restoreButtonNativeTitle
         ];
     `)();
 
@@ -13491,6 +13509,79 @@ const m3 = tree.all.find(n => n.id === '3');
                 resolveInitialSheetUrl(null), defaultUrlExpected);
         } catch (e) {
             assertEqual('Test 203 execution failed', e.message, '');
+        }
+    }
+
+    // ══════════════════════════════════════════════════════════════════════════
+    //  204. Interactive Rich-Text Button Hover Documentation & Examples
+    // ══════════════════════════════════════════════════════════════════════════
+    section('204. Interactive Rich-Text Button Hover Documentation & Examples');
+    {
+        try {
+            // Test 204.01: Catalog completeness and rich-text/examples invariants
+            const catalogKeys = Object.keys(BUTTON_DOCUMENTATION_CATALOG);
+            assert('Test 204.01: BUTTON_DOCUMENTATION_CATALOG defines >= 20 core buttons', catalogKeys.length >= 20);
+            catalogKeys.forEach(k => {
+                const entry = BUTTON_DOCUMENTATION_CATALOG[k];
+                assert(`Test 204.02 (${k}): has non-empty title & badge`, Boolean(entry.title && entry.badge));
+                assert(`Test 204.03 (${k}): summary uses rich-text markdown (**bold** or \`code\`)`,
+                    /\*\*[^*]+\*\*|`[^`]+`/.test(entry.summary));
+                assert(`Test 204.04 (${k}): provides >= 2 concrete examples with label and detail`,
+                    Array.isArray(entry.examples) && entry.examples.length >= 2 &&
+                    entry.examples.every(ex => ex.label && ex.detail));
+            });
+
+            // Test 204.05: Dynamic filter badge resolution (Family, Location, Career)
+            const famDoc = resolveButtonDocumentation('Filter by Family: Parathottiyil', 'Parathottiyil');
+            assertEqual('Test 204.05: Dynamic family filter title', famDoc.title, 'Filter by Family: Parathottiyil');
+            assert('Test 204.06: Dynamic family filter has >= 2 examples', famDoc.examples.length >= 2);
+
+            const locDoc = resolveButtonDocumentation('Filter by Location: Chalissery', 'Chalissery');
+            assertEqual('Test 204.07: Dynamic location filter title', locDoc.title, 'Filter by Location: Chalissery');
+            assert('Test 204.08: Dynamic location filter summary highlights Chalissery in rich text', locDoc.summary.includes('**`Chalissery`**'));
+
+            const jobDoc = resolveButtonDocumentation('Filter by Career: Teacher', 'Teacher');
+            assertEqual('Test 204.09: Dynamic career filter title', jobDoc.title, 'Filter by Career: Teacher');
+            assert('Test 204.10: Dynamic career filter has >= 2 examples', jobDoc.examples.length >= 2);
+
+            // Test 204.11: Contextual button resolution (Directory tabs, Map bar, AI Engine toggle)
+            const dirTabDoc = resolveButtonDocumentation('', 'Locations (42)');
+            assertEqual('Test 204.11: Directory tab resolution', dirTabDoc.title, 'Directory Tab: Locations');
+            const hideDirDoc = resolveButtonDocumentation('', 'Hide Directory');
+            assertEqual('Test 204.12: Hide Directory maps to Toggle Directory entry', hideDirDoc.title, 'Toggle Location Directory Sidebar');
+            const aiEngineDoc = resolveButtonDocumentation('', 'Rule');
+            assertEqual('Test 204.13: AI Engine toggle resolution', aiEngineDoc.title, 'Switch AI Engine Mode (RULE)');
+
+            // Test 204.14: Viewport clamping in computeButtonDocPosition
+            const topBarPos = computeButtonDocPosition({ left: 1250, top: 16, right: 1294, bottom: 60, width: 44, height: 44 }, 1280, 800);
+            assertEqual('Test 204.14: Top-right button places popover below button', topBarPos.placement, 'bottom');
+            assert('Test 204.15: Top-right button popover is clamped inside right viewport margin', topBarPos.left <= 1280 - 340 - 12);
+
+            const bottomBarPos = computeButtonDocPosition({ left: 24, top: 730, right: 64, bottom: 770, width: 40, height: 40 }, 1280, 800);
+            assertEqual('Test 204.16: Bottom-left button places popover above button', bottomBarPos.placement, 'top');
+            assert('Test 204.17: Bottom-left button popover is clamped inside left viewport margin', bottomBarPos.left >= 12);
+
+            // Test 204.18: Native title stashing and restoration via buildHoveredButtonDocState & restoreButtonNativeTitle
+            const attrMap = { title: 'Zoom In' };
+            const mockBtn = {
+                disabled: false,
+                textContent: '',
+                getAttribute: (k) => (k in attrMap ? attrMap[k] : null),
+                setAttribute: (k, v) => { attrMap[k] = String(v); },
+                removeAttribute: (k) => { delete attrMap[k]; },
+                getBoundingClientRect: () => ({ left: 24, top: 700, right: 64, bottom: 740, width: 40, height: 40 })
+            };
+            const hoveredState = buildHoveredButtonDocState(mockBtn);
+            assert('Test 204.18: Hovered button state resolves Zoom In doc', hoveredState && hoveredState.doc.title === 'Zoom In Canvas');
+            assertEqual('Test 204.19: Native title attribute is removed while hovered to prevent tooltip collision', mockBtn.getAttribute('title'), null);
+            assertEqual('Test 204.20: Original title is stashed in data-orig-title', mockBtn.getAttribute('data-orig-title'), 'Zoom In');
+            restoreButtonNativeTitle(mockBtn);
+            assertEqual('Test 204.21: Native title attribute is restored on hover exit', mockBtn.getAttribute('title'), 'Zoom In');
+
+            // Test 204.22: AppRootView mounts ButtonDocTooltipOverlay
+            assert('Test 204.22: AppRootView renders <ButtonDocTooltipOverlay />', appCode.includes('<ButtonDocTooltipOverlay />'));
+        } catch (e) {
+            assertEqual('Test 204 execution failed', e.message, '');
         }
     }
 

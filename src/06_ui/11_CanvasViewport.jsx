@@ -3017,13 +3017,6 @@ function useAppPanels(isLoading) {
  *     handleImport
  *   });
  *
- * @example
- *   const loaded = initializeTreeDataset({
- *     setTree: () => {}, setSheetUrl: () => {}, setFocusId: () => {},
- *     setIsSidebarVisible: () => {}, centerOnPerson: () => {},
- *     appendLog: () => {}, handleImport: () => {}
- *   });
- */
 /**
  * Resolves the initial spreadsheet URL from URL search parameters ('id', 'sheet', 'url', 'sheetId'),
  * falling back to DEFAULT_URL if no query parameter is provided.
@@ -3035,6 +3028,10 @@ function useAppPanels(isLoading) {
  * // Given URL: https://google.github.io/family-tree/?id=1ZDpcz2ACmG63dUjHLfoHZSW7-dG51FbzaJVcqHYdkEI
  * resolveInitialSheetUrl('?id=1ZDpcz2ACmG63dUjHLfoHZSW7-dG51FbzaJVcqHYdkEI');
  * // => 'https://docs.google.com/spreadsheets/d/1ZDpcz2ACmG63dUjHLfoHZSW7-dG51FbzaJVcqHYdkEI/edit'
+ *
+ * @example
+ * resolveInitialSheetUrl('');
+ * // => DEFAULT_URL
  */
 function resolveInitialSheetUrl(searchString = null) {
     try {
@@ -3067,6 +3064,19 @@ function resolveInitialSheetUrl(searchString = null) {
  *
  * @param {Object} options - Initialization options and dispatchers
  * @returns {boolean} Whether an embedded dataset was loaded
+ *
+ * @example
+ * initializeTreeDataset({
+ *   setTree, setSheetUrl, setFocusId, setIsSidebarVisible,
+ *   centerOnPerson, appendLog, handleImport
+ * });
+ *
+ * @example
+ * const loaded = initializeTreeDataset({
+ *   setTree: () => {}, setSheetUrl: () => {}, setFocusId: () => {},
+ *   setIsSidebarVisible: () => {}, centerOnPerson: () => {},
+ *   appendLog: () => {}, handleImport: () => {}
+ * });
  */
 function initializeTreeDataset({
     setTree, setSheetUrl, setFocusId, setIsSidebarVisible,
