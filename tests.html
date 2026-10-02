@@ -13830,6 +13830,125 @@ const m3 = tree.all.find(n => n.id === '3');
     }
 
     // ══════════════════════════════════════════════════════════════════════════
+    //  206. SIBLING column resolves to the nearest same-sheet namesake (Mathayi aka Chittappan)
+    // ══════════════════════════════════════════════════════════════════════════
+    {
+        section('206. SIBLING Column Resolves to the Nearest Same-Sheet Namesake (Mathayi aka Chittappan)');
+        // On the Deepa sheet two men are called Mathayi: row 25 (b. 1925, son of Ousep & Mariyam) and
+        // row 71 (Chittappan, b. 1941, husband of Theyyama, parents unknown). Rows 69, 70 and 72 declare
+        // `Sibling: Mathayi`. The SIBLING cell must mean the Mathayi next to them (row 71), not the first
+        // namesake on the sheet; otherwise Chittappan's siblings vanish under the 1925 Mathayi and the
+        // parent names copied across the sibling link conjure phantom Ousep/Mariyam ghosts as his parents.
+        try {
+            const d = (row, name, extra = {}) => ({ _sourceId: 'd', _sheetRow: row, Name: name, ...extra });
+            const rows206 = [
+                d(12, 'Ousep', { Spouse: 'Mariyam', Family: 'Kanjirathinkal' }),
+                d(13, 'Mariyam', { Age: '75', 'Year of Death': '1963', Spouse: 'Ousep' }),
+                d(18, 'Joseph', { 'Year of Birth': '1920', Mother: 'Mariyam', Father: 'Ousep' }),
+                d(25, 'Mathayi', { Age: '65', 'Year of Death': '1990', Mother: 'Mariyam', Father: 'Ousep', Spouse: 'Kochu Nathoon' }),
+                d(26, 'Kochu Nathoon', { Age: '80', 'Year of Death': '2005', Spouse: 'Mathayi' }),
+                d(40, 'Thomas', { 'Year of Birth': '1912' }),
+                d(41, 'Mariyakkutty', { 'Year of Birth': '1918', Spouse: 'Thomas' }),
+                d(65, 'Theyyama', { 'Year of Birth': '1949', Mother: 'Mariyakkutty', Father: 'Thomas', Spouse: 'Mathayi', Location: 'Palai' }),
+                d(69, 'Mary', { Nickname: 'Kunjamma', Sibling: 'Mathayi', Location: 'Marangattupilli' }),
+                d(70, 'Mathayi Sister', { Sibling: 'Mathayi' }),
+                d(71, 'Mathayi', { Nickname: 'Chittappan', 'Year of Birth': '1941', Spouse: 'Theyyama', Family: 'Chamakkalayil', Location: 'Kuravilangadu', Job: 'Teacher' }),
+                d(72, 'Eliyama', { Sibling: 'Mathayi', Job: 'Bank Officer' }),
+                d(74, 'Jose', { Mother: 'Mathayi Sister' }),
+                d(76, 'Sunil', { 'Year of Birth': '1972', Mother: 'Theyyama', Father: 'Mathayi' })
+            ];
+            const t206 = buildTree(rows206, { d: 'Deepa' });
+            const mathayis = findAllPersons(t206, 'Mathayi');
+            const elder = mathayis.find(m => m.yob === 1925) || null;
+            const chittappan = mathayis.find(m => m.yob === 1941) || null;
+            const mary = findPerson(t206, 'Mary');
+            const sister = findPerson(t206, 'Mathayi Sister');
+            const eliyama = findPerson(t206, 'Eliyama');
+            const ousep = findPerson(t206, 'Ousep');
+            const mariyam = findPerson(t206, 'Mariyam');
+            const siblings = [mary, sister, eliyama];
+
+            assert('Test 206.01: Both namesakes survive as distinct people (b. 1925 and b. 1941)', Boolean(elder && chittappan && elder.id !== chittappan.id));
+            assert('Test 206.02: Rows 69, 70 and 72 are explicit siblings of the row-71 Mathayi (Chittappan), the namesake next to them',
+                siblings.every(s => s && (chittappan.explicitSiblings || []).includes(s.id) && (s.explicitSiblings || []).includes(chittappan.id)));
+            assert('Test 206.03: None of them is linked to the 1925 Mathayi on row 25',
+                siblings.every(s => !(elder.explicitSiblings || []).includes(s.id) && s.momId !== elder.momId && s.fatherId !== elder.fatherId));
+            assert('Test 206.04: Chittappan and his three siblings share one mother and one father',
+                Boolean(chittappan.momId && chittappan.fatherId) && siblings.every(s => s.momId === chittappan.momId && s.fatherId === chittappan.fatherId));
+            assert('Test 206.05: Those shared parents are unknown-parent placeholders (synthetic sibling parents, hidden from cards and the details panel)',
+                FamilyTree.isSyntheticSiblingParent(t206.get(chittappan.momId)) && FamilyTree.isSyntheticSiblingParent(t206.get(chittappan.fatherId)));
+            assert('Test 206.06: No Ousep or Mariyam, real or ghost, is attached to Chittappan as a parent',
+                [chittappan.momId, chittappan.fatherId].every(id => !/^(ousep|mariyam)$/i.test((t206.get(id) || {}).name || '')) &&
+                t206.all.filter(n => n.isGhost && /^(Ousep|Mariyam)$/.test(n.name)).length === 0);
+            assert('Test 206.07: The 1925 Mathayi keeps his real parents Ousep and Mariyam',
+                elder.fatherId === ousep.id && elder.momId === mariyam.id);
+            assert('Test 206.08: Ousep and Mariyam no longer list Chittappan\'s siblings among their children',
+                [ousep, mariyam].every(p => !siblings.some(s => (p.children || []).includes(s.id))) && (ousep.children || []).includes(elder.id));
+            assert('Test 206.09: Chittappan keeps his own family: Theyyama as partner and Sunil as son',
+                (chittappan.partners || []).includes(findPerson(t206, 'Theyyama').id) && findPerson(t206, 'Sunil').fatherId === chittappan.id);
+            assert('Test 206.10: Jose (Mother: Mathayi Sister) hangs under the sister who is linked to Chittappan',
+                findPerson(t206, 'Jose').momId === sister.id);
+            assert('Test 206.11: Row order gives the sibling ages: Mary (row 69) older than Chittappan, Eliyama (row 72) younger',
+                mary.bestYob < chittappan.bestYob && chittappan.bestYob < eliyama.bestYob);
+
+            // Test 206.12-206.14: the biological sibling-span guard (one mother's fertile window)
+            const span206 = FamilyTreeBuilder.BIOLOGICAL_BOUNDS.MAX_MOTHER_CHILDBIRTH_AGE - GAPS.MIN_PARENTAL_AGE;
+            assert('Test 206.12: Siblings five years apart are plausible', FamilyTreeBuilder._isPlausibleSiblingPair({ yob: 1941 }, { yob: 1946 }) === true);
+            assert('Test 206.13: A gap of exactly one maternal fertile window is still plausible, one year more is not',
+                FamilyTreeBuilder._isPlausibleSiblingPair({ yob: 1900 }, { yob: 1900 + span206 }) === true &&
+                FamilyTreeBuilder._isPlausibleSiblingPair({ yob: 1900 + span206 + 1 }, { yob: 1900 }) === false);
+            assert('Test 206.14: Unknown birth years never disqualify a pair',
+                FamilyTreeBuilder._isPlausibleSiblingPair({ yob: 1925 }, { yob: 0 }) === true && FamilyTreeBuilder._isPlausibleSiblingPair({}, null) === true);
+
+            // Test 206.15-206.21: _pickDeclaredSiblingCandidate / _resolveOrCreateSiblingGhost on a stub builder
+            const b206 = new FamilyTreeBuilder([], {});
+            const stub = (id, row, extra = {}) => ({ id, name: 'Mathayi', _normName: 'mathayi', _sourceId: 'd', _sheetRow: row, explicitSiblings: [], ...extra });
+            const m25 = stub('m25', 25, { yob: 1925 });
+            const m71 = stub('m71', 71, { yob: 1941 });
+            const otherSheet = stub('x', 70, { _sourceId: 'other' });
+            b206.name2nodes = { mathayi: [m25, m71, otherSheet] };
+            b206.nodeMap = { m25, m71, x: otherSheet };
+            const row70 = { id: 'r70', name: 'Mathayi Sister', _normName: 'mathayi sister', _sourceId: 'd', _sheetRow: 70, explicitSiblings: [] };
+            assert('Test 206.15: Row 70 resolves "Mathayi" to row 71, not the first namesake on the sheet (row 25) nor the row-70 namesake of another sheet',
+                b206._pickDeclaredSiblingCandidate(row70, 'Mathayi') === m71);
+            assert('Test 206.16: A declaration on row 27 resolves to the row-25 namesake instead',
+                b206._pickDeclaredSiblingCandidate({ ...row70, _sheetRow: 27 }, 'Mathayi') === m25);
+            assert('Test 206.17: No same-sheet namesake, or an unknown name, yields null',
+                b206._pickDeclaredSiblingCandidate({ ...row70, _sourceId: 'other2' }, 'Mathayi') === null && b206._pickDeclaredSiblingCandidate(row70, 'Nobody') === null);
+            assert('Test 206.18: An explicit sibling already linked under that name wins even when a namesake is nearer in rows',
+                b206._pickDeclaredSiblingCandidate({ ...row70, explicitSiblings: ['m25'] }, 'Mathayi') === m25);
+            const m71Old = stub('m71old', 71, { yob: 1875 });
+            b206.name2nodes = { mathayi: [m25, m71Old] };
+            b206.nodeMap = { m25, m71old: m71Old };
+            assert('Test 206.19: A nearer namesake born 55 years before the declaring row is skipped for the nearest plausible one',
+                b206._pickDeclaredSiblingCandidate({ ...row70, yob: 1930 }, 'Mathayi') === m25);
+            b206.name2nodes = { mathayi: [m25, m71] };
+            b206.nodeMap = { m25, m71 };
+            const nodes206 = [m25, m71, row70];
+            const resolved206 = b206._resolveOrCreateSiblingGhost(row70, 'Mathayi', nodes206);
+            assert('Test 206.20: _resolveOrCreateSiblingGhost reuses the nearest namesake instead of creating a ghost',
+                resolved206.match === m71 && resolved206.changed === false && nodes206.length === 3);
+            const created206 = b206._resolveOrCreateSiblingGhost(row70, 'Nobody', nodes206);
+            assert('Test 206.21: With no namesake on the sheet a ghost sibling is still synthesized',
+                created206.changed === true && created206.match.isGhost === true && created206.match.name === 'Nobody' && nodes206.length === 4);
+
+            // Test 206.22-206.23: a contiguous sibling block outranks a nearer namesake (Annamma Brother 6 vs the niece Annamma)
+            const annamma31 = { id: 'a31', name: 'Annamma', _normName: 'annamma', _sourceId: 'm', _sheetRow: 31, explicitSiblings: ['b5'] };
+            const brother5 = { id: 'b5', name: 'Annamma Brother 5', _normName: 'annamma brother 5', _sourceId: 'm', _sheetRow: 36, explicitSiblings: ['a31'] };
+            const niece41 = { id: 'a41', name: 'Annamma', _normName: 'annamma', _sourceId: 'm', _sheetRow: 41, explicitSiblings: [] };
+            const brother6 = { id: 'b6', name: 'Annamma Brother 6', _normName: 'annamma brother 6', _sourceId: 'm', _sheetRow: 37, explicitSiblings: [] };
+            b206.name2nodes = { annamma: [annamma31, niece41] };
+            b206.nodeMap = { a31: annamma31, b5: brother5, a41: niece41, b6: brother6 };
+            assert('Test 206.22: Block distance counts linked siblings: Annamma (row 31) is 1 row from Brother 6 via Brother 5, the niece (row 41) is 4 rows away',
+                b206._siblingBlockDistance(annamma31, brother6) === 1 && b206._siblingBlockDistance(niece41, brother6) === 4);
+            assert('Test 206.23: Brother 6 on row 37 therefore joins his sister\'s block on row 31 instead of the nearer namesake niece on row 41',
+                b206._pickDeclaredSiblingCandidate(brother6, 'Annamma') === annamma31);
+        } catch (e) {
+            assertEqual('Test 206 execution failed', e.message, '');
+        }
+    }
+
+    // ══════════════════════════════════════════════════════════════════════════
     //  SUMMARY
     // ══════════════════════════════════════════════════════════════════════════
     const summaryPlaceholder = document.getElementById('summary-placeholder');

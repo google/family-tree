@@ -223,7 +223,7 @@ The CSV/Spreadsheet parser uses fuzzy Jaro-Winkler and token header matching, so
 | **`Family Name`** | `House Name`, `Family name at birth if father not available` | `Parathottiyil`, `Thalakkottukara`, `Alappatt` |
 | **`Location`** | `Place`, `Location if different from husband/father` | `Chalissery`, `Moonilavu`, `Ollur`, `Bangalore` |
 | **`Job`** | `Occupation`, `Career`, `Profession` | `Teacher`, `Farmer`, `Engineer` |
-| **`Sibling`** | `Brother`, `Sister`, `Sibling any one of them` | `Paul`, `Margaret` |
+| **`Sibling`** | `Brother`, `Sister`, `Sibling any one of them` | `Paul`, `Margaret` (resolved to the nearest age-plausible namesake on the same sheet, e.g. `Mathayi` on the next row rather than a `Mathayi` 45 rows above) |
 | **`Free Form`** | `Notes`, `Children`, `Description` | `3 sons, 2 daughters`, `No children` |
 
 #### Concrete Spreadsheet Table Example
@@ -306,7 +306,7 @@ node scripts/bundle.mjs --check
 # Run a single test section in <1s during development
 node scripts/run_tests.mjs --skip-ast --section 204
 
-# Run Stages 1-3 (AST parse + Scope check + 2,692 unit tests in ~3s)
+# Run Stages 1-3 (AST parse + Scope check + 2,715 unit tests in ~3s)
 node scripts/run_tests.mjs --fast
 
 # Run all 4 stages including Headless Chrome E2E smoke test (~15s)

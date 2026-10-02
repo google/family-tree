@@ -10590,7 +10590,86 @@ ${b64Jsx}
     }
 
     /**
-     * Resolves an explicit sibling reference, or creates a ghost placeholder if none found.
+     * Tells whether two people could be siblings on birth years alone: the eldest and youngest
+     * child of one mother are at most her fertile window apart (MAX_MOTHER_CHILDBIRTH_AGE minus
+     * MIN_PARENTAL_AGE). Unknown birth years never disqualify a pair.
+     *
+     * @param {Object} a - First person node
+     * @param {Object} b - Second person node
+     * @returns {boolean} True when the birth-year gap fits inside one mother's fertile window
+     *
+     * @example
+     * FamilyTreeBuilder._isPlausibleSiblingPair({ yob: 1941 }, { yob: 1946 });
+     * // => true
+     *
+     * @example
+     * FamilyTreeBuilder._isPlausibleSiblingPair({ yob: 1925 }, { yob: 1975 });
+     * // => false (50 years apart: no single mother bears children that far apart)
+     */
+    static _isPlausibleSiblingPair(a, b) {
+        if (!a || !b || !a.yob || !b.yob) return true;
+        const maxSpan = FamilyTreeBuilder.BIOLOGICAL_BOUNDS.MAX_MOTHER_CHILDBIRTH_AGE - FamilyTreeBuilder.GENERATIONAL_GAPS.MIN_PARENTAL_AGE;
+        return Math.abs(a.yob - b.yob) <= maxSpan;
+    }
+
+    /**
+     * Row distance from a declaring row to a namesake's sibling block: the candidate or any sibling
+     * already linked to it, whichever is nearest. Declared siblings are entered as contiguous blocks,
+     * so the sixth brother of a block sits next to his brothers, not next to the namesake niece
+     * listed a few rows below him.
+     *
+     * @param {Object} candidate - Namesake being scored
+     * @param {Object} n - Node whose SIBLING cell is being resolved
+     * @returns {number} Minimum row distance to the candidate or its linked siblings
+     *
+     * @example
+     * // Annamma on row 31 already has brothers linked on rows 32-36; Brother 6 sits on row 37
+     * builder._siblingBlockDistance(annammaRow31, brother6Row37);
+     * // => 1  (to Brother 5 on row 36, although Annamma herself is 6 rows away)
+     *
+     * @example
+     * builder._siblingBlockDistance({ _sourceId: 'd', _sheetRow: 41 }, { _sourceId: 'd', _sheetRow: 37 });
+     * // => 4  (no linked siblings: plain row distance)
+     */
+    _siblingBlockDistance(candidate, n) {
+        const block = [candidate, ...(candidate.explicitSiblings || []).map(id => this.nodeMap[id])].filter(Boolean);
+        return Math.min(...block.map(member => FamilyTreeBuilder._getMinRowDistance(member, n)));
+    }
+
+    /**
+     * Picks which same-sheet namesake a SIBLING cell refers to. An explicit sibling already linked
+     * under that name wins (it was anchored by row proximity earlier); otherwise the biologically
+     * plausible namesake whose sibling block is nearest in spreadsheet rows, the same row-proximity
+     * rule every other relative reference follows. So `Sibling: Mathayi` on row 70 means the Mathayi
+     * on row 71, not the namesake on row 25 who happens to appear first on the sheet.
+     *
+     * @param {Object} n - Node whose SIBLING cell is being resolved
+     * @param {string} sibName - Sibling name from the cell
+     * @returns {Object|null} Best same-sheet namesake, or null when none exists
+     *
+     * @example
+     * // Rows 25 and 71 are both "Mathayi"; row 70 declares Sibling: Mathayi
+     * builder._pickDeclaredSiblingCandidate(row70Node, 'Mathayi');
+     * // => the Mathayi on row 71
+     *
+     * @example
+     * builder._pickDeclaredSiblingCandidate(row70Node, 'Nobody');
+     * // => null
+     */
+    _pickDeclaredSiblingCandidate(n, sibName) {
+        const norm = sibName.toLowerCase().trim();
+        const linked = (n.explicitSiblings || []).map(id => this.nodeMap[id]).find(s => s && s._normName === norm);
+        if (linked) return linked;
+        const cands = (this.name2nodes[norm] || []).filter(c => c !== n && FamilyTreeBuilder.sharesSheet(c, n));
+        if (cands.length <= 1) return cands[0] || null;
+        const plausible = cands.filter(c => FamilyTreeBuilder._isPlausibleSiblingPair(c, n));
+        const pool = plausible.length > 0 ? plausible : cands;
+        return pool.slice().sort((a, b) => this._siblingBlockDistance(a, n) - this._siblingBlockDistance(b, n))[0];
+    }
+
+    /**
+     * Resolves an explicit sibling reference to the nearest same-sheet namesake, or creates a ghost
+     * placeholder if none found.
      *
      * @param {Object} n - Source node referencing sibling
      * @param {string} sibName - Display name of the sibling
@@ -10599,15 +10678,14 @@ ${b64Jsx}
      *
      * @example
      * builder._resolveOrCreateSiblingGhost(currentNode, 'Mark', nodes);
-     * // => Returns existing node for 'Mark' if found on same sheet
+     * // => Returns the existing 'Mark' nearest in rows on the same sheet
      *
      * @example
      * builder._resolveOrCreateSiblingGhost(currentNode, 'UnseenSibling', nodes);
      * // => Synthesizes auto-ghost sibling profile and registers in nodes and name2nodes
      */
     _resolveOrCreateSiblingGhost(n, sibName, nodes) {
-        const cands = this.name2nodes[sibName.toLowerCase()] || [];
-        let match = cands.find(c => c !== n && FamilyTreeBuilder.sharesSheet(c, n));
+        let match = this._pickDeclaredSiblingCandidate(n, sibName);
         let changed = false;
         if (!match) {
             const clean = sibName;
