@@ -13943,6 +13943,63 @@ const m3 = tree.all.find(n => n.id === '3');
                 b206._siblingBlockDistance(annamma31, brother6) === 1 && b206._siblingBlockDistance(niece41, brother6) === 4);
             assert('Test 206.23: Brother 6 on row 37 therefore joins his sister\'s block on row 31 instead of the nearer namesake niece on row 41',
                 b206._pickDeclaredSiblingCandidate(brother6, 'Annamma') === annamma31);
+
+            // Test 206.24-206.30: the family house name outranks row proximity (Kunjunju [Chiramal] vs the two Pauls)
+            assert('Test 206.24: _narrowCandidates keeps the passing candidates and ignores a hint nobody passes',
+                JSON.stringify(FamilyTreeBuilder._narrowCandidates([{ yob: 1915 }, { yob: 1860 }], c => c.yob > 1900)) === '[{"yob":1915}]' &&
+                FamilyTreeBuilder._narrowCandidates([{ yob: 1850 }, { yob: 1860 }], c => c.yob > 1900).length === 2);
+            assert('Test 206.25: _sharesFamilyName is case-insensitive and never matches on a missing name',
+                FamilyTreeBuilder._sharesFamilyName({ family: 'Chiramal' }, { family: ' chiramal ' }) === true &&
+                FamilyTreeBuilder._sharesFamilyName({ family: 'Chiramal' }, { family: '' }) === false &&
+                FamilyTreeBuilder._sharesFamilyName({}, null) === false);
+            const paul = (id, row, extra = {}) => ({ id, name: 'Paul', _normName: 'paul', _sourceId: 'c', _sheetRow: row, explicitSiblings: [], ...extra });
+            const paulChiramal = paul('p39', 39, { yob: 1915, family: 'Chiramal' });
+            const paulKanjira = paul('p44', 44, { family: 'Kanjiraparamban' });
+            const kunjunju = { id: 'k48', name: 'Kunjunju', _normName: 'kunjunju', _sourceId: 'c', _sheetRow: 48, yob: 1920, family: 'Chiramal', explicitSiblings: [] };
+            b206.name2nodes = { paul: [paulChiramal, paulKanjira] };
+            b206.nodeMap = { p39: paulChiramal, p44: paulKanjira, k48: kunjunju };
+            assert('Test 206.26: Kunjunju [Chiramal] on row 48 means the Paul [Chiramal] on row 39, not the nearer Paul [Kanjiraparamban] on row 44',
+                b206._pickDeclaredSiblingCandidate(kunjunju, 'Paul') === paulChiramal);
+            assert('Test 206.27: Without a family name on Kunjunju the nearer Paul on row 44 is still chosen by row proximity',
+                b206._pickDeclaredSiblingCandidate({ ...kunjunju, family: '' }, 'Paul') === paulKanjira);
+            const paulUnlabelled = paul('p44u', 44);
+            b206.name2nodes = { paul: [paulChiramal, paulUnlabelled] };
+            b206.nodeMap = { p39: paulChiramal, p44u: paulUnlabelled, k48: kunjunju };
+            assert('Test 206.28: A namesake declaring the same house is corroborated over a nearer namesake with no family name',
+                b206._pickDeclaredSiblingCandidate(kunjunju, 'Paul') === paulChiramal);
+            const paulGrandfather = paul('p39g', 39, { yob: 1860, family: 'Chiramal' });
+            b206.name2nodes = { paul: [paulGrandfather, paulUnlabelled] };
+            b206.nodeMap = { p39g: paulGrandfather, p44u: paulUnlabelled, k48: kunjunju };
+            assert('Test 206.29: House names pass down the generations, so a same-house namesake born 60 years earlier loses to the age-plausible unlabelled one',
+                b206._pickDeclaredSiblingCandidate(kunjunju, 'Paul') === paulUnlabelled);
+            const paulOtherHouse = paul('p39o', 39, { yob: 1915, family: 'Olakkenkil' });
+            b206.name2nodes = { paul: [paulOtherHouse, paulKanjira] };
+            b206.nodeMap = { p39o: paulOtherHouse, p44: paulKanjira, k48: kunjunju };
+            assert('Test 206.30: When every namesake\'s house conflicts the hint is dropped and the nearest plausible namesake is still chosen',
+                b206._pickDeclaredSiblingCandidate(kunjunju, 'Paul') === paulKanjira);
+
+            // Test 206.31-206.33: the Chalissery rows through the real builder
+            const c = (row, name, extra = {}) => ({ _sourceId: 'c', _sheetRow: row, Name: name, ...extra });
+            const rowsKunjunju = [
+                c(39, 'Paul', { 'Year of Birth': '1915', 'Year of Death': '1985', Family: 'Chiramal' }),
+                c(40, 'Rosa', { 'Year of Birth': '1921', 'Year of Death': '2007', Mother: 'Annamma', Spouse: 'Paul' }),
+                c(44, 'Paul', { Spouse: 'Annamkutty', Family: 'Kanjiraparamban' }),
+                c(45, 'Annamkutty', { Family: 'Parayil Kudiyirippil' }),
+                c(48, 'Kunjunju', { 'Year of Birth': '1920', Family: 'Chiramal', Location: 'Kaloor', Sibling: 'Paul' })
+            ];
+            const tK = buildTree(rowsKunjunju, { c: 'Chalissery' });
+            const pauls = findAllPersons(tK, 'Paul');
+            const paul1915 = pauls.find(p => p.yob === 1915) || null;
+            const paulAnnamkutty = pauls.find(p => p !== paul1915) || null;
+            const kunjunjuK = findPerson(tK, 'Kunjunju');
+            assert('Test 206.31: Kunjunju (b. 1920, Chiramal) is the explicit sibling of Paul b. 1915 [Chiramal], nine rows up',
+                Boolean(paul1915 && kunjunjuK) && (kunjunjuK.explicitSiblings || []).includes(paul1915.id) && (paul1915.explicitSiblings || []).includes(kunjunjuK.id));
+            assert('Test 206.32: Paul x Annamkutty [Kanjiraparamban], four rows up, is not linked to Kunjunju at all',
+                Boolean(paulAnnamkutty) && !(paulAnnamkutty.explicitSiblings || []).includes(kunjunjuK.id) &&
+                (!paulAnnamkutty.momId || paulAnnamkutty.momId !== kunjunjuK.momId) && (!paulAnnamkutty.fatherId || paulAnnamkutty.fatherId !== kunjunjuK.fatherId));
+            assert('Test 206.33: Kunjunju and Paul 1915 share one mother and one father, both unknown-parent placeholders',
+                Boolean(kunjunjuK.momId && kunjunjuK.fatherId) && paul1915.momId === kunjunjuK.momId && paul1915.fatherId === kunjunjuK.fatherId &&
+                FamilyTree.isSyntheticSiblingParent(tK.get(kunjunjuK.momId)) && FamilyTree.isSyntheticSiblingParent(tK.get(kunjunjuK.fatherId)));
         } catch (e) {
             assertEqual('Test 206 execution failed', e.message, '');
         }

@@ -17127,11 +17127,59 @@ ${b64Jsx}
     }
 
     /**
+     * Keeps only the candidates that pass a test, unless none do, in which case the full list is
+     * returned unchanged: a hint may narrow the pool but can never empty it.
+     *
+     * @param {Object[]} cands - Candidates to narrow
+     * @param {function(Object): boolean} keep - Predicate a candidate must satisfy
+     * @returns {Object[]} The passing candidates, or all of them when none pass
+     *
+     * @example
+     * FamilyTreeBuilder._narrowCandidates([{ yob: 1915 }, { yob: 1860 }], c => c.yob > 1900);
+     * // => [{ yob: 1915 }]
+     *
+     * @example
+     * FamilyTreeBuilder._narrowCandidates([{ yob: 1850 }, { yob: 1860 }], c => c.yob > 1900);
+     * // => [{ yob: 1850 }, { yob: 1860 }]  (nobody passes, so the hint is ignored)
+     */
+    static _narrowCandidates(cands, keep) {
+        const kept = cands.filter(keep);
+        return kept.length > 0 ? kept : cands;
+    }
+
+    /**
+     * Tells whether two people declare the same family house name (case-insensitive). Unlike
+     * `_hasFamilyMismatch`, a missing name on either side is not a match: an unlabelled namesake is
+     * neither corroborated nor rejected by the house name.
+     *
+     * @param {Object} a - First person node
+     * @param {Object} b - Second person node
+     * @returns {boolean} True when both carry the same non-empty family name
+     *
+     * @example
+     * FamilyTreeBuilder._sharesFamilyName({ family: 'Chiramal' }, { family: ' chiramal ' });
+     * // => true
+     *
+     * @example
+     * FamilyTreeBuilder._sharesFamilyName({ family: 'Chiramal' }, { family: '' });
+     * // => false
+     */
+    static _sharesFamilyName(a, b) {
+        const fa = FamilyTreeBuilder._normText(a && a.family);
+        const fb = FamilyTreeBuilder._normText(b && b.family);
+        return Boolean(fa && fb && fa === fb);
+    }
+
+    /**
      * Picks which same-sheet namesake a SIBLING cell refers to. An explicit sibling already linked
-     * under that name wins (it was anchored by row proximity earlier); otherwise the biologically
-     * plausible namesake whose sibling block is nearest in spreadsheet rows, the same row-proximity
-     * rule every other relative reference follows. So `Sibling: Mathayi` on row 70 means the Mathayi
-     * on row 71, not the namesake on row 25 who happens to appear first on the sheet.
+     * under that name wins (it was anchored by row proximity earlier). Otherwise the namesakes are
+     * narrowed in evidence order, each step skipped when it would leave nobody: siblings share a
+     * birth house, so a conflicting family name rejects a namesake; the birth-year gap must fit one
+     * mother's fertile window; a namesake declaring the same house name is corroborated; and the
+     * nearest sibling block in spreadsheet rows breaks the remaining tie, the same row-proximity rule
+     * every other relative reference follows. So `Sibling: Mathayi` on row 70 means the Mathayi on
+     * row 71, not the namesake on row 25 who happens to appear first on the sheet, and Kunjunju
+     * [Chiramal] means the Paul [Chiramal] nine rows up, not the Paul [Kanjiraparamban] four rows up.
      *
      * @param {Object} n - Node whose SIBLING cell is being resolved
      * @param {string} sibName - Sibling name from the cell
@@ -17143,8 +17191,9 @@ ${b64Jsx}
      * // => the Mathayi on row 71
      *
      * @example
-     * builder._pickDeclaredSiblingCandidate(row70Node, 'Nobody');
-     * // => null
+     * // Kunjunju [Chiramal] on row 48; Paul [Chiramal] on row 39, Paul [Kanjiraparamban] on row 44
+     * builder._pickDeclaredSiblingCandidate(kunjunjuNode, 'Paul');
+     * // => the Paul on row 39 (his house matches, the nearer Paul's house conflicts)
      */
     _pickDeclaredSiblingCandidate(n, sibName) {
         const norm = sibName.toLowerCase().trim();
@@ -17152,8 +17201,9 @@ ${b64Jsx}
         if (linked) return linked;
         const cands = (this.name2nodes[norm] || []).filter(c => c !== n && FamilyTreeBuilder.sharesSheet(c, n));
         if (cands.length <= 1) return cands[0] || null;
-        const plausible = cands.filter(c => FamilyTreeBuilder._isPlausibleSiblingPair(c, n));
-        const pool = plausible.length > 0 ? plausible : cands;
+        const compatible = FamilyTreeBuilder._narrowCandidates(cands, c => !FamilyTreeBuilder._hasFamilyMismatch(c.family, n.family));
+        const plausible = FamilyTreeBuilder._narrowCandidates(compatible, c => FamilyTreeBuilder._isPlausibleSiblingPair(c, n));
+        const pool = FamilyTreeBuilder._narrowCandidates(plausible, c => FamilyTreeBuilder._sharesFamilyName(c, n));
         return pool.slice().sort((a, b) => this._siblingBlockDistance(a, n) - this._siblingBlockDistance(b, n))[0];
     }
 
