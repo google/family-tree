@@ -70,6 +70,53 @@ resolveInitialSheetUrl('?url=https://docs.google.com/spreadsheets/d/1BxiMVs0XRA5
 
 During bootstrap (`initializeTreeDataset`), if the resolved startup URL differs from `DEFAULT_URL` and its spreadsheet ID does not match the cached local tree, the app automatically triggers `handleImport(initialUrl, false, true)` to fetch the requested sheet live.
 
+### 3.1 Shareable View State Hash (`#p=…&z=…&c=…`) — `src/06_ui/12_UrlViewState.jsx`
+
+The query string selects *which* spreadsheet is loaded; the hash fragment captures *what the user is looking at* (Google-Maps style). `useUrlViewStateSync({ ...core, ...viewport, ...focusNav })` is mounted once from `useAppViewModel()` in `src/07_app/01_App.jsx` and does two jobs: it restores the view described by the initial hash after the dataset is ready, and it mirrors every later UI change back into the address bar with `history.replaceState` (no reload, no extra history entries).
+
+| Key | State field | Encoder / Decoder | Sample |
+| :--- | :--- | :--- | :--- |
+| `p=` | `focusId` (person ID `<Name>_<YOB>_<row>`) | `encodeViewStateToken` / `decodeViewStateToken` (percent-encoding, spaces as `+`) | `p=Joseph_1920_152` |
+| `s=0` | `isSidebarVisible === false` while a person is focused | `encodeSelectionHashParts` | `p=Joseph_1920_152&s=0` |
+| `f=` | `activeFilter` as `<filterType>:<value>` (`place`, `job`, `family`, `search`, `directory`) | `parseViewStateFilterToken` | `f=place:New+York` |
+| `v=map` | `showMap` | `encodeSelectionHashParts` | `v=map&f=place:Chalissery` |
+| `z=` | `camera.z` (2 decimals via `formatCompactNumber`) | `applyViewStateHashEntry` | `z=0.8` |
+| `c=` | Visible-viewport centre `<treeX>,<year>` | `computeViewCenterFromCamera` / `computeCameraFromViewCenter` | `c=1240,1953.5` |
+| `k=` | `collapsedNodes` IDs, comma separated | `encodeSelectionHashParts` | `k=Antu_1931_12,Elsy_1935_13` |
+
+```javascript
+// Example 1: Encoding is lossless and only emits non-default keys (short URLs)
+encodeViewStateHash({ focusId: 'Joseph_1920_152', isSidebarVisible: true, zoom: 0.8, center: { x: 1240, year: 1953.5 } });
+// => 'p=Joseph_1920_152&z=0.8&c=1240,1953.5'
+encodeViewStateHash({ showMap: true, activeFilter: { filterType: 'place', value: 'New York' } });
+// => 'v=map&f=place:New+York'
+
+// Example 2: Parsing tolerates hand-edited URLs (unknown keys and bad numbers are dropped)
+parseViewStateHash('#p=Joseph_1920_152&s=0&z=abc&c=1240,1953.5&foo=bar');
+// => { focusId: 'Joseph_1920_152', isSidebarVisible: false, center: { x: 1240, year: 1953.5 } }
+```
+
+**Screen-independent camera model.** The canvas transform is `screenX = treeX * z + camera.x` and `screenY = ((year - rootNodeYob) * ppy + 24) * z + camera.y`. The horizontal layout depends only on the zoom level, so `c=` stores the tree x-coordinate in unscaled pixels; the vertical scale (`ppy`, pixels-per-year) stretches with the window height, so the vertical position is stored as a calendar **year**. The "centre" is the middle of the canvas area that is actually visible — `measureViewStateViewport` subtracts the open sidebar width (the sidebar overlays the canvas) and `computeViewCenterFromCamera` offsets by the `48px` timeline gutter:
+
+```javascript
+// Example 1: camera -> URL centre on a 1048px-wide visible canvas
+computeViewCenterFromCamera({ camera: { x: -600, y: -200, z: 1 }, ppy: 10, rootNodeYob: 1900, visibleWidth: 1048, visibleHeight: 800 });
+// => { x: 1148, year: 1957.6 }
+
+// Example 2: URL centre -> camera on the receiving screen (exact inverse, then clampCamera())
+computeCameraFromViewCenter({ center: { x: 1148, year: 1957.6 }, zoom: 1, ppy: 10, rootNodeYob: 1900, visibleWidth: 1048, visibleHeight: 800 });
+// => { x: -600, y: -200, z: 1 }
+```
+
+**Restore timing (`useUrlViewStateRestore` → `scheduleViewStateRestore`).** The hash is parsed exactly once at mount; the restore effect fires once `tree.rootId && !isLoading` (i.e. after the cache-then-live double load and after `applyImportSuccessFocus` has reset focus/filter), then runs in two phases so it never fights the app's own startup animations:
+
+1. **`+350 ms` — selection** (`applyRestoredSelection`): map (`setShowMap(true)` + the same sidebar/filter/focus resets as the Map button), else filter via the real `handleFilterBy(type, value)`, else focus via `handleSetFocusId(id)` (so navigation history and re-rooting behave like a click) followed by `setIsSidebarVisible(false)` when `s=0`; finally `setCollapsedNodes(new Set(validIds))`. Person IDs are resolved with `resolveViewStatePersonId`, which falls back to a `<Name>_<YOB>_` prefix match so links survive spreadsheet row insertions.
+2. **`+1000 ms` — camera** (`applyRestoredCamera`): after `centerOnPerson`'s own animation has settled, the stored centre is converted back with *this* screen's `getPpy(zoom)` and the visible width predicted by `resolveRestoredSidebarOpen(state)`, then `setCamera(clampCamera(next))`. Skipped entirely for `v=map`.
+
+**Write rules (`useUrlViewStateWriter`).** Writes are enabled only after the restore completes (`phaseRef.current.writable`), debounced `300 ms`, and suppressed while `isLoading`, `isDragging`, or `isShifting` (live-sync camera shifts), so the address bar always contains a stable, copy-ready URL. `writeViewStateHash` is a no-op when the hash is unchanged and swallows any `SecurityError` a browser may raise from `replaceState` on `file://` standalone exports. In map view the `z=`/`c=` keys are omitted because the Leaflet camera is not part of the tree view state.
+
+`tests.html` Section 205 ("Shareable URL View State") covers the encode/parse round trip, URL-safety of separators, the camera ↔ centre inverse pair, prefix-fallback person resolution, selection/camera application order against stubbed handlers, and `replaceState` behaviour; run it with `node scripts/run_tests.mjs --skip-ast --section 205`.
+
 ---
 
 ## 4. Multi-Tier Automated Test Runner (`scripts/run_tests.mjs`)
@@ -80,7 +127,7 @@ The test suite validates the application across 4 progressive stages:
 | :--- | :--- | :--- | :--- |
 | **Stage 1** | Whole-file Babel AST parse (detects syntax errors, missing braces, invalid JSX) | ~400 ms | Every run (unless `--skip-ast`) |
 | **Stage 2** | AST Scope & Identifier Analysis (detects undeclared variables/globals) | ~800 ms | Every run (unless `--skip-ast`) |
-| **Stage 3** | Algorithmic Unit Tests (`tests.html`, 2,636+ assertions across 204 sections) | ~1.5 s | Every run |
+| **Stage 3** | Algorithmic Unit Tests (`tests.html`, 2,680+ assertions across 205 sections) | ~1.5 s | Every run |
 | **Stage 4** | Headless Chrome E2E browser smoke test via CDP (mounts `<App />`, verifies rendered person cards) | ~12 s | Pre-commit / Final validation |
 
 ### CLI Usage Examples
@@ -92,7 +139,7 @@ node scripts/run_tests.mjs --skip-ast --section 204
 # 2. Grep Filter: Run tests matching a specific keyword
 node scripts/run_tests.mjs --grep "Button Hover"
 
-# 3. Fast Mode: Run Stages 1, 2, 3 for all 2,636+ unit tests (~3s)
+# 3. Fast Mode: Run Stages 1, 2, 3 for all 2,680+ unit tests (~3s)
 node scripts/run_tests.mjs --fast
 
 # 4. Full Quality Gate: Run all 4 stages including Headless Chrome E2E (~15s)
@@ -106,7 +153,7 @@ node scripts/audit_quality.mjs
 
 ## 5. Source Architecture & Bundler (`src/` and `scripts/bundle.mjs`)
 
-The codebase is organized into 36 modular files across 7 numbered directories under `src/`:
+The codebase is organized into 37 modular files across 7 numbered directories under `src/`:
 
 ```text
 src/
@@ -142,7 +189,8 @@ src/
 │   ├── 08_QuickDirectory.jsx     # Hierarchical Locations, Careers, and Families browser
 │   ├── 09_FamilyMapView.jsx      # Interactive Leaflet map view, custom pins & bottom controls
 │   ├── 10_TopNavigation.jsx      # Floating navbar, OmniSearch bar & ButtonDocTooltipOverlay
-│   └── 11_CanvasViewport.jsx     # Main canvas viewport, timeline cohorts & URL sheet resolution
+│   ├── 11_CanvasViewport.jsx     # Main canvas viewport, timeline cohorts & URL sheet resolution
+│   └── 12_UrlViewState.jsx       # Shareable #hash view state: encode/parse, restore & replaceState writer
 └── 07_app/
     └── 01_App.jsx                # Root <App /> view model and layout shell
 ```

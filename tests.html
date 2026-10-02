@@ -203,6 +203,14 @@ try {
     const computeButtonDocPositionSrc = extractFunction(source, 'computeButtonDocPosition');
     const buildHoveredButtonDocStateSrc = extractFunction(source, 'buildHoveredButtonDocState');
     const restoreButtonNativeTitleSrc = extractFunction(source, 'restoreButtonNativeTitle');
+    const urlViewStateSrc = [
+        'formatCompactNumber', 'encodeViewStateToken', 'decodeViewStateToken',
+        'encodeSelectionHashParts', 'encodeCameraHashParts', 'encodeViewStateHash',
+        'parseViewStateFilterToken', 'applyViewStateHashEntry', 'parseViewStateHash',
+        'computeViewCenterFromCamera', 'computeCameraFromViewCenter', 'resolveViewStatePersonId',
+        'resolveRestoredSidebarOpen', 'buildCurrentViewState', 'writeViewStateHash',
+        'applyRestoredFocus', 'applyRestoredSelection', 'applyRestoredCamera'
+    ].map(name => extractFunction(source, name)).join('\n');
 
     const [
         CSVParser, Person, FamilyTree, FamilyTreeBuilder,
@@ -214,7 +222,11 @@ try {
         findBestAnchorNode, calculateShiftedCamera,
         resolveInitialSheetUrl, BUTTON_DOCUMENTATION_CATALOG,
         resolveButtonDocumentation, computeButtonDocPosition,
-        buildHoveredButtonDocState, restoreButtonNativeTitle
+        buildHoveredButtonDocState, restoreButtonNativeTitle,
+        formatCompactNumber, encodeViewStateToken, decodeViewStateToken,
+        encodeViewStateHash, parseViewStateHash, computeViewCenterFromCamera,
+        computeCameraFromViewCenter, resolveViewStatePersonId, resolveRestoredSidebarOpen,
+        buildCurrentViewState, writeViewStateHash, applyRestoredSelection, applyRestoredCamera
     ] = new Function(`
         ${csvParserSrc}
         ${personSrc}
@@ -265,6 +277,12 @@ try {
         ${computeButtonDocPositionSrc}
         ${buildHoveredButtonDocStateSrc}
         ${restoreButtonNativeTitleSrc}
+        const isStandaloneExportMode = () => false;
+        const resolveViewportDimensions = ({ container }) => ({
+            contW: container ? container.clientWidth : 1000,
+            contH: container ? container.clientHeight : 800
+        });
+        ${urlViewStateSrc}
         FamilyTreeBuilder.matchesPersonFilter = matchesPersonFilter;
         FamilyTreeBuilder.FILTER_BADGE_CONFIG = FILTER_BADGE_CONFIG;
         FamilyTreeBuilder.computeFilterHighlightedIds = function(tree, activeFilter) {
@@ -289,7 +307,11 @@ try {
             findBestAnchorNode, calculateShiftedCamera,
             resolveInitialSheetUrl, BUTTON_DOCUMENTATION_CATALOG,
             resolveButtonDocumentation, computeButtonDocPosition,
-            buildHoveredButtonDocState, restoreButtonNativeTitle
+            buildHoveredButtonDocState, restoreButtonNativeTitle,
+            formatCompactNumber, encodeViewStateToken, decodeViewStateToken,
+            encodeViewStateHash, parseViewStateHash, computeViewCenterFromCamera,
+            computeCameraFromViewCenter, resolveViewStatePersonId, resolveRestoredSidebarOpen,
+            buildCurrentViewState, writeViewStateHash, applyRestoredSelection, applyRestoredCamera
         ];
     `)();
 
@@ -13582,6 +13604,152 @@ const m3 = tree.all.find(n => n.id === '3');
             assert('Test 204.22: AppRootView renders <ButtonDocTooltipOverlay />', appCode.includes('<ButtonDocTooltipOverlay />'));
         } catch (e) {
             assertEqual('Test 204 execution failed', e.message, '');
+        }
+    }
+
+    // ══════════════════════════════════════════════════════════════════════════
+    //  205. Shareable URL View State (Google-Maps-style #hash deep links)
+    // ══════════════════════════════════════════════════════════════════════════
+    section('205. Shareable URL View State (Google-Maps-style #hash deep links)');
+    {
+        try {
+            // Test 205.01-03: Compact number formatting drops trailing zeros and tolerates garbage
+            assertEqual('Test 205.01: formatCompactNumber(0.8000001, 2) → "0.8"', formatCompactNumber(0.8000001, 2), '0.8');
+            assertEqual('Test 205.02: formatCompactNumber(1953.46, 1) → "1953.5"', formatCompactNumber(1953.46, 1), '1953.5');
+            assertEqual('Test 205.03: formatCompactNumber(NaN) → "0"', formatCompactNumber(NaN), '0');
+
+            // Test 205.04-06: Token encoding keeps IDs readable, escapes separators, tolerates malformed input
+            assertEqual('Test 205.04: Person IDs pass through unescaped', encodeViewStateToken('Joseph_1920_152'), 'Joseph_1920_152');
+            assertEqual('Test 205.05: Spaces become "+" and separators are percent-escaped',
+                encodeViewStateToken('New York, USA'), 'New+York%2C+USA');
+            assertEqual('Test 205.06: Token round trip restores the original text',
+                decodeViewStateToken(encodeViewStateToken('a&b=c:d,e f')), 'a&b=c:d,e f');
+            assertEqual('Test 205.07: Malformed percent sequence is returned verbatim instead of throwing',
+                decodeViewStateToken('100%'), '100%');
+
+            // Test 205.08-12: Canonical compact hash encoding
+            const focusState = { focusId: 'Joseph_1920_152', isSidebarVisible: true, activeFilter: null, showMap: false,
+                zoom: 0.8, center: { x: 1240.4, year: 1953.46 }, collapsedIds: [] };
+            const focusHash = encodeViewStateHash(focusState);
+            assertEqual('Test 205.08: Focused person + zoom + centre encode compactly', focusHash, 'p=Joseph_1920_152&z=0.8&c=1240,1953.5');
+            assertEqual('Test 205.09: Closed sidebar with a focused person adds s=0',
+                encodeViewStateHash({ ...focusState, isSidebarVisible: false }), 'p=Joseph_1920_152&s=0&z=0.8&c=1240,1953.5');
+            assertEqual('Test 205.10: Filter and map view encode as f=<type>:<value> and v=map',
+                encodeViewStateHash({ activeFilter: { filterType: 'place', value: 'New York' }, showMap: true }), 'f=place:New+York&v=map');
+            assertEqual('Test 205.11: Collapsed branches encode as a comma list under k=',
+                encodeViewStateHash({ collapsedIds: ['Antu_1931_12', 'Elsy_1935_13'] }), 'k=Antu_1931_12,Elsy_1935_13');
+            assertEqual('Test 205.12: Empty state encodes to an empty hash', encodeViewStateHash({}), '');
+            assert('Test 205.13: A typical shared URL hash stays under 60 characters', focusHash.length < 60);
+
+            // Test 205.14-17: Parsing round trips and degrades gracefully on hand-edited hashes
+            const parsed = parseViewStateHash('#' + encodeViewStateHash({ ...focusState, isSidebarVisible: false, collapsedIds: ['Antu_1931_12'] }));
+            assertEqual('Test 205.14: Parsed focus ID round trips', parsed.focusId, 'Joseph_1920_152');
+            assertEqual('Test 205.15: Parsed sidebar flag round trips', parsed.isSidebarVisible, false);
+            assertEqual('Test 205.16: Parsed zoom and centre round trip',
+                JSON.stringify([parsed.zoom, parsed.center]), JSON.stringify([0.8, { x: 1240, year: 1953.5 }]));
+            assertEqual('Test 205.17: Parsed collapsed IDs round trip', JSON.stringify(parsed.collapsedIds), JSON.stringify(['Antu_1931_12']));
+            const filterParsed = parseViewStateHash('f=place:New+York&v=map');
+            assertEqual('Test 205.18: Parsed filter decodes "+" back to a space',
+                JSON.stringify(filterParsed.activeFilter), JSON.stringify({ filterType: 'place', value: 'New York' }));
+            assertEqual('Test 205.19: Parsed map flag', filterParsed.showMap, true);
+            const malformed = parseViewStateHash('#z=abc&c=12&f=place&foo=bar&p=');
+            assert('Test 205.20: Malformed zoom/centre/filter/unknown keys are ignored without throwing',
+                malformed.zoom === undefined && malformed.center === undefined && malformed.activeFilter === undefined && !malformed.focusId);
+            assertEqual('Test 205.21: Empty hash parses to an empty state', JSON.stringify(parseViewStateHash('')), '{}');
+
+            // Test 205.22-24: Visible-centre ↔ camera math is exactly invertible on one screen
+            const screenA = { visibleWidth: 1048, visibleHeight: 800, timelineWidth: 48 };
+            const centreA = computeViewCenterFromCamera({ camera: { x: -600, y: -200, z: 1 }, ppy: 10, rootNodeYob: 1900, ...screenA });
+            assertEqual('Test 205.22: Centre x is expressed in unscaled tree pixels', centreA.x, 1148);
+            assert('Test 205.23: Centre y is expressed in calendar years', Math.abs(centreA.year - 1957.6) < 1e-9);
+            const cameraA = computeCameraFromViewCenter({ center: centreA, zoom: 1, ppy: 10, rootNodeYob: 1900, ...screenA });
+            assert('Test 205.24: computeCameraFromViewCenter inverts computeViewCenterFromCamera',
+                Math.abs(cameraA.x + 600) < 1e-9 && Math.abs(cameraA.y + 200) < 1e-9 && cameraA.z === 1);
+
+            // Test 205.25-26: The same people land in the middle of a different screen (laptop with sidebar open)
+            const screenB = { visibleWidth: 1024 - 360, visibleHeight: 640, timelineWidth: 48 };
+            const hashAB = encodeViewStateHash({ zoom: 0.8, center: computeViewCenterFromCamera({ camera: { x: -412.3, y: -317.9, z: 0.8 }, ppy: 9.37, rootNodeYob: 1900, visibleWidth: 1440, visibleHeight: 900, timelineWidth: 48 }) });
+            const stateAB = parseViewStateHash(hashAB);
+            const cameraB = computeCameraFromViewCenter({ center: stateAB.center, zoom: stateAB.zoom, ppy: 8, rootNodeYob: 1900, ...screenB });
+            const centreB = computeViewCenterFromCamera({ camera: cameraB, ppy: 8, rootNodeYob: 1900, ...screenB });
+            assert('Test 205.25: Horizontal centre survives the screen change within URL rounding (±0.5px)', Math.abs(centreB.x - stateAB.center.x) < 0.5);
+            assert('Test 205.26: Vertical centre survives the screen change and ppy change within URL rounding (±0.05y)',
+                Math.abs(centreB.year - stateAB.center.year) < 0.05);
+
+            // Test 205.27-29: Person ID resolution tolerates spreadsheet row shifts
+            const mockNodes = { 'Joseph_1920_153': { id: 'Joseph_1920_153' }, 'Mary_1924_7': { id: 'Mary_1924_7' } };
+            const mockTree = { get: (id) => mockNodes[id] || null, all: Object.values(mockNodes) };
+            assertEqual('Test 205.27: Exact person ID resolves to itself', resolveViewStatePersonId(mockTree, 'Mary_1924_7'), 'Mary_1924_7');
+            assertEqual('Test 205.28: Shifted raw row ID falls back to <name>_<yob>_ prefix match',
+                resolveViewStatePersonId(mockTree, 'Joseph_1920_152'), 'Joseph_1920_153');
+            assertEqual('Test 205.29: Unknown person resolves to null', resolveViewStatePersonId(mockTree, 'Nobody_unk_0'), null);
+
+            // Test 205.30-32: Sidebar prediction drives the visible width used on restore
+            assertEqual('Test 205.30: Focused person implies an open sidebar', resolveRestoredSidebarOpen({ focusId: 'Joseph_1920_152' }), true);
+            assertEqual('Test 205.31: s=0 keeps the sidebar closed', resolveRestoredSidebarOpen({ focusId: 'Joseph_1920_152', isSidebarVisible: false }), false);
+            assertEqual('Test 205.32: Filters and map always open the sidebar', resolveRestoredSidebarOpen({ activeFilter: { filterType: 'job', value: 'Teacher' } }), true);
+
+            // Test 205.33-34: Live state capture (map view omits camera details)
+            const liveState = buildCurrentViewState({ focusId: 'Joseph_1920_152', isSidebarVisible: true, activeFilter: null, showMap: false,
+                camera: { x: -600, y: -200, z: 1 }, ppy: 10, rootNodeYob: 1900, viewport: screenA, collapsedNodes: new Set(['Antu_1931_12']) });
+            assertEqual('Test 205.33: buildCurrentViewState + encode yields the canonical hash',
+                encodeViewStateHash(liveState), 'p=Joseph_1920_152&z=1&c=1148,1957.6&k=Antu_1931_12');
+            assertEqual('Test 205.34: Map view encodes only v=map (tree canvas is hidden)',
+                encodeViewStateHash(buildCurrentViewState({ focusId: null, isSidebarVisible: true, activeFilter: null, showMap: true,
+                    camera: { x: 0, y: 0, z: 1 }, ppy: 10, rootNodeYob: 1900, viewport: screenA, collapsedNodes: new Set() })), 'v=map');
+
+            // Test 205.35-39: Restoring selection goes through the regular UI handlers
+            const calls = [];
+            const actions = {
+                tree: mockTree,
+                handleSetFocusId: (id) => calls.push(['focus', id]),
+                handleFilterBy: (type, value) => calls.push(['filter', type, value]),
+                setShowMap: (v) => calls.push(['map', v]),
+                setIsSidebarVisible: (v) => calls.push(['sidebar', v]),
+                setActiveFilter: (v) => calls.push(['activeFilter', v]),
+                setFocusId: (v) => calls.push(['focusId', v]),
+                setCollapsedNodes: (set) => calls.push(['collapsed', Array.from(set).join(',')])
+            };
+            assert('Test 205.35: Focus + s=0 restores via handleSetFocusId then hides the sidebar',
+                applyRestoredSelection({ focusId: 'Joseph_1920_152', isSidebarVisible: false }, actions) === true &&
+                JSON.stringify(calls) === JSON.stringify([['focus', 'Joseph_1920_153'], ['sidebar', false]]));
+            calls.length = 0;
+            assert('Test 205.36: Filter restore uses handleFilterBy and never focuses a person',
+                applyRestoredSelection({ activeFilter: { filterType: 'place', value: 'Kochi' }, focusId: 'Mary_1924_7' }, actions) === true &&
+                JSON.stringify(calls) === JSON.stringify([['filter', 'place', 'Kochi']]));
+            calls.length = 0;
+            assert('Test 205.37: Map restore mirrors the Map button (open sidebar, clear filter and focus)',
+                applyRestoredSelection({ showMap: true, focusId: 'Mary_1924_7' }, actions) === true &&
+                JSON.stringify(calls) === JSON.stringify([['map', true], ['sidebar', true], ['activeFilter', null], ['focusId', null]]));
+            calls.length = 0;
+            assert('Test 205.38: Collapsed IDs are filtered to people present in the tree',
+                applyRestoredSelection({ collapsedIds: ['Mary_1924_7', 'Ghost_unk_99'] }, actions) === true &&
+                JSON.stringify(calls) === JSON.stringify([['collapsed', 'Mary_1924_7']]));
+            calls.length = 0;
+            assert('Test 205.39: Unknown person and camera-only state apply nothing',
+                applyRestoredSelection({ focusId: 'Nobody_unk_0', zoom: 0.8 }, actions) === false && calls.length === 0);
+
+            // Test 205.40-42: Restoring the camera uses THIS screen's ppy/viewport and clamps the result
+            let appliedCamera = null;
+            const cameraEnv = {
+                camera: { x: 0, y: 0, z: 1 }, getPpy: () => 8, rootNodeYob: 1900, viewport: screenA,
+                clampCamera: (cam) => ({ ...cam, clamped: true }), setCamera: (cam) => { appliedCamera = cam; }
+            };
+            assert('Test 205.40: Zoom + centre from the URL become a clamped camera transform',
+                applyRestoredCamera({ zoom: 0.5, center: { x: 1000, year: 1991 } }, cameraEnv) === true &&
+                Math.abs(appliedCamera.x - 48) < 1e-9 && Math.abs(appliedCamera.y - 24) < 1e-9 && appliedCamera.z === 0.5 && appliedCamera.clamped === true);
+            appliedCamera = null;
+            assert('Test 205.41: Map view skips camera restore (tree canvas hidden)',
+                applyRestoredCamera({ showMap: true, zoom: 0.5, center: { x: 1000, year: 1991 } }, cameraEnv) === false && appliedCamera === null);
+            assert('Test 205.42: Hash without camera information leaves the camera untouched',
+                applyRestoredCamera({ focusId: 'Joseph_1920_152' }, cameraEnv) === false && appliedCamera === null);
+
+            // Test 205.43-44: URL writing is a safe no-op outside a browser, and the hook is mounted once in the app
+            assertEqual('Test 205.43: writeViewStateHash returns false when no window/history is available', writeViewStateHash('p=x'), false);
+            assert('Test 205.44: useAppViewModel mounts useUrlViewStateSync with core, viewport and focus/navigation state',
+                appCode.includes('useUrlViewStateSync({ ...core, ...viewport, ...focusNav })'));
+        } catch (e) {
+            assertEqual('Test 205 execution failed', e.message, '');
         }
     }
 

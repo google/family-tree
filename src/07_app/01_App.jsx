@@ -338,6 +338,7 @@ function useAppViewModel() {
     const layoutExp = useAppLayoutAndExports({
         ...core, ...viewport, ...focusNav
     });
+    useUrlViewStateSync({ ...core, ...viewport, ...focusNav });
 
     return {
         showZoom: !core.showMap && !core.showLogs && !core.isLoading,
