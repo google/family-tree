@@ -67,11 +67,11 @@ You can load any public or link-shared Google Sheet directly via URL query param
 
 ### Shareable View URLs (Google-Maps-style `#hash`)
 
-Every action you take in the app — focusing a person, applying a filter, opening the map, zooming, panning, or collapsing a branch — is mirrored live into the address bar as a compact `#hash` (via `history.replaceState`, so the browser Back button and the in-app history arrows keep working as before). Copy the URL to any other computer, phone, or browser window and you get **the same view**: the same person selected, the same zoom level, and the same people in the middle of the screen, even when the screen size is different.
+Every action you take in the app — focusing a person, applying a filter, opening the map, zooming, panning, or collapsing a branch — is mirrored live into the address bar as a compact `#hash` (via `history.replaceState`, so the browser Back button and the in-app history arrows keep working as before). Copy the URL to any other computer, phone, or browser window and you get **the same view**: the same person selected, the same zoom level, and the same people in the middle of the screen, even when the screen size is different or rows have since been added to the spreadsheet.
 
 ```text
-https://google.github.io/family-tree/?id=1ZDpcz2ACmG63dUjHLfoHZSW7-dG51FbzaJVcqHYdkEI#p=Joseph_1920_152&z=0.8&c=1240,1953.5
-                                       └────────── which spreadsheet ──────────┘ └──────── what you are looking at ────────┘
+https://google.github.io/family-tree/?id=1ZDpcz2ACmG63dUjHLfoHZSW7-dG51FbzaJVcqHYdkEI#p=Joseph_1920_152&z=0.8
+                                       └────────── which spreadsheet ──────────┘ └─ what you are looking at ─┘
 ```
 
 | Key | Meaning | Written when… | Concrete Example |
@@ -81,21 +81,25 @@ https://google.github.io/family-tree/?id=1ZDpcz2ACmG63dUjHLfoHZSW7-dG51FbzaJVcqH
 | **`f=`** | Active filter `<type>:<value>` (`place`, `job`, `family`, `search`, `directory`) | A location/career/family chip, search, or directory tab is active | `#f=place:Kochi`, `#f=job:Teacher`, `#f=search:Mary+Joseph` |
 | **`v=map`** | Family Locations Map is shown instead of the tree | The Map button (`📍`) is toggled on | `#v=map`, `#v=map&f=place:Chalissery` |
 | **`z=`** | Camera zoom level (2 decimals) | Always (after loading) | `#z=0.8` |
-| **`c=`** | Visible-viewport centre as `<tree-x>,<year>` | Always (after loading) | `#c=1240,1953.5` → the middle of your screen shows tree column `1240px` at year `1953.5` |
+| **`a=`** | Anchor card the camera is tied to (omitted when it is the focused person) | Nobody is focused, or you panned away from the focused person | `#z=0.12&a=Antu_1931_12` |
+| **`o=`** | Where the middle of your screen is, relative to the anchor card: `<tree px right>,<years down>` (omitted when the card is centred) | You panned so the anchor card is off-centre | `#p=Joseph_1920_152&z=0.8&o=-320,12.5` → the screen centre is `320px` left of and `12.5` years below Joseph's card |
 | **`k=`** | Collapsed branch IDs (comma separated) | One or more subtrees are collapsed with the `−` card button | `#k=Antu_1931_12,Elsy_1935_13` |
 
 Examples you can paste directly:
 
 | Goal | URL |
 | :--- | :--- |
-| Open Joseph's profile with the sidebar at reading zoom | `https://google.github.io/family-tree/#p=Joseph_1920_152&z=0.8&c=1240,1953.5` |
-| Same spot, but sidebar hidden so the whole canvas is visible | `https://google.github.io/family-tree/#p=Joseph_1920_152&s=0&z=0.8&c=1240,1953.5` |
-| Everyone who lived in Kochi, listed in the sidebar | `https://google.github.io/family-tree/#f=place:Kochi&z=0.45&c=2200,1948` |
+| Open Joseph's profile with the sidebar at reading zoom | `https://google.github.io/family-tree/#p=Joseph_1920_152&z=0.8` |
+| Same person, but sidebar hidden so the whole canvas is visible | `https://google.github.io/family-tree/#p=Joseph_1920_152&s=0&z=0.8` |
+| Joseph focused, but looking at his grandchildren two rows below him | `https://google.github.io/family-tree/#p=Joseph_1920_152&z=0.8&o=180,55` |
+| Everyone who lived in Kochi, listed in the sidebar | `https://google.github.io/family-tree/#f=place:Kochi&z=0.45` |
 | World map of the family, pre-filtered to one village | `https://google.github.io/family-tree/#v=map&f=place:Chalissery` |
-| Bird's-eye view of the whole tree with two branches folded away | `https://google.github.io/family-tree/#z=0.12&c=5400,1960&k=Antu_1931_12,Elsy_1935_13` |
-| Another family's spreadsheet, opened straight on one person | `https://google.github.io/family-tree/?id=1BxiMVs0XRA5nFMdKvBdBZjgmUUqptlbs74OgvE2upms#p=Mary_1924_7&z=0.8&c=640,1950.2` |
+| Bird's-eye view around Antu's branch with two branches folded away | `https://google.github.io/family-tree/#z=0.12&a=Antu_1931_12&k=Antu_1931_12,Elsy_1935_13` |
+| Another family's spreadsheet, opened straight on one person | `https://google.github.io/family-tree/?id=1BxiMVs0XRA5nFMdKvBdBZjgmUUqptlbs74OgvE2upms#p=Mary_1924_7&z=0.8` |
 
-> **Why `c=` uses pixels horizontally but years vertically:** the horizontal layout only depends on the zoom level, so a tree x-coordinate means the same thing on every screen; the vertical scale (pixels-per-year) stretches with the window height, so the vertical position is stored as a calendar year instead. On the receiving computer the year is converted back using *that* screen's pixels-per-year, and the camera is clamped to the tree bounds. Person IDs are deterministic for the same spreadsheet; if a row was inserted above the person since the link was shared, the app falls back to the `<Name>_<YOB>_` prefix so the link still opens the right person.
+> **Why the link keeps working after the spreadsheet changes:** the view is never stored as absolute canvas coordinates (those move whenever an unrelated row re-flows the tree) but as *"this person's card, offset by so many pixels and years"*, so the same people stay in the middle of the screen even if new relatives were inserted anywhere in the sheet. Person IDs end with the spreadsheet row, which shifts when rows are inserted above; the app therefore matches the exact ID first, then the same name and birth year with the nearest row (so a namesake 50 rows away never wins), then the same name with the nearest row (in case the birth year was corrected). Horizontal offsets are in tree pixels (the layout is identical for the same zoom on every screen) and vertical offsets are in **years**, because pixels-per-year stretches with the window height. Long spreadsheet IDs embedded in auto-generated ("ghost") profile IDs are abbreviated to `~0`, `~1`, … so the URL stays short.
+
+> **What does *not* survive:** renaming the person in the sheet (the ID starts with the name), or deleting them. In both cases the app still opens the requested spreadsheet, zoom level, filter, or map — only the focus/anchor falls back to the default view.
 
 > **Tip:** The hash is only written after the dataset has loaded and the view from the URL has been restored, and never while you are dragging — so the address bar always holds a stable, copy-ready URL.
 
@@ -302,7 +306,7 @@ node scripts/bundle.mjs --check
 # Run a single test section in <1s during development
 node scripts/run_tests.mjs --skip-ast --section 204
 
-# Run Stages 1-3 (AST parse + Scope check + 2,680 unit tests in ~3s)
+# Run Stages 1-3 (AST parse + Scope check + 2,692 unit tests in ~3s)
 node scripts/run_tests.mjs --fast
 
 # Run all 4 stages including Headless Chrome E2E smoke test (~15s)
