@@ -131,7 +131,7 @@ The test suite validates the application across 4 progressive stages:
 | :--- | :--- | :--- | :--- |
 | **Stage 1** | Whole-file Babel AST parse (detects syntax errors, missing braces, invalid JSX) | ~400 ms | Every run (unless `--skip-ast`) |
 | **Stage 2** | AST Scope & Identifier Analysis (detects undeclared variables/globals) | ~800 ms | Every run (unless `--skip-ast`) |
-| **Stage 3** | Algorithmic Unit Tests (`tests.html`, 2,725+ assertions across 206 sections) | ~1.5 s | Every run |
+| **Stage 3** | Algorithmic Unit Tests (`tests.html`, 2,733+ assertions across 207 sections) | ~1.5 s | Every run |
 | **Stage 4** | Headless Chrome E2E browser smoke test via CDP (mounts `<App />`, verifies rendered person cards) | ~12 s | Pre-commit / Final validation |
 
 ### CLI Usage Examples
@@ -143,7 +143,7 @@ node scripts/run_tests.mjs --skip-ast --section 204
 # 2. Grep Filter: Run tests matching a specific keyword
 node scripts/run_tests.mjs --grep "Button Hover"
 
-# 3. Fast Mode: Run Stages 1, 2, 3 for all 2,725+ unit tests (~3s)
+# 3. Fast Mode: Run Stages 1, 2, 3 for all 2,733+ unit tests (~3s)
 node scripts/run_tests.mjs --fast
 
 # 4. Full Quality Gate: Run all 4 stages including Headless Chrome E2E (~15s)

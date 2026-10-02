@@ -213,7 +213,7 @@ try {
         'parseViewStatePersonRef', 'pickNearestRowCandidate', 'resolveViewStatePersonId',
         'resolveRestoredSidebarOpen', 'buildCurrentViewState', 'writeViewStateHash',
         'applyRestoredFocus', 'resolveRestoredCollapsedIds', 'applyRestoredSelection',
-        'resolveRestoredCenter', 'applyRestoredCamera'
+        'resolveRestoredCenter', 'applyRestoredCamera', 'resolveCanvasDisplayMode'
     ].map(name => extractFunction(source, name)).join('\n');
 
     const [
@@ -232,7 +232,8 @@ try {
         encodeViewStateHash, parseViewStateHash, computeViewCenterFromCamera,
         computeCameraFromViewCenter, computeAnchorOffset, computeCenterFromAnchorOffset,
         isAnchorInsideViewport, pickNearestAnchor, resolveViewStatePersonId, resolveRestoredSidebarOpen,
-        buildCurrentViewState, writeViewStateHash, applyRestoredSelection, applyRestoredCamera
+        buildCurrentViewState, writeViewStateHash, applyRestoredSelection, applyRestoredCamera,
+        resolveCanvasDisplayMode
     ] = new Function(`
         ${csvParserSrc}
         ${personSrc}
@@ -320,7 +321,8 @@ try {
             encodeViewStateHash, parseViewStateHash, computeViewCenterFromCamera,
             computeCameraFromViewCenter, computeAnchorOffset, computeCenterFromAnchorOffset,
             isAnchorInsideViewport, pickNearestAnchor, resolveViewStatePersonId, resolveRestoredSidebarOpen,
-            buildCurrentViewState, writeViewStateHash, applyRestoredSelection, applyRestoredCamera
+            buildCurrentViewState, writeViewStateHash, applyRestoredSelection, applyRestoredCamera,
+            resolveCanvasDisplayMode
         ];
     `)();
 
@@ -14002,6 +14004,52 @@ const m3 = tree.all.find(n => n.id === '3');
                 FamilyTree.isSyntheticSiblingParent(tK.get(kunjunjuK.momId)) && FamilyTree.isSyntheticSiblingParent(tK.get(kunjunjuK.fatherId)));
         } catch (e) {
             assertEqual('Test 206 execution failed', e.message, '');
+        }
+    }
+
+    // ══════════════════════════════════════════════════════════════════════════
+    //  207. Brand Logo Displayed Large in Canvas Only While Loading
+    // ══════════════════════════════════════════════════════════════════════════
+    {
+        section('207. Brand Logo Displayed Large in Canvas Only While Loading');
+        // While browsing the tree the top-left "Family Tree" badge is gone; while loading (when the
+        // activity log drawer is open) the emblem and "Family Tree" heading appear large in the
+        // empty tree canvas and vanish as soon as loading completes.
+        try {
+            const populatedTree = buildTree([{ _sourceId: 's', _sheetRow: 2, Name: 'Thoma', 'Year of Birth': '1920' }], { s: 'Sheet' });
+            assertEqual('Test 207.01: While loading with an empty tree, the canvas displays the loading splash',
+                resolveCanvasDisplayMode(new FamilyTree(), true), 'loading-splash');
+            assertEqual('Test 207.02: While loading even after cached or preliminary root nodes arrive, the canvas stays on the loading splash until loading finishes',
+                resolveCanvasDisplayMode(populatedTree, true), 'loading-splash');
+            assertEqual('Test 207.03: Once loading completes (isLoading=false), the canvas switches to the tree and removes the splash',
+                resolveCanvasDisplayMode(populatedTree, false), 'tree');
+            assertEqual('Test 207.04: An empty tree that is not loading shows the import prompt instead of the splash',
+                resolveCanvasDisplayMode(new FamilyTree(), false), 'empty-prompt');
+
+            const sliceComponent = (marker) => {
+                const start = appCode.indexOf(marker);
+                const end = appCode.indexOf('/**', start + marker.length);
+                return start === -1 ? '' : appCode.slice(start, end === -1 ? start + 4000 : end);
+            };
+            const splashBlock = sliceComponent('const TreeLoadingBrandSplash = () => (');
+            assert('Test 207.05: TreeLoadingBrandSplash renders the SVG emblem, the "Family Tree" heading, and the loading caption',
+                /<svg\b[\s\S]*?#navBgGrad[\s\S]*?<\/svg>/.test(splashBlock) &&
+                />Family Tree<\/h1>/.test(splashBlock) &&
+                /Fetching and building tree\.\.\./.test(splashBlock));
+            assert('Test 207.06: The loading splash renders large (>= 64px icon and >= 36px heading)',
+                /w-\[(?:[6-9]\d|\d{3,})px\]/.test(splashBlock) && /text-\[(?:3[6-9]|[4-9]\d)px\]/.test(splashBlock));
+
+            const mainBarBlock = sliceComponent('const TopNavigationMainBar = ({');
+            assert('Test 207.07: TopNavigationMainBar renders neither the SVG icon nor "Family Tree" text while browsing, and TopNavigationBrandTitle is gone',
+                !/Family Tree|<svg\b|TopNavigationBrandTitle/.test(mainBarBlock) && !/const TopNavigationBrandTitle\b/.test(appCode));
+
+            const canvasBlock = sliceComponent('const TreeCanvasContent = ({');
+            assert('Test 207.08: TreeCanvasContent branches on resolveCanvasDisplayMode(tree, isLoading) to mount <TreeLoadingBrandSplash /> only in loading-splash mode',
+                /resolveCanvasDisplayMode\(tree,\s*isLoading\)/.test(canvasBlock) &&
+                /mode\s*===\s*'loading-splash'[\s\S]*?<TreeLoadingBrandSplash\s*\/>/.test(canvasBlock) &&
+                !/Family Tree/.test(canvasBlock));
+        } catch (e) {
+            assertEqual('Test 207 execution failed', e.message, '');
         }
     }
 

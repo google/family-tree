@@ -40813,45 +40813,49 @@ const TopNavigationInactiveToolbar = ({
 };
 
 /**
- * Renders the brand title logo badge in the top navigation header.
+ * Large brand emblem and "Family Tree" title displayed in the empty tree area while loading
+ * (when the activity log drawer is open), and removed once loading completes.
  *
  * @returns {React.ReactNode}
  *
  * @example
- * <TopNavigationBrandTitle />
+ * <TreeLoadingBrandSplash />
  *
  * @example
- * {!isStandalone && <TopNavigationBrandTitle />}
+ * {isLoading && <TreeLoadingBrandSplash />}
  */
-const TopNavigationBrandTitle = () => (
-    <div className="flex items-center justify-center gap-2 bg-white/80 backdrop-blur-xl px-3.5 rounded-xl shadow-[0_0_24px_rgba(0,0,0,0.18),0_0_8px_rgba(0,0,0,0.10)] border border-white/90 shrink-0 h-[38px]">
-        <svg viewBox="0 0 64 64" className="w-[22px] h-[22px] shrink-0 drop-shadow-sm" aria-hidden="true">
-            <defs>
-                <linearGradient id="navBgGrad" x1="0%" y1="0%" x2="100%" y2="100%">
-                    <stop offset="0%" stopColor="#312e81" />
-                    <stop offset="50%" stopColor="#4f46e5" />
-                    <stop offset="100%" stopColor="#7c3aed" />
-                </linearGradient>
-                <linearGradient id="navTrunkGrad" x1="0%" y1="0%" x2="0%" y2="100%">
-                    <stop offset="0%" stopColor="#ffffff" />
-                    <stop offset="100%" stopColor="#c7d2fe" />
-                </linearGradient>
-            </defs>
-            <rect x="2" y="2" width="60" height="60" rx="14" fill="url(#navBgGrad)" stroke="#a5b4fc" strokeOpacity="0.35" strokeWidth="1.5" />
-            <g fill="none" stroke="url(#navTrunkGrad)" strokeLinecap="round" strokeLinejoin="round">
-                <path d="M32 49 V33" strokeWidth="4.5" />
-                <path d="M23 51 C28 51 32 48 32 43" strokeWidth="3.2" />
-                <path d="M41 51 C36 51 32 48 32 43" strokeWidth="3.2" />
-                <path d="M32 36 C22 36 16 30 16 21" strokeWidth="3.4" />
-                <path d="M32 34 V15" strokeWidth="3.4" />
-                <path d="M32 36 C42 36 48 30 48 21" strokeWidth="3.4" />
-            </g>
-            <circle cx="32" cy="14" r="6.2" fill="#fde68a" stroke="#ffffff" strokeWidth="2" />
-            <circle cx="16" cy="21" r="5.2" fill="#ffffff" stroke="#c7d2fe" strokeWidth="1.5" />
-            <circle cx="48" cy="21" r="5.2" fill="#ffffff" stroke="#c7d2fe" strokeWidth="1.5" />
-            <circle cx="32" cy="35" r="3.6" fill="#ffffff" />
-        </svg>
-        <h1 className="text-[17px] leading-none tracking-wide font-bold bg-clip-text text-transparent bg-gradient-to-r from-slate-700 via-indigo-600/80 to-purple-600/80 opacity-80" style={{ fontFamily: "'Uncial Antiqua', serif" }}>Family Tree</h1>
+const TreeLoadingBrandSplash = () => (
+    <div data-testid="tree-loading-brand-splash" className="w-full h-full flex flex-col items-center justify-center gap-5 select-none pointer-events-none relative z-10 px-6">
+        <div className="flex items-center justify-center gap-5 bg-white/85 backdrop-blur-xl px-8 py-6 rounded-3xl shadow-[0_0_40px_rgba(79,70,229,0.14),0_0_12px_rgba(0,0,0,0.08)] border border-indigo-100/80">
+            <svg viewBox="0 0 64 64" className="w-[72px] h-[72px] shrink-0 drop-shadow-md" aria-hidden="true">
+                <defs>
+                    <linearGradient id="navBgGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+                        <stop offset="0%" stopColor="#312e81" />
+                        <stop offset="50%" stopColor="#4f46e5" />
+                        <stop offset="100%" stopColor="#7c3aed" />
+                    </linearGradient>
+                    <linearGradient id="navTrunkGrad" x1="0%" y1="0%" x2="0%" y2="100%">
+                        <stop offset="0%" stopColor="#ffffff" />
+                        <stop offset="100%" stopColor="#c7d2fe" />
+                    </linearGradient>
+                </defs>
+                <rect x="2" y="2" width="60" height="60" rx="14" fill="url(#navBgGrad)" stroke="#a5b4fc" strokeOpacity="0.35" strokeWidth="1.5" />
+                <g fill="none" stroke="url(#navTrunkGrad)" strokeLinecap="round" strokeLinejoin="round">
+                    <path d="M32 49 V33" strokeWidth="4.5" />
+                    <path d="M23 51 C28 51 32 48 32 43" strokeWidth="3.2" />
+                    <path d="M41 51 C36 51 32 48 32 43" strokeWidth="3.2" />
+                    <path d="M32 36 C22 36 16 30 16 21" strokeWidth="3.4" />
+                    <path d="M32 34 V15" strokeWidth="3.4" />
+                    <path d="M32 36 C42 36 48 30 48 21" strokeWidth="3.4" />
+                </g>
+                <circle cx="32" cy="14" r="6.2" fill="#fde68a" stroke="#ffffff" strokeWidth="2" />
+                <circle cx="16" cy="21" r="5.2" fill="#ffffff" stroke="#c7d2fe" strokeWidth="1.5" />
+                <circle cx="48" cy="21" r="5.2" fill="#ffffff" stroke="#c7d2fe" strokeWidth="1.5" />
+                <circle cx="32" cy="35" r="3.6" fill="#ffffff" />
+            </svg>
+            <h1 className="text-[44px] leading-none tracking-wide font-bold bg-clip-text text-transparent bg-gradient-to-r from-slate-700 via-indigo-600/80 to-purple-600/80 opacity-85" style={{ fontFamily: "'Uncial Antiqua', serif" }}>Family Tree</h1>
+        </div>
+        <div className="text-sm text-slate-400 font-sans tracking-wide animate-pulse">Fetching and building tree...</div>
     </div>
 );
 
@@ -40921,7 +40925,7 @@ const TopNavigationRightPanel = ({ isSearchActive, isSidebarVisible, sidebarWidt
 );
 
 /**
- * Main navigation row containing optional brand title and right-side interactive toolbars.
+ * Main navigation row containing right-side interactive toolbars.
  *
  * @param {Object} props
  * @param {boolean} props.isStandalone - Whether app is running in standalone export mode.
@@ -40946,7 +40950,6 @@ const TopNavigationMainBar = ({
     <div className="flex justify-between items-start">
         {!isStandalone && (
                 <div className="flex items-center pointer-events-auto ml-16">
-                    <TopNavigationBrandTitle />
                 </div>
         )}
         {!showLogs && !isLoading && (
@@ -45692,14 +45695,41 @@ function useTreeSearchState(openAiPanel) {
  *   isLoading={true}
  * />
  */
+/**
+ * Decides what the tree canvas displays: the large brand splash while loading (even if cached or
+ * preliminary rows have already arrived), the import prompt when idle with no tree, or the tree.
+ *
+ * @param {FamilyTree|null} tree - Current tree model
+ * @param {boolean} isLoading - Whether a foreground spreadsheet import is running
+ * @returns {'loading-splash'|'empty-prompt'|'tree'} Canvas display mode
+ *
+ * @example
+ * resolveCanvasDisplayMode(new FamilyTree(), true);
+ * // => 'loading-splash'
+ *
+ * @example
+ * resolveCanvasDisplayMode(populatedTree, false);
+ * // => 'tree'
+ */
+function resolveCanvasDisplayMode(tree, isLoading) {
+    if (isLoading) return 'loading-splash';
+    if (!tree?.rootId || !tree?.root) return 'empty-prompt';
+    return 'tree';
+}
+
 const TreeCanvasContent = ({
     tree, isStandalone, dynamicYears, treeStats, camera, ppy,
     isDragging, isShifting, treeRef, layoutConfig, isLoading
 }) => {
-    if (!tree?.rootId || !tree?.root) {
+    const mode = resolveCanvasDisplayMode(tree, isLoading);
+    if (mode === 'loading-splash') {
+        return <TreeLoadingBrandSplash />;
+    }
+
+    if (mode === 'empty-prompt') {
         return (
             <div className="w-full h-full flex items-center justify-center text-slate-400 relative z-10 pointer-events-none font-sans">
-                {isLoading ? "Fetching and building tree..." : "Import data to view the family tree."}
+                Import data to view the family tree.
             </div>
         );
     }

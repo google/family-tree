@@ -306,7 +306,7 @@ node scripts/bundle.mjs --check
 # Run a single test section in <1s during development
 node scripts/run_tests.mjs --skip-ast --section 204
 
-# Run Stages 1-3 (AST parse + Scope check + 2,725 unit tests in ~3s)
+# Run Stages 1-3 (AST parse + Scope check + 2,733 unit tests in ~3s)
 node scripts/run_tests.mjs --fast
 
 # Run all 4 stages including Headless Chrome E2E smoke test (~15s)

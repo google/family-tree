@@ -4074,14 +4074,41 @@ function useTreeSearchState(openAiPanel) {
  *   isLoading={true}
  * />
  */
+/**
+ * Decides what the tree canvas displays: the large brand splash while loading (even if cached or
+ * preliminary rows have already arrived), the import prompt when idle with no tree, or the tree.
+ *
+ * @param {FamilyTree|null} tree - Current tree model
+ * @param {boolean} isLoading - Whether a foreground spreadsheet import is running
+ * @returns {'loading-splash'|'empty-prompt'|'tree'} Canvas display mode
+ *
+ * @example
+ * resolveCanvasDisplayMode(new FamilyTree(), true);
+ * // => 'loading-splash'
+ *
+ * @example
+ * resolveCanvasDisplayMode(populatedTree, false);
+ * // => 'tree'
+ */
+function resolveCanvasDisplayMode(tree, isLoading) {
+    if (isLoading) return 'loading-splash';
+    if (!tree?.rootId || !tree?.root) return 'empty-prompt';
+    return 'tree';
+}
+
 const TreeCanvasContent = ({
     tree, isStandalone, dynamicYears, treeStats, camera, ppy,
     isDragging, isShifting, treeRef, layoutConfig, isLoading
 }) => {
-    if (!tree?.rootId || !tree?.root) {
+    const mode = resolveCanvasDisplayMode(tree, isLoading);
+    if (mode === 'loading-splash') {
+        return <TreeLoadingBrandSplash />;
+    }
+
+    if (mode === 'empty-prompt') {
         return (
             <div className="w-full h-full flex items-center justify-center text-slate-400 relative z-10 pointer-events-none font-sans">
-                {isLoading ? "Fetching and building tree..." : "Import data to view the family tree."}
+                Import data to view the family tree.
             </div>
         );
     }
