@@ -54,21 +54,60 @@ Every `<button>` across the UI displays a rich-text documentation popover with u
 
 ---
 
-## 3. Dynamic URL Query Parameter Loading (`?id=...`)
+## 3. Startup: Home Screen vs. URL Query Parameter Loading (`?id=...`)
 
 `resolveInitialSheetUrl(searchStr)` in `src/06_ui/11_CanvasViewport.jsx` inspects `window.location.search` on startup so users can open any root Google Sheet via URL parameters:
 
 ```javascript
 // Example 1: Passing a Google Spreadsheet ID via ?id=
-resolveInitialSheetUrl('?id=1ZDpcz2ACmG63dUjHLfoHZSW7-dG51FbzaJVcqHYdkEI');
-// => 'https://docs.google.com/spreadsheets/d/1ZDpcz2ACmG63dUjHLfoHZSW7-dG51FbzaJVcqHYdkEI/edit'
+resolveInitialSheetUrl('?id=1BQvyFoA_-u4MG-r1SRDel93F1TwEaN3I6v6p-kOH8z0');
+// => 'https://docs.google.com/spreadsheets/d/1BQvyFoA_-u4MG-r1SRDel93F1TwEaN3I6v6p-kOH8z0/edit'
 
 // Example 2: Passing a full URL via ?url=
 resolveInitialSheetUrl('?url=https://docs.google.com/spreadsheets/d/1BxiMVs0XRA5nFMdKvBdBZjgmUUqptlbs74OgvE2upms/edit');
 // => 'https://docs.google.com/spreadsheets/d/1BxiMVs0XRA5nFMdKvBdBZjgmUUqptlbs74OgvE2upms/edit'
 ```
 
-During bootstrap (`initializeTreeDataset`), if the resolved startup URL differs from `DEFAULT_URL` and its spreadsheet ID does not match the cached local tree, the app automatically triggers `handleImport(initialUrl, false, true)` to fetch the requested sheet live.
+No spreadsheet is hard-coded any more. During bootstrap (`initializeTreeDataset`) an embedded standalone dataset wins; otherwise the app auto-loads **only** when `hasExplicitSheetQueryParam()` is true (`?id=`, `?sheet=`, `?url=`, `?sheetId=`). Without such a parameter `useAppShellPanels()` starts with `isHomeOpen = true` and `sheetUrl = ''` (so the 20-second live-sync poller stays idle) and the user picks a sheet on the home screen. `DEFAULT_URL` (`src/01_core/04_Icons.jsx`) now points at the public demo spreadsheet (`Ancestry Browser: Demo`, ID `1BQvyFoA_-u4MG-r1SRDel93F1TwEaN3I6v6p-kOH8z0`) and is used solely as the last-resort prefill.
+
+### 3.0 Home Screen, Cookie History & Deduction Settings — `src/05_hooks/00_BrowserPreferences.jsx`, `src/06_ui/13_HomeScreen.jsx`, `src/06_ui/14_SettingsPanel.jsx`
+
+**Persistence layer (`00_BrowserPreferences.jsx`).** Two first-party cookies (`path=/; max-age=1y; SameSite=Lax`, `Secure` on https) hold everything the user has chosen; each is mirrored into `localStorage` under `ft_pref_<cookie>` because `document.cookie` is inert on `file://` standalone exports. `readPreference` prefers the cookie and falls back to the mirror; `removePreference` deletes both. All parsers are pure and unit-tested against an isolated cookie jar (see §4).
+
+| Cookie | Payload | Writers / Readers |
+| :--- | :--- | :--- |
+| `ft_sheet_history` | JSON array of `{ i: sheetId, t: title, n: uses, l: lastUsedMs }` (compact keys; long keys accepted on read), ranked **uses desc → lastUsed desc → id**, capped at `SHEET_HISTORY_LIMIT = 12` entries / `SHEET_TITLE_MAX_LENGTH = 60` chars and trimmed from the bottom until the URL-encoded payload fits `SHEET_HISTORY_COOKIE_BUDGET = 3500` (browsers drop >4 KB cookies silently) | `recordSheetUse(id, title)` from `commitSuccessfulSheetImport` (only after a **successful** import), `forgetSheetHistoryEntry(id)` from the dropdown `×`, `readSheetHistory()` |
+| `ft_demographic_settings` | Sanitized `DEFAULT_DEMOGRAPHIC_SETTINGS`-shaped object (`marriageAgeAnchors`, `firstChildAfterMarriage`, `spousalGenderOffset`, `consecutiveSiblingGap`) | `saveDemographicSettings` (Apply), `applyStoredDemographicSettings()` (called from a `useState` initializer in `useAppCoreState` so it runs **before** the first build), `clearStoredDemographicSettings` |
+
+```javascript
+// Example 1: the dropdown payload after opening the demo twice and another sheet once
+readSheetHistory();
+// => [{ id: '1BQvy…', title: 'Ancestry Browser: Demo', uses: 2, lastUsed: 1759478400000 },
+//     { id: '1BxiM…', title: '', uses: 1, lastUsed: 1759478100000 }]
+formatSheetHistoryLabel(readSheetHistory()[1]);   // => 'Untitled sheet — 1BxiMVs0XRA5nFMdKvBdBZjgmUUqptlbs74OgvE2upms'
+
+// Example 2: a corrupt cookie can never crash the UI
+parseSheetHistoryJson('{not json');               // => []
+loadStoredDemographicSettings();                  // => null when absent or corrupt
+```
+
+**Prefill precedence (`resolveHomeScreenPrefill(clipboardRef, history)`).** `useSheetSourceForm(isOpen)` re-prefills every time the screen opens: *clipboard → most-used → demo*. `readClipboardSheetReference()` only accepts text that `isLikelySheetReference` approves — any Google URL, or a bare 35–60-char token containing an upper-case letter, `-` or `_` (so a 40-char lower-case git SHA is never mistaken for a sheet ID). Chrome rejects `navigator.clipboard.readText()` while the document is unfocused, so `attachClipboardPrefill` retries on `focus` and on the first `pointerdown`; Firefox/Safari do not expose page clipboard reads at all and silently fall through. A late clipboard hit never overwrites text the user already typed (`touchedRef`). Nothing is loaded until Enter/**Open** (`normalizeSheetReference` validates; a dropdown row click fills **and** opens).
+
+```javascript
+// Example 1: precedence
+resolveHomeScreenPrefill({ id: '1Ekg…', url: '…/d/1Ekg…/edit' }, history).source;  // => 'clipboard'
+resolveHomeScreenPrefill(null, []).url === DEFAULT_URL;                              // => true (demo)
+
+// Example 2: clipboard strictness
+isLikelySheetReference('3bd09a0f6c2e4d1b8a7f9e0c1d2b3a4f5e6d7c8b'); // => false (git SHA)
+isLikelySheetReference('1BQvyFoA_-u4MG-r1SRDel93F1TwEaN3I6v6p-kOH8z0'); // => true
+```
+
+**Spreadsheet titles.** Google's CSV export answers with `Content-Disposition: attachment; filename="…"; filename*=UTF-8''<Title>%20-%20<Tab>.csv` and exposes the header via CORS. `fetchCSVData` calls `rememberSheetTitleFromResponse(sheetId, response)` for the default tab; `parseContentDispositionFilename` prefers the RFC 5987 `filename*` form, `deriveSpreadsheetTitle` strips `.csv` and only the **last** ` - <tab>` segment (so `Smith - Jones Family - Sheet1.csv` → `Smith - Jones Family`). The title lives in the in-memory `sheetTitleRegistry` until `commitSuccessfulSheetImport` copies it into the cookie. When the gviz fallback served the CSV there is no such header and the dropdown shows *Untitled sheet*.
+
+**Address bar.** After every successful import `syncSheetIdIntoLocation(sheetId)` rewrites the URL to `buildSheetDeepLinkUrl(location, sheetId)` — path and `#hash` kept, legacy `sheet`/`url`/`sheetId` aliases dropped, `?id=` set — via `history.replaceState`, so a refresh reopens the sheet and the Home emblem (`HomeButton`, `fixed left-4 top-4 z-[60]`, hidden in standalone exports) returns to the chooser. A failed import reopens the home screen with the error (`useTreeImportHandler` → `setIsHomeOpen(true)`).
+
+**Deduction Settings panel (`14_SettingsPanel.jsx`).** The gear in `TopNavImportExportButtons` (which replaced the clipboard-import button) opens `DeductionSettingsPanel`; `useDemographicSettingsDraft` re-seeds the draft from the live model on open, `describeMarriageAgePreview` evaluates the half-typed draft on `[1915, 1945, 1975, 2005]` after the same sanitization Apply performs, and `useDemographicSettingsApply` saves → closes → `rebuildTreeFromCachedRows(sheetUrl)` (`new FamilyTreeBuilder(TreeDataCache.get(url).rows, …).build()`, falling back to `fetchFromUrl(sheetUrl, { skipCache: true })` when nothing is cached). The GDPR footer's **clear stored data** calls `clearStoredPreferences()`: both cookies, both mirrors, the title registry, and `FamilyTreeBuilder.resetDemographicSettings()`.
 
 ### 3.1 Shareable View State Hash (`#p=…&z=…&a=…&o=…`) — `src/06_ui/12_UrlViewState.jsx`
 
@@ -131,8 +170,8 @@ The test suite validates the application across 4 progressive stages:
 | :--- | :--- | :--- | :--- |
 | **Stage 1** | Whole-file Babel AST parse (detects syntax errors, missing braces, invalid JSX) | ~400 ms | Every run (unless `--skip-ast`) |
 | **Stage 2** | AST Scope & Identifier Analysis (detects undeclared variables/globals) | ~800 ms | Every run (unless `--skip-ast`) |
-| **Stage 3** | Algorithmic Unit Tests (`tests.html`, 2,733+ assertions across 207 sections) | ~1.5 s | Every run |
-| **Stage 4** | Headless Chrome E2E browser smoke test via CDP (mounts `<App />`, verifies rendered person cards) | ~12 s | Pre-commit / Final validation |
+| **Stage 3** | Algorithmic Unit Tests (`tests.html`, 2,873 assertions across 210 sections) | ~1.5 s | Every run |
+| **Stage 4** | Headless Chrome E2E via CDP: home screen first (demo prefilled, nothing loaded) → **Open** → demo tree rendered → Home button + watermark + `?id=` + history cookie → Home button reopens the chooser with `Ancestry Browser: Demo — <id>` in the dropdown | ~15 s | Pre-commit / Final validation |
 
 ### CLI Usage Examples
 
@@ -143,10 +182,10 @@ node scripts/run_tests.mjs --skip-ast --section 204
 # 2. Grep Filter: Run tests matching a specific keyword
 node scripts/run_tests.mjs --grep "Button Hover"
 
-# 3. Fast Mode: Run Stages 1, 2, 3 for all 2,733+ unit tests (~3s)
+# 3. Fast Mode: Run Stages 1, 2, 3 for all 2,873 unit tests (~3s)
 node scripts/run_tests.mjs --fast
 
-# 4. Full Quality Gate: Run all 4 stages including Headless Chrome E2E (~15s)
+# 4. Full Quality Gate: Run all 4 stages including Headless Chrome E2E (~20s)
 node scripts/run_tests.mjs
 
 # 5. Code Quality Audit (<= 40 lines, 100% JSDoc, >= 2 @example tags, 0 undeclared vars)
@@ -157,7 +196,7 @@ node scripts/audit_quality.mjs
 
 ## 5. Source Architecture & Bundler (`src/` and `scripts/bundle.mjs`)
 
-The codebase is organized into 37 modular files across 7 numbered directories under `src/`:
+The codebase is organized into 41 modular files across 7 numbered directories under `src/`:
 
 ```text
 src/
@@ -166,7 +205,8 @@ src/
 │   ├── 01_constants.jsx          # Demographic tokens, generational gap constants
 │   ├── 02_DisjointSetForest.jsx  # Union-find with transactional snapshot/rollback
 │   ├── 03_GenealogicalGraph.jsx  # Graph traversal, cycle detection, ancestor/descendant queries
-│   └── 04_Icons.jsx              # Vector SVG icons & DEFAULT_URL constant
+│   ├── 04_Icons.jsx              # Vector SVG icons & DEFAULT_URL (public demo sheet) constant
+│   └── 07_BrandAssets.jsx        # BrandLogo emblem (green ring + leafy tree) & BrandWatermark layer
 ├── 02_utils/
 │   ├── 01_ScriptLoader.jsx       # Dynamic external script/stylesheet loader
 │   └── 02_CSVParser.jsx          # Multi-line CSV tokenizer, header detector, row mapper
@@ -178,6 +218,7 @@ src/
 │   ├── 02_FamilyTreePipeline.jsx # Declarative 5-phase construction pipeline
 │   └── 03_FamilyTreeBuilder.jsx  # Entity resolution, ghost synthesis, YOB/gender/death deduction
 ├── 05_hooks/
+│   ├── 00_BrowserPreferences.jsx # Cookie + localStorage persistence: sheet history, titles, demographic settings
 │   ├── 01_TreeDataCache.jsx      # LocalStorage/embedded cache & parallel multi-sheet CSV crawler
 │   ├── 02_useAppLogs.jsx         # Audit & ingestion log formatters and state hooks
 │   ├── 03_useAncestryData.jsx    # Sheet crawler orchestration & live background sync
@@ -194,7 +235,9 @@ src/
 │   ├── 09_FamilyMapView.jsx      # Interactive Leaflet map view, custom pins & bottom controls
 │   ├── 10_TopNavigation.jsx      # Floating navbar, OmniSearch bar & ButtonDocTooltipOverlay
 │   ├── 11_CanvasViewport.jsx     # Main canvas viewport, timeline cohorts & URL sheet resolution
-│   └── 12_UrlViewState.jsx       # Shareable #hash view state: encode/parse, restore & replaceState writer
+│   ├── 12_UrlViewState.jsx       # Shareable #hash view state: encode/parse, restore & replaceState writer
+│   ├── 13_HomeScreen.jsx         # Home screen (sheet chooser, cookie history dropdown, GDPR notice) & HomeButton
+│   └── 14_SettingsPanel.jsx      # Deduction Settings modal: cohort marriage-age anchors, preview, apply/rebuild
 └── 07_app/
     └── 01_App.jsx                # Root <App /> view model and layout shell
 ```

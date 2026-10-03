@@ -401,27 +401,51 @@ if (shouldRunChrome) {
         await sendCommand('Page.enable');
         await sendCommand('Runtime.enable');
 
-        let ready = false;
-        for (let attempt = 0; attempt < 25; attempt++) {
-            await new Promise(r => setTimeout(r, 600));
-            const check = await sendCommand('Runtime.evaluate', {
-                expression: 'document.querySelectorAll(".person-node").length'
-            });
-            const nodeCount = check?.result?.value || 0;
-            if (nodeCount > 50) {
-                ready = true;
-                console.log(`  ${GREEN}✓${RESET} Headless Chrome E2E verification successful: <App /> mounted cleanly with zero runtime exceptions, rendered ${nodeCount} person nodes.`);
-                break;
+        const evaluate = async (expression) => {
+            const res = await sendCommand('Runtime.evaluate', { expression, returnByValue: true, awaitPromise: true });
+            return res?.result?.value;
+        };
+        // Polls an in-page expression until `predicate` accepts its value; dumps the page text and exits on timeout.
+        const waitFor = async (label, expression, predicate, attempts = 25, delayMs = 600) => {
+            for (let attempt = 0; attempt < attempts; attempt++) {
+                await new Promise(r => setTimeout(r, delayMs));
+                const value = await evaluate(expression);
+                if (predicate(value)) return value;
             }
-        }
-
-        if (!ready) {
-            const errCheck = await sendCommand('Runtime.evaluate', {
-                expression: 'document.body.innerText'
-            });
-            console.error(`  ${RED}FATAL: App failed to render in Headless Chrome:${RESET}\n`, errCheck?.result?.value);
+            const bodyText = await evaluate('document.body.innerText');
+            console.error(`  ${RED}FATAL: ${label} — timed out in Headless Chrome:${RESET}\n`, bodyText);
             process.exit(1);
-        }
+        };
+        const DEMO_ID = '1BQvyFoA_-u4MG-r1SRDel93F1TwEaN3I6v6p-kOH8z0';
+        const q = (selector) => `document.querySelector('${selector}')`;
+
+        // 1. The home screen comes first: the demo sheet is prefilled but NOTHING loads until the user asks.
+        const homeState = JSON.parse(await waitFor('home screen with the demo sheet prefilled',
+            `JSON.stringify({ home: !!${q('[data-testid="sheet-source-home"]')}, privacy: !!${q('[data-testid="home-privacy-notice"]')},
+                value: (document.getElementById('sheet-source-input') || {}).value || '', nodes: document.querySelectorAll('.person-node').length })`,
+            (v) => { const s = v && JSON.parse(v); return s && s.home && s.privacy && s.value.includes(DEMO_ID) && s.nodes === 0; }));
+        console.log(`  ${GREEN}✓${RESET} Home screen rendered first: demo sheet prefilled, privacy notice shown, no tree loaded yet (${homeState.nodes} nodes).`);
+
+        // 2. Press Open → the demo sheet is fetched from Google and the tree renders. The demo's own tab is a flat
+        //    roster; its `Links` tab leads to the 14-person "Husband's Family" sheet that actually forms the tree.
+        await evaluate(`${q('[data-testid="sheet-source-home"] form button[type="submit"]')}.click(); 'clicked'`);
+        const nodeCount = await waitFor('tree render after pressing Open', "document.querySelectorAll('.person-node').length", (n) => n >= 10, 40, 600);
+        console.log(`  ${GREEN}✓${RESET} Headless Chrome E2E verification successful: <App /> mounted cleanly with zero runtime exceptions, rendered ${nodeCount} person nodes.`);
+
+        // 3. After a successful load: home screen gone, Home button + watermark mounted, ?id= in the address bar, history cookie written.
+        const shell = JSON.parse(await waitFor('post-load shell state',
+            `JSON.stringify({ home: !!${q('[data-testid="sheet-source-home"]')}, homeBtn: !!${q('[data-testid="home-button"]')},
+                watermark: !!${q('[data-testid="brand-watermark"]')}, search: location.search, cookie: document.cookie })`,
+            (v) => { const s = v && JSON.parse(v); return s && !s.home && s.homeBtn && s.watermark && s.search.includes(`id=${DEMO_ID}`) && s.cookie.includes('ft_sheet_history='); }, 10, 300));
+        console.log(`  ${GREEN}✓${RESET} Shell after load: Home button + watermark mounted, address bar "${shell.search}", sheet-history cookie written.`);
+
+        // 4. Home button → the chooser returns ("Back to the tree") and the dropdown lists the demo sheet with its learned title.
+        await evaluate(`${q('[data-testid="home-button"]')}.click(); 'clicked'`);
+        await waitFor('home screen after the Home button', `(${q('[data-testid="sheet-source-home"]')} || {}).innerText || ''`, (t) => t.includes('Back to the tree'), 10, 300);
+        await evaluate(`${q('button[aria-label="Show sheets you have opened before"]')}.click(); 'clicked'`);
+        await waitFor('history dropdown listing "Ancestry Browser: Demo"', `(${q('[data-testid="sheet-history-dropdown"]')} || {}).innerText || ''`,
+            (t) => t.includes(DEMO_ID) && t.includes('Ancestry Browser: Demo'), 10, 300);
+        console.log(`  ${GREEN}✓${RESET} Home button reopens the chooser; the history dropdown lists "Ancestry Browser: Demo — ${DEMO_ID}".`);
 
         ws.close();
     } finally {

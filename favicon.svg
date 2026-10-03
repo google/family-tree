@@ -1,48 +1,44 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" width="64" height="64">
   <defs>
-    <linearGradient id="bgGrad" x1="0%" y1="0%" x2="100%" y2="100%">
-      <stop offset="0%" stop-color="#312e81" />
-      <stop offset="50%" stop-color="#4f46e5" />
-      <stop offset="100%" stop-color="#7c3aed" />
-    </linearGradient>
-    <radialGradient id="canopyGlow" cx="50%" cy="38%" r="42%">
-      <stop offset="0%" stop-color="#a5b4fc" stop-opacity="0.45" />
-      <stop offset="100%" stop-color="#a5b4fc" stop-opacity="0" />
-    </radialGradient>
-    <linearGradient id="trunkGrad" x1="0%" y1="0%" x2="0%" y2="100%">
-      <stop offset="0%" stop-color="#ffffff" />
-      <stop offset="100%" stop-color="#c7d2fe" />
+    <linearGradient id="brandLeafGrad" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#9cc95f"/>
+      <stop offset="100%" stop-color="#5f8b35"/>
     </linearGradient>
   </defs>
-
-  <!-- Rounded badge background -->
-  <rect x="2" y="2" width="60" height="60" rx="14" fill="url(#bgGrad)" stroke="#a5b4fc" stroke-opacity="0.35" stroke-width="1.5" />
-
-  <!-- Subtle canopy aura so silhouette reads as a lush tree at 16x16 -->
-  <circle cx="32" cy="25" r="20" fill="url(#canopyGlow)" />
-
-  <!-- Genealogical pedigree branches & trunk -->
-  <g fill="none" stroke="url(#trunkGrad)" stroke-linecap="round" stroke-linejoin="round">
-    <!-- Main trunk -->
-    <path d="M32 49 V33" stroke-width="4.5" />
-    <!-- Root flares -->
-    <path d="M23 51 C28 51 32 48 32 43" stroke-width="3.2" />
-    <path d="M41 51 C36 51 32 48 32 43" stroke-width="3.2" />
-    <!-- Left pedigree branch -->
-    <path d="M32 36 C22 36 16 30 16 21" stroke-width="3.4" />
-    <!-- Center pedigree stem -->
-    <path d="M32 34 V15" stroke-width="3.4" />
-    <!-- Right pedigree branch -->
-    <path d="M32 36 C42 36 48 30 48 21" stroke-width="3.4" />
+  <!-- Ring -->
+  <circle cx="32" cy="32" r="29.6" fill="#fcfdf8" stroke="#5c7c33" stroke-width="2.4"/>
+  <!-- Trunk, roots and limbs -->
+  <g fill="none" stroke="#5c7c33" stroke-linecap="round" stroke-linejoin="round">
+    <!-- roots -->
+    <path d="M32 54 C29.8 54.3 27.4 55.1 25 56.6" stroke-width="2.3"/>
+    <path d="M32 54 C34.2 54.3 36.6 55.1 39 56.6" stroke-width="2.3"/>
+    <!-- trunk -->
+    <path d="M32 54.5 C31.6 49.5 31.8 45 32 40.5" stroke-width="3.4"/>
+    <!-- centre limb -->
+    <path d="M32 41 C32.6 35 31.4 29 32 18.5" stroke-width="2.7"/>
+    <!-- upper limbs -->
+    <path d="M32 41 C31 36 27.4 33 24 28.6 C22.8 27 21.9 25.6 21.3 24" stroke-width="2.5"/>
+    <path d="M32 41 C33 36 36.6 33 40 28.6 C41.2 27 42.1 25.6 42.7 24" stroke-width="2.5"/>
+    <!-- middle limbs -->
+    <path d="M27.6 34.6 C24.4 34.8 20.6 34.2 17.4 32.6" stroke-width="2.1"/>
+    <path d="M36.4 34.6 C39.6 34.8 43.4 34.2 46.6 32.6" stroke-width="2.1"/>
+    <!-- lower limbs -->
+    <path d="M31.8 46.5 C28.6 46.8 25.4 45.6 22.8 43.2" stroke-width="1.9"/>
+    <path d="M32.2 46.5 C35.4 46.8 38.6 45.6 41.2 43.2" stroke-width="1.9"/>
+    <!-- twigs off the centre limb -->
+    <path d="M31.8 27.5 C30 27 28.6 26 27.6 24.6" stroke-width="1.5"/>
+    <path d="M32.2 27.5 C34 27 35.4 26 36.4 24.6" stroke-width="1.5"/>
   </g>
-
-  <!-- Generational family nodes -->
-  <!-- Center crown node -->
-  <circle cx="32" cy="14" r="6.2" fill="#fde68a" stroke="#ffffff" stroke-width="2" />
-  <!-- Left branch node -->
-  <circle cx="16" cy="21" r="5.2" fill="#ffffff" stroke="#c7d2fe" stroke-width="1.5" />
-  <!-- Right branch node -->
-  <circle cx="48" cy="21" r="5.2" fill="#ffffff" stroke="#c7d2fe" stroke-width="1.5" />
-  <!-- Root heart node at fork -->
-  <circle cx="32" cy="35" r="3.6" fill="#ffffff" />
+  <!-- Leaves (each sits on the tangent of the limb that carries it) -->
+  <g fill="url(#brandLeafGrad)" stroke="#4a6a27" stroke-width="0.5" stroke-linejoin="round">
+    <path d="M0 -5.4 C3.1 -2.5 3.1 2.5 0 5.4 C-3.1 2.5 -3.1 -2.5 0 -5.4 Z" transform="translate(32 13.2)"/>
+    <path d="M0 -4.8 C2.8 -2.2 2.8 2.2 0 4.8 C-2.8 2.2 -2.8 -2.2 0 -4.8 Z" transform="translate(19.7 19.9) rotate(-22)"/>
+    <path d="M0 -4.8 C2.8 -2.2 2.8 2.2 0 4.8 C-2.8 2.2 -2.8 -2.2 0 -4.8 Z" transform="translate(44.3 19.9) rotate(22)"/>
+    <path d="M0 -4.5 C2.6 -2.1 2.6 2.1 0 4.5 C-2.6 2.1 -2.6 -2.1 0 -4.5 Z" transform="translate(13.7 30.8) rotate(-64)"/>
+    <path d="M0 -4.5 C2.6 -2.1 2.6 2.1 0 4.5 C-2.6 2.1 -2.6 -2.1 0 -4.5 Z" transform="translate(50.3 30.8) rotate(64)"/>
+    <path d="M0 -4.1 C2.4 -1.9 2.4 1.9 0 4.1 C-2.4 1.9 -2.4 -1.9 0 -4.1 Z" transform="translate(19.9 40.5) rotate(-47)"/>
+    <path d="M0 -4.1 C2.4 -1.9 2.4 1.9 0 4.1 C-2.4 1.9 -2.4 -1.9 0 -4.1 Z" transform="translate(44.1 40.5) rotate(47)"/>
+    <path d="M0 -3.3 C1.9 -1.5 1.9 1.5 0 3.3 C-1.9 1.5 -1.9 -1.5 0 -3.3 Z" transform="translate(25.8 22.1) rotate(-36)"/>
+    <path d="M0 -3.3 C1.9 -1.5 1.9 1.5 0 3.3 C-1.9 1.5 -1.9 -1.5 0 -3.3 Z" transform="translate(38.2 22.1) rotate(36)"/>
+  </g>
 </svg>

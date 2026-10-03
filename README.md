@@ -53,17 +53,31 @@ The app reconstructs multi-generational family trees directly from **Google Shee
    ```
 2. Open [http://localhost:8000/](http://localhost:8000/) in your browser.
 
+### The Home Screen: Choosing a Google Sheet
+
+The app does **not** hard-code a spreadsheet. On first visit (and whenever you click the **Family Tree emblem** pinned to the top-left corner of every tree or map view) a full-screen home screen asks for a **Google Sheets link or spreadsheet ID**. Nothing is fetched until you press **Enter** or click **Open**.
+
+| What the textbox is prefilled with | When | Example |
+| :--- | :--- | :--- |
+| A Google Sheets link or ID found on your **clipboard** | Chrome/Edge, after the clipboard permission is granted (Firefox/Safari do not expose clipboard reads to pages, so they fall through to the next rule) | You copied `https://docs.google.com/spreadsheets/d/1BxiMVs0…/edit` from a chat message |
+| Your **most-used** sheet | Whenever this browser has opened at least one sheet before | `https://docs.google.com/spreadsheets/d/<your family's id>/edit` |
+| The public **demo** sheet (`Ancestry Browser: Demo`) | Fresh browser, empty clipboard | `https://docs.google.com/spreadsheets/d/1BQvyFoA_-u4MG-r1SRDel93F1TwEaN3I6v6p-kOH8z0/edit?usp=drive_link` |
+
+Every sheet you successfully open is remembered in a first-party **cookie** (`ft_sheet_history`, mirrored into `localStorage` for `file://` standalone exports) together with its spreadsheet **title**, which the app learns from the CSV export's `Content-Disposition` header. The caret at the right of the textbox opens a dropdown listing them **most-used first** as `<Title> — <spreadsheet ID>` (the rest of the URL is deliberately trimmed), with a use counter and a `×` to forget an entry. Clicking a row opens that sheet immediately. The sheet must be shared as *Anyone with the link can view*; a failed import reopens the home screen with the error message.
+
+> **Privacy (GDPR):** the home screen footer states exactly what is stored (the sheet links you open and your deduction settings), where (cookies / local storage on *this device only* — nothing is sent to any server other than Google Sheets), and offers a one-click **clear stored data** link that deletes both cookies and their mirrors.
+
 ### Loading Any Google Sheet via URL Query Parameters
 
-You can load any public or link-shared Google Sheet directly via URL query parameters (`?id=`, `?sheet=`, or `?url=`) on both GitHub Pages and localhost:
+You can also skip the home screen entirely: when the page URL names a sheet via `?id=`, `?sheet=`, or `?url=` the app loads it on startup (on both GitHub Pages and localhost). After **any** successful load the app writes `?id=<spreadsheet ID>` into the address bar itself (via `history.replaceState`, no reload), so a refresh reopens the same sheet and the URL is ready to share.
 
 | Parameter | Format | Concrete Example |
 | :--- | :--- | :--- |
-| **`?id=`** | Google Spreadsheet ID (`20+` chars) | `https://google.github.io/family-tree/?id=1ZDpcz2ACmG63dUjHLfoHZSW7-dG51FbzaJVcqHYdkEI` |
-| **`?sheet=`** | Google Spreadsheet ID or full URL | `https://google.github.io/family-tree/?sheet=1ZDpcz2ACmG63dUjHLfoHZSW7-dG51FbzaJVcqHYdkEI` |
-| **`?url=`** | Full Google Sheets URL | `http://localhost:8000/?url=https://docs.google.com/spreadsheets/d/1ZDpcz2ACmG63dUjHLfoHZSW7-dG51FbzaJVcqHYdkEI/edit` |
+| **`?id=`** | Google Spreadsheet ID (`35–60` chars) | `https://google.github.io/family-tree/?id=1BQvyFoA_-u4MG-r1SRDel93F1TwEaN3I6v6p-kOH8z0` |
+| **`?sheet=`** | Google Spreadsheet ID or full URL | `https://google.github.io/family-tree/?sheet=1BQvyFoA_-u4MG-r1SRDel93F1TwEaN3I6v6p-kOH8z0` |
+| **`?url=`** | Full Google Sheets URL | `http://localhost:8000/?url=https://docs.google.com/spreadsheets/d/1BQvyFoA_-u4MG-r1SRDel93F1TwEaN3I6v6p-kOH8z0/edit` |
 
-> **How it works:** When `?id=<SPREADSHEET_ID>` is present in the URL, `resolveInitialSheetUrl()` automatically expands it to `https://docs.google.com/spreadsheets/d/<SPREADSHEET_ID>/edit`, bypasses stale default cache entries if a new sheet ID is supplied, fetches the main genealogical tab plus any branch sheets referenced in the `Links` tab, and renders the unified tree.
+> **How it works:** When `?id=<SPREADSHEET_ID>` is present in the URL, `resolveInitialSheetUrl()` automatically expands it to `https://docs.google.com/spreadsheets/d/<SPREADSHEET_ID>/edit`, bypasses stale default cache entries if a new sheet ID is supplied, fetches the main genealogical tab plus any branch sheets referenced in the `Links` tab, and renders the unified tree. Without such a parameter `hasExplicitSheetQueryParam()` is false and the home screen is shown instead.
 
 ### Shareable View URLs (Google-Maps-style `#hash`)
 
@@ -113,7 +127,8 @@ Every button in the application displays an interactive rich-text documentation 
 
 | Button / Icon | Title & Shortcut | Detailed Behavior | Usage Examples |
 | :--- | :--- | :--- | :--- |
-| **Link Icon** (`🔗`) | **Import Google Sheet from Clipboard URL** | Reads a Google Sheets URL or Spreadsheet ID from your system clipboard (or prompts if clipboard permission is denied), crawls the root sheet and all linked branch tabs in `Links` in parallel, and rebuilds the family tree. | **1. Clipboard Sync:** Copy `https://docs.google.com/spreadsheets/d/1ZDpcz2.../edit` and click `🔗` to import all linked family branches.<br>**2. Direct URL Load:** Append `?id=1ZDpcz2ACmG63dUjHLfoHZSW7-dG51FbzaJVcqHYdkEI` to the browser URL to load automatically on startup. |
+| **Family Tree Emblem** (top-left corner) | **Family Tree Home – choose a Google Sheet** | Returns to the **home screen** where you paste any Google Sheets link or spreadsheet ID. Every sheet you open is remembered in a browser cookie and offered in a dropdown, most-used first, as `<Title> — <ID>`. Hidden inside standalone `.html` exports, which carry their own embedded dataset. | **1. Switch Family:** Click the emblem, pick `Ancestry Browser: Demo — 1BQvy…` from the dropdown or paste another link, then press **Enter** or **Open**.<br>**2. Shareable Link:** After a sheet loads the address bar carries `?id=<sheetId>`; share it and the recipient skips the home screen entirely. |
+| **Gear Icon** (`⚙`) | **Deduction Settings (marriage age by birth cohort)** | Opens the **Deduction Settings** panel: the bride's age at first marriage per birth cohort (born 1910s–20s ≈ 15, 1940s ≈ 22, 2000s ≈ 27, linearly interpolated between anchor rows), the wedding→first-child interval, the husband–wife age offset and the sibling spacing, with a live preview per cohort. **Apply & rebuild tree** persists the values in a cookie (`ft_demographic_settings`) and rebuilds from the cached rows without refetching. | **1. Later Marriages:** Raise the `1940` cohort from **22** to **25** and every mother born in the 1940s is deduced three years older.<br>**2. Reset:** Click **Reset to defaults** then **Apply & rebuild tree** to return to the shipped curve. |
 | **Download Icon** (`⬇`) | **Download Standalone Interactive App (`.html`)** | Packages the entire interactive React/SVG application and the currently focused lineage dataset into a single self-contained `.html` file that runs 100% offline in any browser. | **1. Full Family Archive:** Focus on the root ancestor (`Kochuvareed`) and click `⬇` to download `Kochuvareed_Interactive_App_2026-09-27.html` containing all 240+ profiles.<br>**2. Scoped Sub-Branch App:** Select a specific grandparent first to export an offline interactive tree scoped only to their ancestors and descendants. |
 | **Printer Icon** (`🖨`) | **Print Tree / Export A4 Landscape SVGs (10pt names)** | Generates a multi-page A4 landscape printable document and **Family Atlas** with vector SVG cards calibrated so every person's name renders at a readable **10pt physical font size**. | **1. Multi-Page Wall Poster:** Click `🖨` to open the A4 print preview, save as **PDF**, and tape adjacent tiled pages together using the alignment guides.<br>**2. Branch Atlas Chapters:** Deep sub-branches are automatically organized into numbered **Atlas Chapters** with cross-page reference badges. |
 | **Map Pin Icon** (`📍`) | **View Family Locations Map** / **Switch to Family Tree Diagram** | Toggles the main viewport between the chronological 2D family tree diagram and an interactive **Leaflet World Map** plotting ancestral towns, parishes, and diaspora cities with member count pins. | **1. Explore Regional Clusters:** Click `📍` to view family concentrations across **Kerala** (`Thrissur`, `Palakkad`, `Kottayam`), **Karnataka**, and global diaspora hubs.<br>**2. Pin-to-Tree Spotlight:** Click a town pin on the map (e.g., `Chalissery`), then click `📍` again to see those exact residents highlighted on the tree canvas. |
@@ -270,10 +285,12 @@ When exact names of relatives are unknown in historical records, you can enter r
 
 The `FamilyTreeBuilder` pipeline applies domain-calibrated demographic rules across 5 phases:
 
-1. **Maternal & Spousal Birth Year Inference**:
-   - **Maternal Gap (`20 yrs`):** If a mother's birth year is unknown, it is deduced from her eldest child (`mother.yob = firstChild.yob - 20`).
-   - **Spousal Offset (`2 yrs`):** If one spouse's birth year is unknown, the husband is deduced as 2 years older than the wife (`husband.yob = wife.yob - 2`, `wife.yob = husband.yob + 2`).
-   - **Second Wife / Remarriage Inference:** When a widower remarries and the second wife's birth year is unknown, her birth year is estimated from the first wife's last child (`secondWife.yob = lastChildOfFirstWife.yob - 18`).
+1. **Cohort-Aware Maternal & Spousal Birth Year Inference**:
+   - **Marriage age by birth cohort:** the bride's age at first marriage is read from a piecewise-linear curve over her *birth year* — `[1900, 15] → [1928, 15] → [1940, 22] → [1970, 25] → [2000, 27] → [2020, 28]` (women born in the 1910s–20s married at ~15, those born in the 1940s at 20–25, those born in the 2000s at 25–30); years before/after the anchors clamp to the nearest one.
+   - **Maternal Gap (cohort-dependent):** if a mother's birth year is unknown it is deduced from her eldest child by *inverting* that curve (`mother.yob = firstChild.yob - (marriageAge(mother cohort) + 2)`), so a child born in 1935 implies a ~1918 mother while a child born in 2005 implies a ~1978 mother. Deducing downward uses the parent's own cohort (`firstChild.yob = mother.yob + marriageAge(mother.yob) + 2`).
+   - **Spousal Offset (`2 yrs`):** If one spouse's birth year is unknown, the husband is deduced as 2 years older than the wife (`husband.yob = wife.yob - 2`, `wife.yob = husband.yob + 2`); paternal gaps are the maternal gap of the offset-younger wife plus the offset.
+   - **Second Wife / Remarriage Inference:** When a widower remarries and the second wife's birth year is unknown, she is assumed to have married at the marriage age of her own cohort in the wedding year estimated from the first wife's last child (`secondWife.yob = weddingYear - brideAgeAtMarriageYear(weddingYear)`).
+   - **User-tunable:** every value above (the anchor rows, the wedding→first-child interval, the spousal offset and the sibling spacing) can be changed in the **Deduction Settings** panel (`⚙`); the choice is stored in a cookie and applied before the first build on the next visit.
 2. **Sibling Seniority & 2-Year Spacing**:
    - Consecutive siblings without explicit birth years are spaced by **2 years** (`SIBLING_AGE_GAP = 2`), using **spreadsheet row order** as the authoritative seniority order (lower row number = older sibling).
 3. **Biological Sanity & Consanguinity Guards**:
@@ -306,10 +323,10 @@ node scripts/bundle.mjs --check
 # Run a single test section in <1s during development
 node scripts/run_tests.mjs --skip-ast --section 204
 
-# Run Stages 1-3 (AST parse + Scope check + 2,733 unit tests in ~3s)
+# Run Stages 1-3 (AST parse + Scope check + 2,873 unit tests in ~3s)
 node scripts/run_tests.mjs --fast
 
-# Run all 4 stages including Headless Chrome E2E smoke test (~15s)
+# Run all 4 stages including the Headless Chrome E2E flow (home screen → Open → tree → Home button, ~20s)
 node scripts/run_tests.mjs
 
 # Run strict code quality audit (<=40 lines/fn, 100% JSDoc, >=2 @example blocks)

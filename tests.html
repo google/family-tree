@@ -196,13 +196,39 @@ try {
     const getPersonCardThemeSrc = extractFunction(source, 'getPersonCardTheme');
     const extractSheetIdFromUrlSrc = extractFunction(source, 'extractSheetIdFromUrl');
     const resolveInitialSheetUrlSrc = extractFunction(source, 'resolveInitialSheetUrl');
-    const buttonDocCatalogSrc = 'const BUTTON_DOCUMENTATION_CATALOG = ' + extractBlock(source, '{\n    \'Import Google Sheet from Clipboard URL\':') + ';';
+    const buttonDocCatalogSrc = 'const BUTTON_DOCUMENTATION_CATALOG = ' + extractBlock(source, '{\n    \'Family Tree Home – choose a Google Sheet\':') + ';';
     const resolveDynamicFilterButtonDocSrc = extractFunction(source, 'resolveDynamicFilterButtonDoc');
     const resolveContextualButtonDocSrc = extractFunction(source, 'resolveContextualButtonDoc');
     const resolveButtonDocumentationSrc = extractFunction(source, 'resolveButtonDocumentation');
     const computeButtonDocPositionSrc = extractFunction(source, 'computeButtonDocPosition');
     const buildHoveredButtonDocStateSrc = extractFunction(source, 'buildHoveredButtonDocState');
     const restoreButtonNativeTitleSrc = extractFunction(source, 'restoreButtonNativeTitle');
+    // Pulls a single-line `const NAME = ...;` declaration verbatim, so the harness never
+    // restates a constant's value (a retune in App.jsx must not silently diverge from here).
+    const extractConst = (src, name) => {
+        const m = src.match(new RegExp(`^const ${name} = .*;$`, 'm'));
+        if (!m) throw new Error(`Could not find const ${name}`);
+        return m[0];
+    };
+    const browserPreferencesSrc = [
+        'SHEET_HISTORY_COOKIE', 'DEMOGRAPHIC_SETTINGS_COOKIE', 'PREFERENCE_COOKIE_MAX_AGE_SECONDS',
+        'SHEET_HISTORY_LIMIT', 'SHEET_TITLE_MAX_LENGTH', 'SHEET_HISTORY_COOKIE_BUDGET',
+        'DEMO_SHEET_ID', 'DEMO_SHEET_TITLE', 'SHEET_ID_EXACT_PATTERN', 'sheetTitleRegistry',
+        'MARRIAGE_AGE_PREVIEW_COHORTS'
+    ].map(name => extractConst(source, name)).concat([
+        'parseCookieHeader', 'buildCookieAssignment', 'readCookieValue', 'writeCookieValue',
+        'preferenceStorageKey', 'readPreference', 'writePreference', 'removePreference',
+        'isValidSheetId', 'rankSheetHistory', 'parseSheetHistoryJson', 'serializeSheetHistory',
+        'mergeSheetHistoryEntry', 'resolveMostUsedSheet', 'readSheetHistory', 'writeSheetHistory',
+        'recordSheetUse', 'forgetSheetHistoryEntry', 'buildSheetUrlFromId', 'normalizeSheetReference',
+        'isLikelySheetReference', 'resolveHomeScreenPrefill', 'formatSheetHistoryLabel',
+        'parseContentDispositionFilename', 'deriveSpreadsheetTitle', 'rememberSheetTitle',
+        'getRememberedSheetTitle', 'rememberSheetTitleFromResponse', 'loadStoredDemographicSettings',
+        'saveDemographicSettings', 'clearStoredDemographicSettings', 'applyStoredDemographicSettings',
+        'clearStoredPreferences', 'hasExplicitSheetQueryParam', 'buildSheetDeepLinkUrl',
+        'syncSheetIdIntoLocation', 'commitSuccessfulSheetImport', 'suggestNextMarriageAnchor',
+        'describeMarriageAgePreview'
+    ].map(name => extractFunction(source, name))).join('\n');
     const urlViewStateSrc = [
         'formatCompactNumber', 'encodeViewStateToken', 'decodeViewStateToken',
         'collectViewStateSheetIds', 'compactViewStateSheetIds', 'expandViewStateSheetIds', 'encodePersonIdToken',
@@ -233,8 +259,50 @@ try {
         computeCameraFromViewCenter, computeAnchorOffset, computeCenterFromAnchorOffset,
         isAnchorInsideViewport, pickNearestAnchor, resolveViewStatePersonId, resolveRestoredSidebarOpen,
         buildCurrentViewState, writeViewStateHash, applyRestoredSelection, applyRestoredCamera,
-        resolveCanvasDisplayMode
+        resolveCanvasDisplayMode,
+        DEFAULT_URL, DEMO_SHEET_ID, DEMO_SHEET_TITLE, SHEET_HISTORY_LIMIT, SHEET_TITLE_MAX_LENGTH,
+        SHEET_HISTORY_COOKIE, DEMOGRAPHIC_SETTINGS_COOKIE,
+        parseCookieHeader, buildCookieAssignment, readPreference, writePreference, removePreference,
+        isValidSheetId, rankSheetHistory, parseSheetHistoryJson, serializeSheetHistory,
+        mergeSheetHistoryEntry, resolveMostUsedSheet, readSheetHistory, recordSheetUse,
+        forgetSheetHistoryEntry, buildSheetUrlFromId, normalizeSheetReference, isLikelySheetReference,
+        resolveHomeScreenPrefill, formatSheetHistoryLabel, parseContentDispositionFilename,
+        deriveSpreadsheetTitle, rememberSheetTitle, getRememberedSheetTitle, rememberSheetTitleFromResponse,
+        loadStoredDemographicSettings, saveDemographicSettings, clearStoredDemographicSettings,
+        applyStoredDemographicSettings, clearStoredPreferences, hasExplicitSheetQueryParam,
+        buildSheetDeepLinkUrl, syncSheetIdIntoLocation, commitSuccessfulSheetImport,
+        suggestNextMarriageAnchor, describeMarriageAgePreview, cookieJar, fakeLocalStorage, extractSheetIdFromUrl
     ] = new Function(`
+        // Isolated cookie jar + localStorage: preference tests must never touch the real
+        // browser state, and Stage 3 runs in node where neither exists. Every other
+        // document member is forwarded to the host document (real or mocked).
+        const cookieJar = new Map();
+        const realDocument = typeof globalThis.document !== 'undefined' ? globalThis.document : {};
+        const document = new Proxy({}, {
+            get(_, prop) {
+                if (prop === 'cookie') return [...cookieJar].map(([k, v]) => k + '=' + v).join('; ');
+                const value = realDocument[prop];
+                return typeof value === 'function' ? value.bind(realDocument) : value;
+            },
+            set(_, prop, value) {
+                if (prop !== 'cookie') { realDocument[prop] = value; return true; }
+                const [pair, ...attrs] = String(value).split(';');
+                const eq = pair.indexOf('=');
+                const name = pair.slice(0, eq).trim();
+                const maxAge = attrs.map(a => a.trim().match(/^max-age=(-?\\d+)$/i)).find(Boolean);
+                if (maxAge && Number(maxAge[1]) <= 0) cookieJar.delete(name);
+                else cookieJar.set(name, pair.slice(eq + 1).trim());
+                return true;
+            }
+        });
+        const fakeLocalStorage = {
+            _m: new Map(),
+            getItem(k) { return this._m.has(k) ? this._m.get(k) : null; },
+            setItem(k, v) { this._m.set(k, String(v)); },
+            removeItem(k) { this._m.delete(k); },
+            clear() { this._m.clear(); }
+        };
+        const localStorage = fakeLocalStorage;
         ${csvParserSrc}
         ${personSrc}
         ${familyTreeSrc}
@@ -274,7 +342,7 @@ try {
         ${matchesPersonFilterSrc}
         ${filterBadgeConfigSrc}
         ${getPersonCardThemeSrc}
-        const DEFAULT_URL = 'https://docs.google.com/spreadsheets/d/1ZDpcz2ACmG63dUjHLfoHZSW7-dG51FbzaJVcqHYdkEI/edit?usp=sharing';
+        ${extractConst(source, 'DEFAULT_URL')}
         ${extractSheetIdFromUrlSrc}
         ${resolveInitialSheetUrlSrc}
         ${buttonDocCatalogSrc}
@@ -291,6 +359,7 @@ try {
             contH: container ? container.clientHeight : 800
         });
         ${urlViewStateSrc}
+        ${browserPreferencesSrc}
         FamilyTreeBuilder.matchesPersonFilter = matchesPersonFilter;
         FamilyTreeBuilder.FILTER_BADGE_CONFIG = FILTER_BADGE_CONFIG;
         FamilyTreeBuilder.computeFilterHighlightedIds = function(tree, activeFilter) {
@@ -322,7 +391,19 @@ try {
             computeCameraFromViewCenter, computeAnchorOffset, computeCenterFromAnchorOffset,
             isAnchorInsideViewport, pickNearestAnchor, resolveViewStatePersonId, resolveRestoredSidebarOpen,
             buildCurrentViewState, writeViewStateHash, applyRestoredSelection, applyRestoredCamera,
-            resolveCanvasDisplayMode
+            resolveCanvasDisplayMode,
+            DEFAULT_URL, DEMO_SHEET_ID, DEMO_SHEET_TITLE, SHEET_HISTORY_LIMIT, SHEET_TITLE_MAX_LENGTH,
+            SHEET_HISTORY_COOKIE, DEMOGRAPHIC_SETTINGS_COOKIE,
+            parseCookieHeader, buildCookieAssignment, readPreference, writePreference, removePreference,
+            isValidSheetId, rankSheetHistory, parseSheetHistoryJson, serializeSheetHistory,
+            mergeSheetHistoryEntry, resolveMostUsedSheet, readSheetHistory, recordSheetUse,
+            forgetSheetHistoryEntry, buildSheetUrlFromId, normalizeSheetReference, isLikelySheetReference,
+            resolveHomeScreenPrefill, formatSheetHistoryLabel, parseContentDispositionFilename,
+            deriveSpreadsheetTitle, rememberSheetTitle, getRememberedSheetTitle, rememberSheetTitleFromResponse,
+            loadStoredDemographicSettings, saveDemographicSettings, clearStoredDemographicSettings,
+            applyStoredDemographicSettings, clearStoredPreferences, hasExplicitSheetQueryParam,
+            buildSheetDeepLinkUrl, syncSheetIdIntoLocation, commitSuccessfulSheetImport,
+            suggestNextMarriageAnchor, describeMarriageAgePreview, cookieJar, fakeLocalStorage, extractSheetIdFromUrl
         ];
     `)();
 
@@ -333,6 +414,15 @@ try {
     // happen to produce today (e.g. `1940 + GAPS.MATERNAL_FIRST_CHILD`, never `1964`).
     // Otherwise retuning a prior breaks assertions that were never about the prior's value.
     const GAPS = FamilyTreeBuilder.GENERATIONAL_GAPS;
+
+    // Cohort-aware marriage-age model (FamilyTreeBuilder.MARRIAGE_AGE_MODEL). The first-child gap
+    // follows the PARENT's birth cohort when deducing downward (a 1920 mother bears at ~17, a
+    // 1940 mother at ~24, a 2000 mother at ~29) and is inverted from the child's year when
+    // deducing upward. Express expectations through these helpers, never through literal years.
+    const maternalGap = (motherYob) => FamilyTreeBuilder.maternalFirstChildGap(motherYob);
+    const paternalGap = (fatherYob) => FamilyTreeBuilder.paternalFirstChildGap(fatherYob);
+    const motherFromChild = (childYob) => childYob - FamilyTreeBuilder.firstChildGapFromChild(childYob);
+    const fatherFromChild = (childYob) => childYob - FamilyTreeBuilder.firstChildGapFromChild(childYob, true);
 
     /**
      * Builds a FamilyTree from raw row data in one call.
@@ -542,34 +632,40 @@ try {
     // ══════════════════════════════════════════════════════════════════════════
         section('4. _propagateParentChildYobs — parent-child YOB propagation');
 
-    comment('Rule: the mother is assumed MATERNAL_FIRST_CHILD years older than her first child');
+    comment('Rule: a mother bears her first child maternalFirstChildGap(her cohort) years after her own birth');
     let mom = { gender: 'F', yob: 1940, _inferredYob: null, id: 'm1' };
     let child = { yob: null, _inferredYob: null, momId: 'm1', fatherId: null };
     assert('mother→child propagates', FamilyTreeBuilder._propagateParentChildYobs(mom, child, getYob));
-    assertEqual('child._inferredYob = mother + MATERNAL_FIRST_CHILD',
-        child._inferredYob, 1940 + GAPS.MATERNAL_FIRST_CHILD);
+    assertEqual('child._inferredYob = mother + maternalFirstChildGap(mother)',
+        child._inferredYob, 1940 + maternalGap(1940));
+    assertEqual('the 1940 reference cohort reproduces GAPS.MATERNAL_FIRST_CHILD',
+        maternalGap(1940), GAPS.MATERNAL_FIRST_CHILD);
 
-    comment('Rule: the father is assumed PATERNAL_FIRST_CHILD years older than his first child');
-    comment('(PATERNAL_FIRST_CHILD is derived: MATERNAL_FIRST_CHILD + SPOUSAL_GENDER_OFFSET)');
+    comment('Rule: a father is paternalFirstChildGap(his cohort) years older than his first child');
+    comment('(the paternal gap is derived: the wife\'s maternal gap + SPOUSAL_GENDER_OFFSET)');
     let dad = { gender: 'M', yob: 1938, _inferredYob: null, id: 'd1' };
     child = { yob: null, _inferredYob: null, momId: null, fatherId: 'd1' };
     assert('father→child propagates', FamilyTreeBuilder._propagateParentChildYobs(dad, child, getYob));
-    assertEqual('child._inferredYob = father + PATERNAL_FIRST_CHILD',
-        child._inferredYob, 1938 + GAPS.PATERNAL_FIRST_CHILD);
+    assertEqual('child._inferredYob = father + paternalFirstChildGap(father)',
+        child._inferredYob, 1938 + paternalGap(1938));
+    assertEqual('paternal gap = maternal gap of the (offset-younger) wife + offset',
+        paternalGap(1938), maternalGap(1938 + GAPS.SPOUSAL_GENDER_OFFSET) + GAPS.SPOUSAL_GENDER_OFFSET);
 
-    comment('Reverse: known child → deduce mother YOB');
+    comment('Reverse: known child → deduce mother YOB by inverting the cohort model');
     mom = { gender: 'F', yob: null, _inferredYob: null, id: 'm2' };
     child = { yob: 1980, _inferredYob: null, momId: 'm2', fatherId: null };
     assert('child→mother propagates', FamilyTreeBuilder._propagateParentChildYobs(mom, child, getYob));
-    assertEqual('mother._inferredYob = child - MATERNAL_FIRST_CHILD',
-        mom._inferredYob, 1980 - GAPS.MATERNAL_FIRST_CHILD);
+    assertEqual('mother._inferredYob = child - firstChildGapFromChild(child)',
+        mom._inferredYob, motherFromChild(1980));
+    assert('the inverted mother cohort reproduces the child year when run forward (±1 for gap rounding)',
+        Math.abs(mom._inferredYob + maternalGap(mom._inferredYob) - 1980) <= 1);
 
     comment('Reverse: known child → deduce father YOB');
     dad = { gender: 'M', yob: null, _inferredYob: null, id: 'd2' };
     child = { yob: 1980, _inferredYob: null, momId: null, fatherId: 'd2' };
     assert('child→father propagates', FamilyTreeBuilder._propagateParentChildYobs(dad, child, getYob));
-    assertEqual('father._inferredYob = child - PATERNAL_FIRST_CHILD',
-        dad._inferredYob, 1980 - GAPS.PATERNAL_FIRST_CHILD);
+    assertEqual('father._inferredYob = child - firstChildGapFromChild(child, isFather)',
+        dad._inferredYob, fatherFromChild(1980));
 
     comment('Both known → no propagation');
     mom = { gender: 'F', yob: 1940, _inferredYob: null, id: 'm3' };
@@ -918,14 +1014,15 @@ try {
     if (priya) assertEqual('Priya._inferredYob = Raj + SPOUSAL_GENDER_OFFSET',
         priya._inferredYob, 1950 + GAPS.SPOUSAL_GENDER_OFFSET);
 
-    comment('Child b.1980 with mother → mother deduced b.1956 (24yr gap)');
+    comment('Child b.1980 with mother → mother deduced by inverting the cohort model at 1980');
     tree = buildTree([
         { _sourceId: 'S1', Name: 'Meena', Gender: 'F' },
         { _sourceId: 'S1', Name: 'Sita', Gender: 'F', 'Year of Birth': '1980', Mother: 'Meena' },
     ]);
     let meena = findPerson(tree, 'Meena');
     assert('Meena exists', !!meena);
-    if (meena) assertEqual('Meena._inferredYob = 1956', meena._inferredYob, 1956);
+    if (meena) assertEqual('Meena._inferredYob = 1980 - firstChildGapFromChild(1980)',
+        meena._inferredYob, motherFromChild(1980));
 
 
     // (Section 13 deleted; Test 83 enforces that distinct same-name profiles on the same sheet must not merge without relational evidence)
@@ -1704,11 +1801,12 @@ try {
     // ══════════════════════════════════════════════════════════════════════════
     //  38. Upward YOB propagation — child YOB flows UP to parent
     //      _propagateParentChildYobs: childYob && !parentYob → parent._inferredYob.
-    //      Step 2 uses first child only (24/26yr gap calibrated for first child).
+    //      Step 2 uses the first child only; the gap is the cohort model inverted
+    //      from the child's year (firstChildGapFromChild).
     // ══════════════════════════════════════════════════════════════════════════
         section('38. Upward YOB propagation — child to parent direction');
 
-    comment('Mother with no YOB, child with known YOB → mother = child - 24');
+    comment('Mother with no YOB, child with known YOB → mother = child - firstChildGapFromChild(child)');
     {
         const rows = [
             { _sourceId: 's1', _sheetRow: 2, Name: 'Rani', Gender: 'F' },
@@ -1716,11 +1814,11 @@ try {
         ];
         const tree = buildTree(rows);
         const rani = Object.values(tree.nodes).find(n => n.name === 'Rani');
-        assertEqual('mother = child - MATERNAL_FIRST_CHILD',
-            rani.yob || rani._inferredYob, 1990 - GAPS.MATERNAL_FIRST_CHILD);
+        assertEqual('mother = child - firstChildGapFromChild(child)',
+            rani.yob || rani._inferredYob, motherFromChild(1990));
     }
 
-    comment('Father with no YOB, child with known YOB → father = child - PATERNAL_FIRST_CHILD');
+    comment('Father with no YOB, child with known YOB → father = child - firstChildGapFromChild(child, isFather)');
     {
         const rows = [
             { _sourceId: 's1', _sheetRow: 2, Name: 'Kumar', Gender: 'M' },
@@ -1728,14 +1826,15 @@ try {
         ];
         const tree = buildTree(rows);
         const kumar = Object.values(tree.nodes).find(n => n.name === 'Kumar');
-        assertEqual('father = child - PATERNAL_FIRST_CHILD',
-            kumar.yob || kumar._inferredYob, 1990 - GAPS.PATERNAL_FIRST_CHILD);
+        assertEqual('father = child - firstChildGapFromChild(child, isFather)',
+            kumar.yob || kumar._inferredYob, fatherFromChild(1990));
     }
 
     comment('Three-gen chain: grandchild YOB propagates up through parent to grandparent');
     {
         // Grandpa(M) → Mom(F, father=Grandpa) → Child(b.1990, mother=Mom)
-        // Mom = child - MATERNAL_FIRST_CHILD. Grandpa = Mom - PATERNAL_FIRST_CHILD.
+        // Mom = motherFromChild(child). Grandpa = fatherFromChild(Mom): each hop inverts the model
+        // at its own child's year, so the older generation gets the older cohort's smaller gap.
         const rows = [
             { _sourceId: 's1', _sheetRow: 2, Name: 'Grandpa', Gender: 'M' },
             { _sourceId: 's1', _sheetRow: 3, Name: 'Mama', Gender: 'F', Father: 'Grandpa' },
@@ -1744,17 +1843,17 @@ try {
         const tree = buildTree(rows);
         const mama = Object.values(tree.nodes).find(n => n.name === 'Mama');
         const gp = Object.values(tree.nodes).find(n => n.name === 'Grandpa');
-        const expectedMama = 1990 - GAPS.MATERNAL_FIRST_CHILD;
-        assertEqual('mama = child - MATERNAL_FIRST_CHILD', mama.yob || mama._inferredYob, expectedMama);
-        assertEqual('grandpa = mama - PATERNAL_FIRST_CHILD',
-            gp.yob || gp._inferredYob, expectedMama - GAPS.PATERNAL_FIRST_CHILD);
+        const expectedMama = motherFromChild(1990);
+        assertEqual('mama = child - firstChildGapFromChild(child)', mama.yob || mama._inferredYob, expectedMama);
+        assertEqual('grandpa = mama - firstChildGapFromChild(mama, isFather)',
+            gp.yob || gp._inferredYob, fatherFromChild(expectedMama));
     }
 
     comment('Upward from non-first child: only 3rd child has YOB');
     {
         // Father(M) → [Kid1, Kid2, Kid3(b.1994)]
         // Sibling backward over 2 CONSECUTIVE_SIBLING gaps: Kid2=1992, Kid1=1990.
-        // Upward: Father = Kid1 - PATERNAL_FIRST_CHILD.
+        // Upward: Father = fatherFromChild(Kid1).
         const rows = [
             { _sourceId: 's1', _sheetRow: 2, Name: 'Papa', Gender: 'M' },
             { _sourceId: 's1', _sheetRow: 3, Name: 'Kid1', Father: 'Papa' },
@@ -1764,8 +1863,8 @@ try {
         const tree = buildTree(rows);
         const papa = Object.values(tree.nodes).find(n => n.name === 'Papa');
         const expectedKid1 = 1994 - 2 * GAPS.CONSECUTIVE_SIBLING;
-        assertEqual('papa = kid1 - PATERNAL_FIRST_CHILD',
-            papa.yob || papa._inferredYob, expectedKid1 - GAPS.PATERNAL_FIRST_CHILD);
+        assertEqual('papa = kid1 - firstChildGapFromChild(kid1, isFather)',
+            papa.yob || papa._inferredYob, fatherFromChild(expectedKid1));
     }
 
 
@@ -1811,12 +1910,12 @@ try {
         // reachable two ways — directly as kvMother's father, and via his wife Thandammamma —
         // so pinning the literal made this test depend on three priors agreeing by accident.
         comment('Upward: Kochuvareed Mother is one maternal generation above Kochuvareed');
-        assertEqual('Kochuvareed Mother is MATERNAL_FIRST_CHILD years older than Kochuvareed',
-            getYob(kv) - getYob(kvMother), GAPS.MATERNAL_FIRST_CHILD);
+        assertEqual('Kochuvareed Mother = Kochuvareed - firstChildGapFromChild(1880)',
+            getYob(kvMother), motherFromChild(getYob(kv)));
 
         comment('Upward: Anthony (father) is one paternal generation above Kochuvareed Mother');
-        assertEqual('Anthony is PATERNAL_FIRST_CHILD years older than Kochuvareed Mother',
-            getYob(kvMother) - getYob(anthony), GAPS.PATERNAL_FIRST_CHILD);
+        assertEqual('Anthony = Kochuvareed Mother - firstChildGapFromChild(her year, isFather)',
+            getYob(anthony), fatherFromChild(getYob(kvMother)));
 
         comment('Siblings: Kochappu and Celina get YOBs from sibling propagation');
         assert('Kochappu gets YOB', getYob(kochappu) !== null);
@@ -2102,7 +2201,8 @@ try {
         const stefiny = Object.values(tree.nodes).find(n => n.name === 'Sr Stefiny');
         const wife2 = Object.values(tree.nodes).find(n => n.name === 'Wife 2');
         
-        assert('Second wife born ~18 years before last child of first wife (Sr Stefiny)', wife2 && Math.abs(getYob(wife2) - (getYob(stefiny) - 18)) <= 2);
+        assertEqual('Second wife born brideAgeAtMarriageYear(last child year) years before last child of first wife (Sr Stefiny)',
+            wife2 && getYob(wife2), getYob(stefiny) - FamilyTreeBuilder.brideAgeAtMarriageYear(getYob(stefiny)));
     }
 
     // ══════════════════════════════════════════════════════════════════════════
@@ -2300,8 +2400,8 @@ const m3 = tree.all.find(n => n.id === '3');
     assertEqual('Achama is partner of Husband Anthony',
         achama55 && achama55.partners && achama55.partners[0], husbandAnthony55.id);
 
-    assertEqual('Achama Daughter 1 deduced one MATERNAL_FIRST_CHILD gap below mother b.1962',
-        daughter1_55 && daughter1_55._inferredYob, 1962 + GAPS.MATERNAL_FIRST_CHILD);
+    assertEqual('Achama Daughter 1 deduced one maternalFirstChildGap(1962) below mother b.1962',
+        daughter1_55 && daughter1_55._inferredYob, 1962 + maternalGap(1962));
 
     // ══════════════════════════════════════════════════════════════════════════
     //  56. E2E: Cross-sheet "Husband" column must not flip spouse gender
@@ -2822,9 +2922,9 @@ const m3 = tree.all.find(n => n.id === '3');
         assert('Rosamma born after Kochappu Wife 1 (she is the later wife)',
             rosaYob > wife1Yob);
 
-        // Rosamma should be at marriage age (18) around Fr Jose's birth year
-        const expectedRosaYob = frJoseYob - 18;
-        assertEqual('Rosamma YOB deduced from marriage age (18) at last child of first wife',
+        // Rosamma should be at the cohort bride age for a wedding around Fr Jose's birth year
+        const expectedRosaYob = frJoseYob - FamilyTreeBuilder.brideAgeAtMarriageYear(frJoseYob);
+        assertEqual('Rosamma YOB deduced from the cohort bride age at last child of first wife',
             rosaYob, expectedRosaYob);
 
         // Rosamma must be linked as Kochappu's partner
@@ -2886,8 +2986,9 @@ const m3 = tree.all.find(n => n.id === '3');
 
     // ══════════════════════════════════════════════════════════════════════════
     //  67. Ghost Parents Age deduction with multiple sibling anchors
-    //      Ghost mother and father must be deduced to be at least 18 years older
-    //      than the oldest sibling anchor (Anthony Sister b.~1866).
+    //      Ghost mother and father must be deduced at least one cohort first-child
+    //      gap older than the oldest sibling anchor (Anthony Sister, b.~1873 as
+    //      inverted from Kochuvareed b.1890).
     // ══════════════════════════════════════════════════════════════════════════
     section('67. Ghost Parents Age deduction with multiple sibling anchors');
     {
@@ -2903,13 +3004,15 @@ const m3 = tree.all.find(n => n.id === '3');
         const father = tree67.all.find(n => n.name === 'Anthony Father');
 
         if (mother && sister && mother.bestYob && sister.bestYob) {
-            assert('Anthony Mother is at least 18 years older than Anthony Sister', mother.bestYob <= sister.bestYob - 18);
+            assert('Anthony Mother is at least one cohort first-child gap older than Anthony Sister',
+                mother.bestYob <= motherFromChild(sister.bestYob));
         } else {
             assert('Anthony Mother and Anthony Sister bestYob exist', false);
         }
         
         if (father && sister && father.bestYob && sister.bestYob) {
-            assert('Anthony Father is at least 18 years older than Anthony Sister', father.bestYob <= sister.bestYob - 18);
+            assert('Anthony Father is at least one cohort first-child gap older than Anthony Sister',
+                father.bestYob <= fatherFromChild(sister.bestYob));
         } else {
             assert('Anthony Father and Anthony Sister bestYob exist', false);
         }
@@ -7276,7 +7379,11 @@ const m3 = tree.all.find(n => n.id === '3');
     // ══════════════════════════════════════════════════════════════════════════
     section("127. Second Wife DOB Estimation from Previous Wife's Last Child");
 
-    // 127A: Male with 2 partners infers second wife DOB as (last child of 1st wife - SECOND_WIFE_MARRIAGE_AGE)
+    // The second wife is assumed to have married right after the first wife's last child, at the
+    // cohort bride age for THAT wedding year (brideAgeAtMarriageYear), never at a flat age.
+    const secondWifeYob = (lastChildYob) => lastChildYob - FamilyTreeBuilder.brideAgeAtMarriageYear(lastChildYob);
+
+    // 127A: Male with 2 partners infers second wife DOB as (last child of 1st wife - bride age at that year)
     {
         try {
             const rows127 = [
@@ -7294,9 +7401,11 @@ const m3 = tree.all.find(n => n.id === '3');
             const thankamma = tree127.all.find(p => p.name === 'Thankamma');
 
             assert('Test 127A: Thankamma profile exists', !!thankamma);
-            assertEqual('Test 127A: Thankamma inferred YOB is exactly last child YOB (1952) - SECOND_WIFE_MARRIAGE_AGE (18)', thankamma._inferredYob, 1934);
+            assertEqual('Test 127A: Thankamma inferred YOB is exactly last child YOB (1952) - brideAgeAtMarriageYear(1952)',
+                thankamma._inferredYob, secondWifeYob(1952));
             assert('Test 127A: Thankamma marked with _isSecondWifeInferred', thankamma._isSecondWifeInferred === true);
-            assert('Test 127A: Display string reflects ~1934', thankamma.getDateStrings().dateStr.includes('1934'));
+            assert('Test 127A: Display string reflects the inferred year',
+                thankamma.getDateStrings().dateStr.includes(String(secondWifeYob(1952))));
         } catch (e) {
             assertEqual('Test 127A execution failed', e.message, '');
         }
@@ -7311,15 +7420,19 @@ const m3 = tree.all.find(n => n.id === '3');
                 { _sheetRow: 12, Name: 'Wife 2', Gender: 'F', Spouse: 'Kochappappan', _sourceId: 's127b' },
                 { _sheetRow: 13, Name: 'W1 Child 1', Mother: 'Wife 1', 'Year of Birth': '1920', _sourceId: 's127b' },
                 { _sheetRow: 14, Name: 'W1 Child 2', Mother: 'Wife 1', 'Year of Birth': '1927', _sourceId: 's127b' },
-                { _sheetRow: 15, Name: 'W2 Child 1', Mother: 'Wife 2', 'Year of Birth': '1929', _sourceId: 's127b' },
+                { _sheetRow: 15, Name: 'W2 Child 1', Mother: 'Wife 2', 'Year of Birth': '1935', _sourceId: 's127b' },
             ];
 
             const tree127B = buildTree(rows127B, { 's127b': 'Sheet127B' });
             const wife2 = tree127B.all.find(p => p.name === 'Wife 2');
 
             assert('Test 127B: Wife 2 exists', !!wife2);
-            // 1927 (last child of wife 1) - 18 = 1909. Must not be overwritten to 1929 - 24 = 1905 by W2 Child 1.
-            assertEqual('Test 127B: Wife 2 inferred YOB is 1909 (1927 - 18)', wife2._inferredYob, 1909);
+            // 1927 (last child of wife 1) - bride age at 1927. Must not be overwritten by the
+            // upward first-child inference from W2 Child 1 (1935 - firstChildGapFromChild(1935)).
+            assertEqual('Test 127B: Wife 2 inferred YOB is 1927 - brideAgeAtMarriageYear(1927)',
+                wife2._inferredYob, secondWifeYob(1927));
+            assert('Test 127B: the second-wife estimate differs from the plain upward inference it must beat',
+                secondWifeYob(1927) !== motherFromChild(1935));
         } catch (e) {
             assertEqual('Test 127B execution failed', e.message, '');
         }
@@ -7340,9 +7453,11 @@ const m3 = tree.all.find(n => n.id === '3');
 
             assert('Test 127C: Rosamma profile exists', !!rosamma);
             assertEqual('Test 127C: Rosamma yob is cleared to 0 (overridden by second wife fix)', rosamma.yob, 0);
-            assertEqual('Test 127C: Rosamma inferred YOB is 1934 (1952 - 18)', rosamma._inferredYob, 1934);
+            assertEqual('Test 127C: Rosamma inferred YOB is 1952 - brideAgeAtMarriageYear(1952)',
+                rosamma._inferredYob, secondWifeYob(1952));
             assert('Test 127C: Rosamma marked with _isSecondWifeInferred', rosamma._isSecondWifeInferred === true);
-            assertEqual('Test 127C: Rosamma date string is ~1934 - 1980', rosamma.getDateStrings().dateStr, '~1934 - 1980');
+            assertEqual('Test 127C: Rosamma date string is ~<inferred> - 1980',
+                rosamma.getDateStrings().dateStr, `~${secondWifeYob(1952)} - 1980`);
         } catch (e) {
             assertEqual('Test 127C execution failed', e.message, '');
         }
@@ -9659,11 +9774,20 @@ const m3 = tree.all.find(n => n.id === '3');
             assert('Test 162A5: Devasikkutty Sister 1 is partnered with Devasikkutty Sister 1 Husband', ds1?.partners.includes(dsh?.id));
             assert('Test 162A6: Devasikkutty Sister 1 Husband is partnered with Devasikkutty Sister 1', dsh?.partners.includes(ds1?.id));
 
-            // 2. YOBs must not spiral downward into the 1800s due to same-gender spousal ping-pong
-            assert('Test 162B1: Alice YOB is in the 1900s (>1930)', alice?.bestYob >= 1930);
-            assert('Test 162B2: Jossy YOB is in the 1900s (>1930)', jossy?.bestYob >= 1930);
-            assert('Test 162B3: Piya YOB is in the 1900s (>1960)', piya?.bestYob >= 1960);
-            assert('Test 162B4: Piya Husband YOB is in the 1900s (>1960)', ph?.bestYob >= 1960);
+            // 2. YOBs must not spiral downward into the 1800s due to same-gender spousal ping-pong.
+            //    Assert each hop of the chain through the cohort model (Rosa Sister b.1894 → Ouseph →
+            //    Alice → Piya) instead of pinning loose literal floors.
+            const ouseph162 = tree162.all.find(n => n.name === 'Ouseph');
+            const expectedOuseph = 1894 + maternalGap(1894);
+            const expectedAlice = expectedOuseph + paternalGap(expectedOuseph);
+            const expectedPiya = expectedAlice + maternalGap(expectedAlice);
+            assertEqual('Test 162B0: Ouseph is one maternal cohort gap below Rosa Sister b.1894', ouseph162?.bestYob, expectedOuseph);
+            assertEqual('Test 162B1: Alice is one paternal cohort gap below Ouseph', alice?.bestYob, expectedAlice);
+            assertEqual('Test 162B2: Jossy is one SPOUSAL_GENDER_OFFSET older than Alice', jossy?.bestYob, expectedAlice - GAPS.SPOUSAL_GENDER_OFFSET);
+            assertEqual('Test 162B3: Piya is one maternal cohort gap below Alice', piya?.bestYob, expectedPiya);
+            assertEqual('Test 162B4: Piya Husband is one SPOUSAL_GENDER_OFFSET older than Piya', ph?.bestYob, expectedPiya - GAPS.SPOUSAL_GENDER_OFFSET);
+            assert('Test 162B5: nobody in the chain spirals back into the 1800s',
+                [alice, jossy, piya, ph].every(n => n?.bestYob >= 1900));
 
             // 3. Disjoint subtrees must not isolate these profiles
             const disjoint162 = tree162.findDisjointSubtrees();
@@ -12615,7 +12739,10 @@ const m3 = tree.all.find(n => n.id === '3');
 
             // 1. Manju's children: Rosemol (row 132) and Jeswin (row 133)
             assertEqual('Test 193.04: Manju has 2 children', manju.children.length, 2);
-            assertEqual('Test 193.05: Rosemol bestYob is 2000', rosemol.bestYob, 2000);
+            assertEqual('Test 193.04b: Manju (first child) is one maternal cohort gap below Valsamma b.1952',
+                manju.bestYob, 1952 + maternalGap(1952));
+            assertEqual('Test 193.05: Rosemol is one maternal cohort gap below Manju',
+                rosemol.bestYob, manju.bestYob + maternalGap(manju.bestYob));
             assertEqual('Test 193.06: Jeswin bestYob is one CONSECUTIVE_SIBLING after Rosemol',
                 jeswin.bestYob, rosemol.bestYob + GAPS.CONSECUTIVE_SIBLING);
             assertEqual('Test 193.07: Jeswin is one CONSECUTIVE_SIBLING younger than Rosemol',
@@ -12629,8 +12756,8 @@ const m3 = tree.all.find(n => n.id === '3');
             assertEqual('Test 193.10: Maya has 4 children', maya.children.length, 4);
 
             const mayaChildren = maya.children.map(id => tree193.all.find(n => n.id === id)).sort((a, b) => a.bestYob - b.bestYob);
-            const mayaFirstBorn = maya.bestYob + GAPS.MATERNAL_FIRST_CHILD;
-            assertEqual('Test 193.11: Maya child 0 anchors one MATERNAL_FIRST_CHILD below Maya',
+            const mayaFirstBorn = maya.bestYob + maternalGap(maya.bestYob);
+            assertEqual('Test 193.11: Maya child 0 anchors one maternal cohort gap below Maya',
                 mayaChildren[0].bestYob, mayaFirstBorn);
             assert('Test 193.11b: Jopan is one of Maya\'s children', maya.children.includes(jopan.id));
             assertEqual('Test 193.12: Maya child 1 is one CONSECUTIVE_SIBLING after child 0',
@@ -12655,8 +12782,8 @@ const m3 = tree.all.find(n => n.id === '3');
             const maneshChildren = manesh.children.map(id => tree193.all.find(n => n.id === id)).sort((a, b) => a.bestYob - b.bestYob);
             // The first child sits one paternal generation below Manesh and each later child one
             // sibling gap after the previous, so derive the ladder instead of freezing 2004..2010.
-            const maneshFirstBorn = manesh.bestYob + GAPS.PATERNAL_FIRST_CHILD;
-            assertEqual('Test 193.19: Manesh child 0 (John) is one PATERNAL_FIRST_CHILD below Manesh',
+            const maneshFirstBorn = manesh.bestYob + paternalGap(manesh.bestYob);
+            assertEqual('Test 193.19: Manesh child 0 (John) is one paternal cohort gap below Manesh',
                 maneshChildren[0].bestYob, maneshFirstBorn);
             assertEqual('Test 193.19b: Manesh child 0 is John', maneshChildren[0].id, john.id);
             assertEqual('Test 193.20: Manesh child 1 (Manesh Daughter 2) is one CONSECUTIVE_SIBLING after John',
@@ -13238,19 +13365,23 @@ const m3 = tree.all.find(n => n.id === '3');
             ];
             const sisters200 = (freeForm, annuGender) => {
                 const tree = buildTree(rows200(freeForm, annuGender));
+                const saju = tree.all.find(n => n.name === 'Saju');
                 return {
                     aneesha: tree.all.find(n => n.name === 'Aneesha'),
                     annu: tree.all.find(n => n.name === 'Annu'),
-                    childCount: tree.all.find(n => n.name === 'Saju').children.length
+                    childCount: saju.children.length,
+                    // Saju's year comes from AGE (so it tracks the current year); the elder daughter
+                    // sits one paternal cohort gap below him, never at a frozen literal year.
+                    elderYear: saju.bestYob + paternalGap(saju.bestYob)
                 };
             };
 
             // Baseline: no free-form cell. Row order alone already gets this right,
             // which is exactly what typing into the cell must not disturb.
             const base200 = sisters200('', '');
-            assertEqual('Test 200.01: Without the free-form cell Aneesha (row 78) is the elder', base200.aneesha.bestYob, 1994);
+            assertEqual('Test 200.01: Without the free-form cell Aneesha (row 78) is the elder', base200.aneesha.bestYob, base200.elderYear);
             assertEqual('Test 200.02: Without the free-form cell Annu (row 79) is one CONSECUTIVE_SIBLING younger',
-                base200.annu.bestYob, 1994 + GAPS.CONSECUTIVE_SIBLING);
+                base200.annu.bestYob, base200.elderYear + GAPS.CONSECUTIVE_SIBLING);
 
             // The reported bug: "2 daughters" on Saju, with only Annu's gender known.
             const flip200 = sisters200('2 daughters', 'F');
@@ -13258,9 +13389,9 @@ const m3 = tree.all.find(n => n.id === '3');
             assertEqual('Test 200.04: Aneesha absorbs "Daughter 1" despite Annu being the one with a recorded gender',
                 flip200.aneesha._siblingOrdinal.num, 1);
             assertEqual('Test 200.05: Annu absorbs "Daughter 2"', flip200.annu._siblingOrdinal.num, 2);
-            assertEqual('Test 200.06: Aneesha keeps the elder birth year', flip200.aneesha.bestYob, 1994);
+            assertEqual('Test 200.06: Aneesha keeps the elder birth year', flip200.aneesha.bestYob, flip200.elderYear);
             assertEqual('Test 200.07: Annu keeps the younger birth year',
-                flip200.annu.bestYob, 1994 + GAPS.CONSECUTIVE_SIBLING);
+                flip200.annu.bestYob, flip200.elderYear + GAPS.CONSECUTIVE_SIBLING);
 
             // "2 daughters" names no sons, so every child it covers is a daughter.
             assertEqual('Test 200.08: "2 daughters" makes Aneesha female too', flip200.aneesha.gender, 'F');
@@ -13268,7 +13399,7 @@ const m3 = tree.all.find(n => n.id === '3');
 
             // ...and the same holds when neither sister has a gender on file.
             const plain200 = sisters200('2 daughters', '');
-            assertEqual('Test 200.10: Birth order survives when no gender is recorded at all', plain200.aneesha.bestYob, 1994);
+            assertEqual('Test 200.10: Birth order survives when no gender is recorded at all', plain200.aneesha.bestYob, plain200.elderYear);
             assertEqual('Test 200.11: "2 daughters" genders both sisters on its own',
                 plain200.aneesha.gender === 'F' && plain200.annu.gender === 'F', true);
 
@@ -13277,7 +13408,7 @@ const m3 = tree.all.find(n => n.id === '3');
             const mixed200 = sisters200('1 daughter, 1 son', '');
             assertEqual('Test 200.12: A mixed "1 daughter, 1 son" statement genders neither sister',
                 !mixed200.aneesha.gender && !mixed200.annu.gender, true);
-            assertEqual('Test 200.13: A mixed statement still preserves birth order', mixed200.aneesha.bestYob, 1994);
+            assertEqual('Test 200.13: A mixed statement still preserves birth order', mixed200.aneesha.bestYob, mixed200.elderYear);
         } catch (e) {
             assertEqual('Test 200 execution failed', e.message, '');
         }
@@ -13528,18 +13659,21 @@ const m3 = tree.all.find(n => n.id === '3');
             assertEqual('Test 203.04: ?url=<fullUrl> resolves directly',
                 resolveInitialSheetUrl(`?url=https://docs.google.com/spreadsheets/d/${customId}/edit`), `https://docs.google.com/spreadsheets/d/${customId}/edit`);
 
-            // Test 203.05: Fallback to DEFAULT_URL when empty query string is passed
-            const defaultUrlExpected = 'https://docs.google.com/spreadsheets/d/1ZDpcz2ACmG63dUjHLfoHZSW7-dG51FbzaJVcqHYdkEI/edit?usp=sharing';
+            // Test 203.05: Fallback to DEFAULT_URL (the public demo sheet) when empty query string is passed
             assertEqual('Test 203.05: Empty query string falls back to DEFAULT_URL',
-                resolveInitialSheetUrl(''), defaultUrlExpected);
+                resolveInitialSheetUrl(''), DEFAULT_URL);
 
             // Test 203.06: Fallback to DEFAULT_URL when unrelated query string is passed
             assertEqual('Test 203.06: Unrelated query string falls back to DEFAULT_URL',
-                resolveInitialSheetUrl('?other=foo'), defaultUrlExpected);
+                resolveInitialSheetUrl('?other=foo'), DEFAULT_URL);
 
             // Test 203.07: Fallback to DEFAULT_URL when null is passed
             assertEqual('Test 203.07: Null query string falls back to DEFAULT_URL',
-                resolveInitialSheetUrl(null), defaultUrlExpected);
+                resolveInitialSheetUrl(null), DEFAULT_URL);
+
+            // Test 203.08: DEFAULT_URL is the public demo spreadsheet, not a private family sheet
+            assertEqual('Test 203.08: DEFAULT_URL points at the demo spreadsheet (DEMO_SHEET_ID)',
+                extractSheetIdFromUrl(DEFAULT_URL), DEMO_SHEET_ID);
         } catch (e) {
             assertEqual('Test 203 execution failed', e.message, '');
         }
@@ -14032,12 +14166,12 @@ const m3 = tree.all.find(n => n.id === '3');
                 return start === -1 ? '' : appCode.slice(start, end === -1 ? start + 4000 : end);
             };
             const splashBlock = sliceComponent('const TreeLoadingBrandSplash = () => (');
-            assert('Test 207.05: TreeLoadingBrandSplash renders the SVG emblem, the "Family Tree" heading, and the loading caption',
-                /<svg\b[\s\S]*?#navBgGrad[\s\S]*?<\/svg>/.test(splashBlock) &&
+            assert('Test 207.05: TreeLoadingBrandSplash renders the shared BrandLogo emblem, the "Family Tree" heading, and the loading caption',
+                /<BrandLogo\b[^>]*idPrefix="splash"/.test(splashBlock) &&
                 />Family Tree<\/h1>/.test(splashBlock) &&
                 /Fetching and building tree\.\.\./.test(splashBlock));
-            assert('Test 207.06: The loading splash renders large (>= 64px icon and >= 36px heading)',
-                /w-\[(?:[6-9]\d|\d{3,})px\]/.test(splashBlock) && /text-\[(?:3[6-9]|[4-9]\d)px\]/.test(splashBlock));
+            assert('Test 207.06: The loading splash renders large (>= 64px emblem and >= 36px heading)',
+                /<BrandLogo\b[^>]*size=\{(?:[6-9]\d|\d{3,})\}/.test(splashBlock) && /text-\[(?:3[6-9]|[4-9]\d)px\]/.test(splashBlock));
 
             const mainBarBlock = sliceComponent('const TopNavigationMainBar = ({');
             assert('Test 207.07: TopNavigationMainBar renders neither the SVG icon nor "Family Tree" text while browsing, and TopNavigationBrandTitle is gone',
@@ -14050,6 +14184,470 @@ const m3 = tree.all.find(n => n.id === '3');
                 !/Family Tree/.test(canvasBlock));
         } catch (e) {
             assertEqual('Test 207 execution failed', e.message, '');
+        }
+    }
+
+    // ══════════════════════════════════════════════════════════════════════════
+    //  208. Cohort Marriage-Age Model & Demographic Settings
+    // ══════════════════════════════════════════════════════════════════════════
+    {
+        section('208. Cohort Marriage-Age Model & Demographic Settings');
+        // Marriage age rose steeply over the last century: women born in the 1910s-20s married at
+        // ~15, those born in the 1940s at 20-25, those born in the 2000s at 25-30. Every deduced
+        // generational gap must follow the PARENT's birth cohort rather than one flat constant.
+        try {
+            const B = FamilyTreeBuilder;
+            const model = B.MARRIAGE_AGE_MODEL;
+            const anchorYears = model.ANCHORS.map(([year]) => year);
+            const anchorAges = model.ANCHORS.map(([, age]) => age);
+
+            assert('Test 208.01: Anchors are sorted by cohort year',
+                anchorYears.every((y, i) => i === 0 || y > anchorYears[i - 1]));
+            assert('Test 208.02: Marriage age never decreases across cohorts',
+                anchorAges.every((a, i) => i === 0 || a >= anchorAges[i - 1]));
+            assert('Test 208.03: The 1910s-20s cohort married in the mid teens (<= 16)',
+                B.marriageAgeForBirthYear(1915) <= 16 && B.marriageAgeForBirthYear(1925) <= 16);
+            assert('Test 208.04: The 1940s cohort married between 20 and 25',
+                B.marriageAgeForBirthYear(1945) >= 20 && B.marriageAgeForBirthYear(1945) <= 25);
+            assert('Test 208.05: The 2000s cohort marries between 25 and 30',
+                B.marriageAgeForBirthYear(2005) >= 25 && B.marriageAgeForBirthYear(2005) <= 30);
+
+            // Interpolation and clamping
+            const [y0, a0] = model.ANCHORS[0];
+            const [y1, a1] = model.ANCHORS[1];
+            assertEqual('Test 208.06: Exactly on an anchor returns the anchor age', B.marriageAgeForBirthYear(y1), a1);
+            assertEqual('Test 208.07: Midway between two anchors is the linear midpoint',
+                B.marriageAgeForBirthYear((y0 + y1) / 2), (a0 + a1) / 2);
+            assertEqual('Test 208.08: Cohorts before the first anchor clamp to its age', B.marriageAgeForBirthYear(y0 - 300), a0);
+            const [yLast, aLast] = model.ANCHORS[model.ANCHORS.length - 1];
+            assertEqual('Test 208.09: Cohorts after the last anchor clamp to its age', B.marriageAgeForBirthYear(yLast + 300), aLast);
+            assertEqual('Test 208.10: Unknown cohort (null) falls back to the reference cohort',
+                B.marriageAgeForBirthYear(null), B.marriageAgeForBirthYear(model.REFERENCE_COHORT_YEAR));
+
+            // First-child gaps derived from the marriage age
+            assertEqual('Test 208.11: maternalFirstChildGap = round(marriage age + FIRST_CHILD_AFTER_MARRIAGE)',
+                B.maternalFirstChildGap(1962), Math.round(B.marriageAgeForBirthYear(1962) + model.FIRST_CHILD_AFTER_MARRIAGE));
+            assert('Test 208.12: A 1920 mother bears earlier than a 1940 mother, who bears earlier than a 2000 mother',
+                B.maternalFirstChildGap(1920) < B.maternalFirstChildGap(1940) && B.maternalFirstChildGap(1940) < B.maternalFirstChildGap(2000));
+            assertEqual('Test 208.13: The reference cohort gap equals GENERATIONAL_GAPS.MATERNAL_FIRST_CHILD',
+                B.maternalFirstChildGap(model.REFERENCE_COHORT_YEAR), GAPS.MATERNAL_FIRST_CHILD);
+            assertEqual('Test 208.14: paternalFirstChildGap = maternal gap of the offset-younger wife + offset',
+                B.paternalFirstChildGap(1938), B.maternalFirstChildGap(1938 + GAPS.SPOUSAL_GENDER_OFFSET) + GAPS.SPOUSAL_GENDER_OFFSET);
+            assertEqual('Test 208.15: Unknown parent cohort uses the reference cohort gap',
+                B.maternalFirstChildGap(null), GAPS.MATERNAL_FIRST_CHILD);
+
+            // Inverse: from a child's year back to the mother's cohort
+            for (const childYear of [1900, 1935, 1964, 1990, 2020]) {
+                const mother = B.inferMotherYobFromFirstChild(childYear);
+                assert(`Test 208.16.${childYear}: inferMotherYobFromFirstChild inverts the forward model within rounding`,
+                    Math.abs(mother + B.maternalFirstChildGap(mother) - childYear) <= 1);
+            }
+            assertEqual('Test 208.17: firstChildGapFromChild is child - inverted mother cohort',
+                B.firstChildGapFromChild(1964), 1964 - B.inferMotherYobFromFirstChild(1964));
+            assertEqual('Test 208.18: firstChildGapFromChild(isFather) adds the spousal offset',
+                B.firstChildGapFromChild(1964, true), B.firstChildGapFromChild(1964) + GAPS.SPOUSAL_GENDER_OFFSET);
+            assert('Test 208.19: An older child year implies a smaller upward gap than a modern one',
+                B.firstChildGapFromChild(1930) < B.firstChildGapFromChild(2010));
+
+            // Bride age for a given wedding year (second-wife estimate)
+            const bride1927 = B.brideAgeAtMarriageYear(1927);
+            assert('Test 208.20: brideAgeAtMarriageYear is self-consistent: cohort + its marriage age lands on the wedding year (±1)',
+                Math.abs((1927 - bride1927) + B.marriageAgeForBirthYear(1927 - bride1927) - 1927) <= 1);
+            assert('Test 208.21: A 1920s bride was younger than a 1990s bride',
+                B.brideAgeAtMarriageYear(1927) < B.brideAgeAtMarriageYear(1995));
+
+            // Settings: sanitize / apply / read back / reset
+            const defaults = B.DEFAULT_DEMOGRAPHIC_SETTINGS;
+            const clean = B.sanitizeDemographicSettings({ marriageAgeAnchors: [[1970, 24], [1900, 15], ['x', 1], [1900, 16]], spousalGenderOffset: 3, consecutiveSiblingGap: 99 });
+            assertEqual('Test 208.22: sanitize sorts anchors by year, drops invalid pairs and duplicate years',
+                JSON.stringify(clean.marriageAgeAnchors), JSON.stringify([[1900, 15], [1970, 24]]));
+            assertEqual('Test 208.23: sanitize keeps an in-range offset', clean.spousalGenderOffset, 3);
+            assertEqual('Test 208.24: sanitize falls back to the default for an out-of-range sibling gap',
+                clean.consecutiveSiblingGap, defaults.consecutiveSiblingGap);
+            assertEqual('Test 208.25: sanitize of garbage returns the defaults',
+                JSON.stringify(B.sanitizeDemographicSettings('nonsense')), JSON.stringify(B.sanitizeDemographicSettings(defaults)));
+
+            const before = B.getDemographicSettings();
+            B.applyDemographicSettings({ marriageAgeAnchors: [[1900, 20], [2000, 30]], spousalGenderOffset: 4, consecutiveSiblingGap: 3, firstChildAfterMarriage: 1 });
+            assertEqual('Test 208.26: apply installs the new anchors (1950 interpolates to 25 + 1)', B.maternalFirstChildGap(1950), 26);
+            assertEqual('Test 208.27: apply recomputes MATERNAL_FIRST_CHILD from the reference cohort',
+                B.GENERATIONAL_GAPS.MATERNAL_FIRST_CHILD, B.maternalFirstChildGap(model.REFERENCE_COHORT_YEAR));
+            assertEqual('Test 208.28: apply keeps the PATERNAL = MATERNAL + offset identity',
+                B.GENERATIONAL_GAPS.PATERNAL_FIRST_CHILD, B.GENERATIONAL_GAPS.MATERNAL_FIRST_CHILD + 4);
+            assertEqual('Test 208.29: apply installs the sibling gap', B.GENERATIONAL_GAPS.CONSECUTIVE_SIBLING, 3);
+            assertEqual('Test 208.30: getDemographicSettings round-trips what was applied',
+                JSON.stringify(B.getDemographicSettings()), JSON.stringify(B.sanitizeDemographicSettings({ marriageAgeAnchors: [[1900, 20], [2000, 30]], spousalGenderOffset: 4, consecutiveSiblingGap: 3, firstChildAfterMarriage: 1 })));
+            const appliedTree = buildTree([
+                { _sourceId: 's', _sheetRow: 2, Name: 'Mother', Gender: 'F', 'Year of Birth': '1950' },
+                { _sourceId: 's', _sheetRow: 3, Name: 'Kid', Mother: 'Mother' },
+            ]);
+            assertEqual('Test 208.31: A build after apply uses the new gaps', appliedTree.all.find(n => n.name === 'Kid').bestYob, 1950 + 26);
+
+            B.resetDemographicSettings();
+            assertEqual('Test 208.32: reset restores the shipped settings', JSON.stringify(B.getDemographicSettings()), JSON.stringify(before));
+            assertEqual('Test 208.33: reset restores the live GENERATIONAL_GAPS alias used by the rest of this suite',
+                B.GENERATIONAL_GAPS.MATERNAL_FIRST_CHILD, GAPS.MATERNAL_FIRST_CHILD);
+        } catch (e) {
+            FamilyTreeBuilder.resetDemographicSettings();
+            assertEqual('Test 208 execution failed', e.message, '');
+        }
+    }
+
+    // ══════════════════════════════════════════════════════════════════════════
+    //  209. Sheet History Cookie, Clipboard Prefill & Sheet Titles
+    // ══════════════════════════════════════════════════════════════════════════
+    {
+        section('209. Sheet History Cookie, Clipboard Prefill & Sheet Titles');
+        // The app no longer hard-codes a spreadsheet. Every sheet the user opens is remembered in
+        // a first-party cookie (mirrored to localStorage for file:// exports), the home-screen box
+        // is prefilled clipboard → most-used → demo, and the spreadsheet title is learned from the
+        // CSV export's Content-Disposition header. Everything here runs against the harness's
+        // isolated cookie jar — never the real browser cookies.
+        try {
+            const B = FamilyTreeBuilder;
+            const ID_A = DEMO_SHEET_ID;
+            const ID_B = '1BxiMVs0XRA5nFMdKvBdBZjgmUUqptlbs74OgvE2upms';
+            const ID_C = '1ZDpcz2ACmG63dUjHLfoHZSW7-dG51FbzaJVcqHYdkEI';
+            const fakeId = (k) => `1${String(k).padStart(2, '0')}${'x'.repeat(41)}`;
+            cookieJar.clear();
+            fakeLocalStorage.clear();
+
+            // Cookie primitives
+            assertEqual('Test 209.01: parseCookieHeader finds and URL-decodes the named cookie',
+                parseCookieHeader('theme=dark; ft_sheet_history=%5B%5D; x=1', 'ft_sheet_history'), '[]');
+            assertEqual('Test 209.02: parseCookieHeader returns null for an absent cookie',
+                parseCookieHeader('theme=dark', 'ft_sheet_history'), null);
+            assertEqual('Test 209.03: parseCookieHeader does not match a cookie whose name merely ends with the wanted name',
+                parseCookieHeader('xft_sheet_history=1; theme=dark', 'ft_sheet_history'), null);
+            assertEqual('Test 209.04: buildCookieAssignment URL-encodes, scopes to path=/, sets max-age and SameSite=Lax',
+                buildCookieAssignment('ft_demo', 'a b', 60), 'ft_demo=a%20b; path=/; max-age=60; SameSite=Lax');
+            assertEqual('Test 209.05: buildCookieAssignment appends Secure on request and max-age=0 for deletion',
+                buildCookieAssignment('ft_demo', '', 0, true), 'ft_demo=; path=/; max-age=0; SameSite=Lax; Secure');
+            writePreference('ft_test', 'héllo; wörld');
+            assertEqual('Test 209.06: writePreference stores the cookie (URL-encoded) in the jar',
+                cookieJar.get('ft_test'), encodeURIComponent('héllo; wörld'));
+            assertEqual('Test 209.07: writePreference mirrors the raw value into localStorage',
+                fakeLocalStorage.getItem('ft_pref_ft_test'), 'héllo; wörld');
+            assertEqual('Test 209.08: readPreference decodes the cookie round trip', readPreference('ft_test'), 'héllo; wörld');
+            cookieJar.delete('ft_test');
+            assertEqual('Test 209.09: readPreference falls back to the localStorage mirror when the cookie is gone (file:// exports)',
+                readPreference('ft_test'), 'héllo; wörld');
+            removePreference('ft_test');
+            assert('Test 209.10: removePreference deletes both the cookie and the mirror',
+                !cookieJar.has('ft_test') && fakeLocalStorage.getItem('ft_pref_ft_test') === null && readPreference('ft_test') === null);
+
+            // Sheet IDs and history ranking
+            assert('Test 209.11: isValidSheetId accepts the 44-char demo ID and rejects URLs, short and over-long tokens',
+                isValidSheetId(ID_A) && !isValidSheetId(buildSheetUrlFromId(ID_A)) && !isValidSheetId('abc') && !isValidSheetId('a'.repeat(61)) && !isValidSheetId(null));
+            const ranked = rankSheetHistory([
+                { id: 'c', uses: 2, lastUsed: 5 }, { id: 'a', uses: 2, lastUsed: 9 }, { id: 'b', uses: 7, lastUsed: 1 }
+            ]);
+            assertEqual('Test 209.12: rankSheetHistory orders by uses desc, then lastUsed desc',
+                ranked.map(e => e.id).join(','), 'b,a,c');
+            assertEqual('Test 209.13: rankSheetHistory breaks full ties by id for determinism',
+                rankSheetHistory([{ id: 'z', uses: 1, lastUsed: 1 }, { id: 'y', uses: 1, lastUsed: 1 }]).map(e => e.id).join(','), 'y,z');
+            assertEqual('Test 209.14: resolveMostUsedSheet returns the top-ranked entry (null when empty)',
+                resolveMostUsedSheet(ranked).id + '/' + resolveMostUsedSheet([]), 'b/null');
+
+            // Parse / serialize
+            const parsed = parseSheetHistoryJson(JSON.stringify([
+                { i: ID_A, t: 'Demo', n: 2, l: 5 }, { id: ID_B, title: 'Long keys', uses: 3, lastUsed: 7 },
+                { i: ID_A, t: 'dupe', n: 9, l: 9 }, { i: 'not-an-id', n: 1 }, null, 'junk'
+            ]));
+            assertEqual('Test 209.15: parseSheetHistoryJson accepts compact and long keys, drops duplicates and non-IDs, and ranks',
+                parsed.map(e => `${e.id === ID_A ? 'A' : 'B'}:${e.title}:${e.uses}:${e.lastUsed}`).join('|'), 'B:Long keys:3:7|A:Demo:2:5');
+            assertEqual('Test 209.16: parseSheetHistoryJson survives corrupt JSON and non-arrays',
+                parseSheetHistoryJson('not json').length + parseSheetHistoryJson('{"a":1}').length + parseSheetHistoryJson(null).length, 0);
+            const clamped = parseSheetHistoryJson(JSON.stringify([{ i: ID_A, t: 'x'.repeat(200), n: 0 }]))[0];
+            assertEqual('Test 209.17: parseSheetHistoryJson clamps uses to >= 1 and truncates over-long titles',
+                `${clamped.uses}:${clamped.title.length}`, `1:${SHEET_TITLE_MAX_LENGTH}`);
+            const many = Array.from({ length: SHEET_HISTORY_LIMIT + 5 }, (_, k) => ({ i: fakeId(k), n: k + 1, l: k }));
+            const capped = parseSheetHistoryJson(JSON.stringify(many));
+            assertEqual('Test 209.18: parseSheetHistoryJson caps the list at SHEET_HISTORY_LIMIT keeping the most used',
+                `${capped.length}:${capped[0].uses}`, `${SHEET_HISTORY_LIMIT}:${SHEET_HISTORY_LIMIT + 5}`);
+            assertEqual('Test 209.19: serializeSheetHistory writes compact keys',
+                serializeSheetHistory([{ id: ID_A, title: 'Demo', uses: 1, lastUsed: 5 }]), `[{"i":"${ID_A}","t":"Demo","n":1,"l":5}]`);
+            const bulky = Array.from({ length: SHEET_HISTORY_LIMIT }, (_, k) => ({ id: fakeId(k), title: 'T'.repeat(SHEET_TITLE_MAX_LENGTH), uses: SHEET_HISTORY_LIMIT - k, lastUsed: k }));
+            const budgeted = JSON.parse(serializeSheetHistory(bulky, 600));
+            assert('Test 209.20: serializeSheetHistory drops the LOWEST-ranked entries until the encoded payload fits the budget',
+                encodeURIComponent(JSON.stringify(budgeted)).length <= 600 && budgeted.length < SHEET_HISTORY_LIMIT && budgeted.length >= 1 && budgeted[0].n === SHEET_HISTORY_LIMIT);
+            assert('Test 209.21: parse(serialize(x)) is the identity on clean entries',
+                JSON.stringify(parseSheetHistoryJson(serializeSheetHistory(parsed))) === JSON.stringify(parsed));
+
+            // Merge
+            const once = mergeSheetHistoryEntry([], ID_A, '', 100);
+            const twice = mergeSheetHistoryEntry(once, ID_A, 'Demo', 200);
+            assertEqual('Test 209.22: mergeSheetHistoryEntry starts a new entry at one use',
+                JSON.stringify(once), JSON.stringify([{ id: ID_A, title: '', uses: 1, lastUsed: 100 }]));
+            assertEqual('Test 209.23: mergeSheetHistoryEntry bumps uses, refreshes lastUsed and adopts a newly learned title',
+                JSON.stringify(twice), JSON.stringify([{ id: ID_A, title: 'Demo', uses: 2, lastUsed: 200 }]));
+            assertEqual('Test 209.24: mergeSheetHistoryEntry keeps the known title when the new load learned none',
+                mergeSheetHistoryEntry(twice, ID_A, '', 300)[0].title, 'Demo');
+            assertEqual('Test 209.25: mergeSheetHistoryEntry ignores invalid IDs and does not mutate its input',
+                mergeSheetHistoryEntry(twice, 'bogus', 'x', 400).length + ':' + twice[0].uses, '1:2');
+
+            // Persisted history through the cookie jar
+            cookieJar.clear(); fakeLocalStorage.clear();
+            recordSheetUse(ID_A, '', 1000);
+            recordSheetUse(ID_B, 'Second', 2000);
+            recordSheetUse(ID_A, DEMO_SHEET_TITLE, 3000);
+            assertEqual('Test 209.26: recordSheetUse persists a ranked history in the ft_sheet_history cookie',
+                readSheetHistory().map(e => `${e.id === ID_A ? 'A' : 'B'}:${e.title}:${e.uses}`).join('|'), `A:${DEMO_SHEET_TITLE}:2|B:Second:1`);
+            assert('Test 209.27: The cookie payload is URL-encoded JSON with compact keys',
+                cookieJar.has(SHEET_HISTORY_COOKIE) && decodeURIComponent(cookieJar.get(SHEET_HISTORY_COOKIE)).startsWith('[{"i":"'));
+            assertEqual('Test 209.28: forgetSheetHistoryEntry removes one entry and persists the rest',
+                forgetSheetHistoryEntry(ID_A).map(e => e.id).join(',') + '|' + readSheetHistory().length, `${ID_B}|1`);
+            assertEqual('Test 209.29: forgetSheetHistoryEntry of an unknown ID is a no-op', forgetSheetHistoryEntry('nope').length, 1);
+
+            // Typed / pasted references
+            assertEqual('Test 209.30: normalizeSheetReference canonicalizes the demo drive_link URL to /edit',
+                JSON.stringify(normalizeSheetReference(`  ${DEFAULT_URL}  `)), JSON.stringify({ id: ID_A, url: buildSheetUrlFromId(ID_A) }));
+            assertEqual('Test 209.31: normalizeSheetReference accepts a bare ID', normalizeSheetReference(ID_B).url, buildSheetUrlFromId(ID_B));
+            assert('Test 209.32: normalizeSheetReference rejects prose, non-Google hosts, and empty input',
+                normalizeSheetReference('Dear aunt Mary') === null && normalizeSheetReference(`https://example.com/${ID_A}`) === null &&
+                normalizeSheetReference('') === null && normalizeSheetReference(undefined) === null);
+            assert('Test 209.33: isLikelySheetReference (clipboard) accepts Google URLs and mixed-case IDs but rejects a 40-char lower-case git SHA',
+                isLikelySheetReference(DEFAULT_URL) && isLikelySheetReference(ID_A) &&
+                !isLikelySheetReference('3bd09a0f6c2e4d1b8a7f9e0c1d2b3a4f5e6d7c8b') && !isLikelySheetReference('hello'));
+
+            // Prefill precedence
+            const clip = { id: ID_C, url: buildSheetUrlFromId(ID_C) };
+            const hist = [{ id: ID_B, title: 'Second', uses: 4, lastUsed: 1 }];
+            assertEqual('Test 209.34: Prefill prefers a sheet reference found on the clipboard',
+                JSON.stringify(resolveHomeScreenPrefill(clip, hist)), JSON.stringify({ id: ID_C, url: clip.url, source: 'clipboard' }));
+            assertEqual('Test 209.35: Without a clipboard hit the most-used sheet is prefilled',
+                JSON.stringify(resolveHomeScreenPrefill(null, hist)), JSON.stringify({ id: ID_B, url: buildSheetUrlFromId(ID_B), source: 'history' }));
+            assertEqual('Test 209.36: With no history the demo sheet (DEFAULT_URL) is prefilled',
+                JSON.stringify(resolveHomeScreenPrefill(null, [])), JSON.stringify({ id: DEMO_SHEET_ID, url: DEFAULT_URL, source: 'demo' }));
+            assertEqual('Test 209.37: Dropdown label is "<title> — <id>" with the rest of the URL trimmed',
+                formatSheetHistoryLabel({ id: ID_A, title: DEMO_SHEET_TITLE }), `${DEMO_SHEET_TITLE} — ${ID_A}`);
+            assertEqual('Test 209.38: Dropdown label falls back to "Untitled sheet" when the title is unknown',
+                formatSheetHistoryLabel({ id: ID_A, title: '' }), `Untitled sheet — ${ID_A}`);
+
+            // Titles from Content-Disposition (the header Google really sends for the demo sheet)
+            const demoHeader = 'attachment; filename="AncestryBrowserDemo-Data.csv"; filename*=UTF-8\'\'Ancestry%20Browser%3A%20Demo%20-%20Data.csv';
+            assertEqual('Test 209.39: parseContentDispositionFilename prefers the RFC 5987 filename* form',
+                parseContentDispositionFilename(demoHeader), 'Ancestry Browser: Demo - Data.csv');
+            assertEqual('Test 209.40: parseContentDispositionFilename falls back to plain filename= and null for garbage',
+                parseContentDispositionFilename('attachment; filename="Family - Links.csv"') + '|' + parseContentDispositionFilename('inline'), 'Family - Links.csv|null');
+            assertEqual('Test 209.41: deriveSpreadsheetTitle strips .csv and only the LAST " - <tab>" segment',
+                deriveSpreadsheetTitle('Smith - Jones Family - Sheet1.csv') + '|' + deriveSpreadsheetTitle('Ancestry Browser: Demo - Data.csv'), 'Smith - Jones Family|' + DEMO_SHEET_TITLE);
+            const registry = new Map();
+            assertEqual('Test 209.42: rememberSheetTitleFromResponse learns the demo title from the real export header',
+                rememberSheetTitleFromResponse(ID_A, { headers: { get: (h) => h.toLowerCase() === 'content-disposition' ? demoHeader : null } }, registry), DEMO_SHEET_TITLE);
+            assertEqual('Test 209.43: getRememberedSheetTitle reads it back; unknown IDs yield "" (the gviz fallback sends no header)',
+                getRememberedSheetTitle(ID_A, registry) + '|' + getRememberedSheetTitle(ID_B, registry), DEMO_SHEET_TITLE + '|');
+            assert('Test 209.44: rememberSheetTitle ignores blank titles and header-less or null responses are harmless',
+                !rememberSheetTitle(ID_B, '   ', registry) && rememberSheetTitleFromResponse(ID_B, { headers: { get: () => null } }, registry) === '' &&
+                rememberSheetTitleFromResponse(ID_B, null, registry) === '');
+
+            // Address-bar bookkeeping
+            assert('Test 209.45: hasExplicitSheetQueryParam is true only for a non-blank id/sheet/url/sheetId param',
+                hasExplicitSheetQueryParam(`?id=${ID_A}`) && hasExplicitSheetQueryParam(`?sheet=${ID_A}`) && hasExplicitSheetQueryParam('?url=https://x') &&
+                hasExplicitSheetQueryParam(`?sheetId=${ID_A}`) && !hasExplicitSheetQueryParam('?utm_source=mail') && !hasExplicitSheetQueryParam('') && !hasExplicitSheetQueryParam('?id=%20'));
+            assertEqual('Test 209.46: buildSheetDeepLinkUrl keeps path and hash, drops legacy aliases, sets ?id=',
+                buildSheetDeepLinkUrl({ pathname: '/family-tree/', search: '?sheet=old&x=1&sheetId=y&url=z', hash: '#p=Joseph_1920' }, ID_A), `/family-tree/?x=1&id=${ID_A}#p=Joseph_1920`);
+            assertEqual('Test 209.47: buildSheetDeepLinkUrl tolerates a missing location', buildSheetDeepLinkUrl(null, ID_B), `/?id=${ID_B}`);
+
+            // window.location is unforgeable in real browsers (assigning it would navigate), so it is
+            // only mocked where the harness owns the window object (node); history.replaceState is
+            // stubbed everywhere and restored afterwards.
+            const win = window;
+            const locDesc = Object.getOwnPropertyDescriptor(win, 'location');
+            const canMockLocation = !locDesc || locDesc.configurable;
+            const savedLocation = win.location, savedHistory = win.history;
+            const restoreWindowProp = (key, value) => { if (value === undefined) delete win[key]; else win[key] = value; };
+            const replaceCalls = [];
+            const fakeHistory = { state: { k: 1 }, replaceState: (state, title, url) => replaceCalls.push(url) };
+            if (canMockLocation) {
+                win.location = { pathname: '/family-tree/', search: '', hash: '#p=Joseph_1920' };
+                win.history = fakeHistory;
+            } else {
+                win.history.replaceState = fakeHistory.replaceState;
+            }
+            try {
+                const changed = syncSheetIdIntoLocation(ID_A);
+                assert('Test 209.48: syncSheetIdIntoLocation rewrites the address bar via history.replaceState with ?id=<sheetId> (no reload, no new history entry)',
+                    changed === true && replaceCalls.length === 1 && new RegExp(`[?&]id=${ID_A}(#|$)`).test(replaceCalls[0]));
+                if (canMockLocation) {
+                    win.location = { pathname: '/family-tree/', search: `?id=${ID_A}`, hash: '' };
+                    assert('Test 209.49: syncSheetIdIntoLocation is a no-op when ?id= already names that sheet',
+                        syncSheetIdIntoLocation(ID_A) === false && replaceCalls.length === 1);
+                    win.location = { pathname: '/', search: '', hash: '' };
+                } else {
+                    assert('Test 209.49: syncSheetIdIntoLocation refuses an empty sheet ID', syncSheetIdIntoLocation('') === false && replaceCalls.length === 1);
+                }
+                cookieJar.clear(); fakeLocalStorage.clear();
+                rememberSheetTitle(ID_B, 'Second');
+                assertEqual('Test 209.50: commitSuccessfulSheetImport records the sheet with its learned title and syncs the URL',
+                    commitSuccessfulSheetImport(buildSheetUrlFromId(ID_B)) + '|' + readSheetHistory().map(e => `${e.title}:${e.uses}`).join(',') + '|' + replaceCalls.length, `${ID_B}|Second:1|2`);
+                assertEqual('Test 209.51: commitSuccessfulSheetImport ignores URLs without a sheet ID',
+                    commitSuccessfulSheetImport('https://example.com/no-id') + '|' + readSheetHistory().length, 'null|1');
+            } finally {
+                if (canMockLocation) { restoreWindowProp('location', savedLocation); restoreWindowProp('history', savedHistory); }
+                else delete win.history.replaceState;
+            }
+
+            // Demographic settings: cookie → live model
+            cookieJar.clear(); fakeLocalStorage.clear();
+            B.resetDemographicSettings();
+            const shipped = JSON.stringify(B.getDemographicSettings());
+            assertEqual('Test 209.52: loadStoredDemographicSettings is null when nothing is stored', loadStoredDemographicSettings(), null);
+            assertEqual('Test 209.53: applyStoredDemographicSettings leaves the shipped model untouched when nothing is stored',
+                applyStoredDemographicSettings() + '|' + (JSON.stringify(B.getDemographicSettings()) === shipped), 'null|true');
+            const saved = saveDemographicSettings({ marriageAgeAnchors: [[1900, 20], [2000, 30]], spousalGenderOffset: 4, consecutiveSiblingGap: 99, firstChildAfterMarriage: 1 });
+            assertEqual('Test 209.54: saveDemographicSettings sanitizes before storing (out-of-range sibling gap → default)',
+                saved.consecutiveSiblingGap + ':' + saved.spousalGenderOffset, `${B.DEFAULT_DEMOGRAPHIC_SETTINGS.consecutiveSiblingGap}:4`);
+            assert('Test 209.55: The settings land in the ft_demographic_settings cookie as JSON',
+                cookieJar.has(DEMOGRAPHIC_SETTINGS_COOKIE) && JSON.parse(decodeURIComponent(cookieJar.get(DEMOGRAPHIC_SETTINGS_COOKIE))).spousalGenderOffset === 4);
+            assertEqual('Test 209.56: loadStoredDemographicSettings round-trips the sanitized object',
+                JSON.stringify(loadStoredDemographicSettings()), JSON.stringify(saved));
+            assert('Test 209.57: Saving does not by itself change the live model', JSON.stringify(B.getDemographicSettings()) === shipped);
+            applyStoredDemographicSettings();
+            assertEqual('Test 209.58: applyStoredDemographicSettings installs the stored anchors into the live model (1950 → 25 + 1) and the offset',
+                B.maternalFirstChildGap(1950) + ':' + B.GENERATIONAL_GAPS.SPOUSAL_GENDER_OFFSET, '26:4');
+            writePreference(DEMOGRAPHIC_SETTINGS_COOKIE, '{corrupt');
+            assertEqual('Test 209.59: A corrupt settings cookie is ignored rather than crashing startup', loadStoredDemographicSettings(), null);
+            clearStoredDemographicSettings();
+            assert('Test 209.60: clearStoredDemographicSettings forgets the cookie and its mirror',
+                !cookieJar.has(DEMOGRAPHIC_SETTINGS_COOKIE) && fakeLocalStorage.getItem('ft_pref_' + DEMOGRAPHIC_SETTINGS_COOKIE) === null);
+            recordSheetUse(ID_A, DEMO_SHEET_TITLE, 5);
+            saveDemographicSettings({ spousalGenderOffset: 3 });
+            rememberSheetTitle(ID_A, DEMO_SHEET_TITLE);
+            clearStoredPreferences();
+            assert('Test 209.61: clearStoredPreferences (GDPR "clear stored data") wipes history, settings, the title registry and restores the shipped model',
+                readSheetHistory().length === 0 && loadStoredDemographicSettings() === null && getRememberedSheetTitle(ID_A) === '' &&
+                cookieJar.size === 0 && JSON.stringify(B.getDemographicSettings()) === shipped);
+
+            // Settings panel helpers
+            assertEqual('Test 209.62: suggestNextMarriageAnchor continues ten years after the last row at the same age',
+                JSON.stringify(suggestNextMarriageAnchor([[1900, 15], [1940, 22]])), '[1950,22]');
+            assertEqual('Test 209.63: suggestNextMarriageAnchor seeds an empty table with [1900, 15] and fills blank cells of a half-typed row',
+                JSON.stringify(suggestNextMarriageAnchor([])) + JSON.stringify(suggestNextMarriageAnchor([['', '']])) + JSON.stringify(suggestNextMarriageAnchor([['1940', '']])), '[1900,15][1900,15][1950,15]');
+            const preview = describeMarriageAgePreview(B.getDemographicSettings(), [1915, 1945, 2005]);
+            assert('Test 209.64: describeMarriageAgePreview evaluates the live model per cohort (marriage age to 0.1, first-child age rounded)',
+                preview.length === 3 && preview.every(p => p.marriageAge === Math.round(B.marriageAgeForBirthYear(p.year) * 10) / 10 &&
+                    p.firstChildAge === Math.round(B.marriageAgeForBirthYear(p.year) + B.MARRIAGE_AGE_MODEL.FIRST_CHILD_AFTER_MARRIAGE)));
+            assert('Test 209.65: The preview mirrors the cohort rule: 1915 ≈ 15, 1945 in 20-25, 2005 in 25-30',
+                preview[0].marriageAge <= 16 && preview[1].marriageAge >= 20 && preview[1].marriageAge <= 25 && preview[2].marriageAge >= 25 && preview[2].marriageAge <= 30);
+            assertEqual('Test 209.66: describeMarriageAgePreview sanitizes a half-typed draft the same way Apply would',
+                JSON.stringify(describeMarriageAgePreview({ marriageAgeAnchors: [[1900, 20], [2000, 30]], firstChildAfterMarriage: 1 }, [1950])), JSON.stringify([{ year: 1950, marriageAge: 25, firstChildAge: 26 }]));
+            assert('Test 209.67: describeMarriageAgePreview never mutates the live model', JSON.stringify(B.getDemographicSettings()) === shipped);
+        } catch (e) {
+            assertEqual('Test 209 execution failed', e.message, '');
+        } finally {
+            FamilyTreeBuilder.resetDemographicSettings();
+            cookieJar.clear();
+            fakeLocalStorage.clear();
+        }
+    }
+
+    // ══════════════════════════════════════════════════════════════════════════
+    //  210. Home Screen, Home Button, Watermark & Settings Panel Wiring
+    // ══════════════════════════════════════════════════════════════════════════
+    {
+        section('210. Home Screen, Home Button, Watermark & Settings Panel Wiring');
+        // Source-level contract of the new shell: a home screen that waits for Enter/Open, a Home
+        // emblem button at the top-left of every tree view, the brand watermark behind the tree,
+        // the GDPR notice, the settings gear replacing the clipboard-import button, and startup
+        // that only auto-loads when the page URL names a sheet.
+        try {
+            const sliceComponent = (marker) => {
+                const start = appCode.indexOf(marker);
+                const end = appCode.indexOf('/**', start + marker.length);
+                return start === -1 ? '' : appCode.slice(start, end === -1 ? start + 4000 : end);
+            };
+            const homeBlock = sliceComponent('const SheetSourceHomeScreen = ({');
+            assert('Test 210.01: SheetSourceHomeScreen is a full-screen overlay with the watermark, header, form and privacy notice, hidden while closed',
+                /data-testid="sheet-source-home"/.test(homeBlock) && /fixed inset-0/.test(homeBlock) && /<BrandWatermark\b/.test(homeBlock) &&
+                /<HomeScreenHeader\s*\/>/.test(homeBlock) && /<SheetSourceForm\b/.test(homeBlock) && /<HomePrivacyNotice\b/.test(homeBlock) &&
+                /if \(!isOpen\) return null;/.test(homeBlock));
+            assert('Test 210.02: The home screen only opens a sheet after validation on submit, and offers "Back to the tree" when one is loaded',
+                /const ref = form\.validate\(text\);\s*if \(ref\) onSubmit\(ref\.url\);/.test(homeBlock) && /hasTree && \(/.test(homeBlock) && /Back to the tree/.test(homeBlock));
+
+            const inputBlock = sliceComponent('const SheetSourceInput = ({');
+            assert('Test 210.03: Typing in the textbox only updates state (marks the form touched) — nothing loads until Enter/Open',
+                /id="sheet-source-input"/.test(inputBlock) && /onChange=\{\(e\) => \{ form\.markTouched\(\); form\.setValue\(e\.target\.value\); \}\}/.test(inputBlock) &&
+                !/onChange=[^\n]*onSubmit\(/.test(inputBlock));
+            assert('Test 210.04: Picking a dropdown row fills the textbox with the canonical URL and opens that sheet at once',
+                /const pickEntry = \(entry\) => \{\s*const url = buildSheetUrlFromId\(entry\.id\);[\s\S]*?form\.setValue\(url\);[\s\S]*?onSubmit\(url\);/.test(inputBlock));
+            assert('Test 210.05: The history caret and dropdown appear only when the cookie history is non-empty',
+                /form\.history\.length > 0 && \(/.test(inputBlock) && /form\.isListOpen && <SheetHistoryDropdown\b/.test(inputBlock));
+
+            const rowBlock = sliceComponent('const SheetHistoryRow = ({');
+            assert('Test 210.06: Dropdown rows show the title (or "Untitled sheet") and the bare ID — the rest of the URL is trimmed',
+                /\{entry\.title \|\| 'Untitled sheet'\}/.test(rowBlock) && /\{entry\.id\}/.test(rowBlock) && !/docs\.google\.com/.test(rowBlock) &&
+                /title=\{formatSheetHistoryLabel\(entry\)\}/.test(rowBlock));
+            assert('Test 210.07: Each row has a "×" that forgets the sheet without triggering the row click',
+                /e\.stopPropagation\(\); onForget\(entry\.id\);/.test(rowBlock) && /title="Forget this sheet"/.test(rowBlock));
+
+            const formHookBlock = sliceComponent('function useSheetSourceForm(');
+            assert('Test 210.08: The form re-prefills on open (clipboard → most-used → demo) but never overwrites text the user already typed',
+                /resolveHomeScreenPrefill\(clipboardRef, freshHistory\)/.test(formHookBlock) && /if \(touchedRef\.current\) return;/.test(formHookBlock) &&
+                /return attachClipboardPrefill\(applyPrefill\);/.test(formHookBlock));
+            const clipboardBlock = sliceComponent('function attachClipboardPrefill(');
+            assert('Test 210.09: Clipboard prefill retries on window focus and the first pointer interaction (Chrome rejects reads while unfocused) and detaches on dispose',
+                /readClipboardSheetReference\(\)/.test(clipboardBlock) && /addEventListener\('focus', attempt\)/.test(clipboardBlock) &&
+                /addEventListener\('pointerdown', attempt, \{ once: true \}\)/.test(clipboardBlock) && /removeEventListener\('focus', attempt\)/.test(clipboardBlock));
+
+            const homeButtonBlock = sliceComponent('const HomeButton = ({');
+            assert('Test 210.10: HomeButton pins the brand emblem to the top-left corner (fixed left-4 top-4) above the toolbars and returns to the home screen',
+                /data-testid="home-button"/.test(homeButtonBlock) && /fixed left-4 top-4 z-\[60\]/.test(homeButtonBlock) &&
+                /<BrandLogo\b[^>]*idPrefix="homebtn"/.test(homeButtonBlock) && /title="Family Tree Home – choose a Google Sheet"/.test(homeButtonBlock));
+            assert('Test 210.11: HomeButton is not rendered inside standalone .html exports (they cannot switch sheets)',
+                /if \(isStandaloneExportMode\(\)\) return null;/.test(homeButtonBlock));
+
+            const rootBlock = sliceComponent('const AppRootView = (');
+            assert('Test 210.12: AppRootView mounts the Home button (only while the home screen is closed), the settings panel and the home screen',
+                /\{!shellProps\.isHomeOpen && <HomeButton\b/.test(rootBlock) && /<DeductionSettingsPanel\b/.test(rootBlock) && /<SheetSourceHomeScreen\b/.test(rootBlock));
+
+            const privacyBlock = sliceComponent('const HomePrivacyNotice = ({');
+            assert('Test 210.13: The GDPR notice names what is stored (sheet links, deduction settings), where (cookies / local storage on this device only) and offers one-click deletion',
+                /data-testid="home-privacy-notice"/.test(privacyBlock) && /spreadsheet links you open/.test(privacyBlock) && /deduction settings/.test(privacyBlock) &&
+                /cookies \/ local storage/.test(privacyBlock) && /this device only/.test(privacyBlock) && /onClick=\{onClearStoredData\}/.test(privacyBlock) && /clear stored data/.test(privacyBlock));
+            assert('Test 210.14: The home screen wires the GDPR button to clearStoredPreferences and empties the dropdown',
+                /onClearStoredData: clearStoredPreferences/.test(appCode) && /onClearStoredData\(\);\s*form\.resetHistory\(\);/.test(homeBlock));
+
+            const viewportBlock = sliceComponent('const MainCanvasViewport = (');
+            assert('Test 210.15: The brand watermark sits behind the tree in MainCanvasViewport, and BrandWatermark is a very transparent, pointer-transparent layer',
+                /<BrandWatermark \/>/.test(viewportBlock) && /const BrandWatermark = \(\{ size = \d+, opacity = 0\.0\d+ \}\)/.test(appCode) &&
+                /data-testid="brand-watermark"/.test(appCode) && /pointer-events-none/.test(sliceComponent('const BrandWatermark = ({')));
+
+            const importExportBlock = sliceComponent('const TopNavImportExportButtons = ({');
+            assert('Test 210.16: The clipboard "Import Google Sheet" toolbar button is gone; the settings gear took its place',
+                !/Import Google Sheet from Clipboard URL/.test(appCode) && !/handleImport/.test(importExportBlock) &&
+                /onClick=\{onOpenSettings\}[^\n]*title="Deduction Settings \(marriage age by birth cohort\)"/.test(importExportBlock) && /<Icons\.Settings \/>/.test(importExportBlock));
+            const homeDoc = BUTTON_DOCUMENTATION_CATALOG['Family Tree Home – choose a Google Sheet'];
+            const settingsDoc = BUTTON_DOCUMENTATION_CATALOG['Deduction Settings (marriage age by birth cohort)'];
+            assert('Test 210.17: The hover-documentation catalog documents the Home button and the Settings gear with at least two examples each, and no longer documents the Import button',
+                homeDoc && homeDoc.examples.length >= 2 && settingsDoc && settingsDoc.examples.length >= 2 &&
+                !Object.keys(BUTTON_DOCUMENTATION_CATALOG).some(k => /Import Google Sheet/.test(k)));
+
+            const initBlock = sliceComponent('function initializeTreeDataset(');
+            assert('Test 210.18: Startup auto-loads a sheet only when the page URL names one (?id=…); otherwise the home screen stays open',
+                /if \(!hasExplicitSheetQueryParam\(\)\) return false;\s*handleImport\(resolveInitialSheetUrl\(\)\);/.test(initBlock));
+            assert('Test 210.19: The app starts with the home screen open unless the URL names a sheet (never in standalone exports)',
+                /useState\(\(\) => !isStandalone && !hasExplicitSheetQueryParam\(\)\)/.test(appCode));
+            const importHandlerBlock = sliceComponent('function useTreeImportHandler(');
+            assert('Test 210.20: A successful import records the sheet in the cookie history and puts ?id= in the address bar; a failed import reopens the home screen with the error',
+                /commitSuccessfulSheetImport\(urlToLoad\)/.test(importHandlerBlock) && /setIsHomeOpen\(true\)/.test(importHandlerBlock));
+            assert('Test 210.21: The CSV crawl captures the spreadsheet title from the export response (Content-Disposition) for the first tab',
+                /if \(!sheetName\) rememberSheetTitleFromResponse\(sheetId, response\);/.test(appCode));
+            assert('Test 210.22: Stored demographic settings are applied before the first build',
+                /useState\(\(\) => applyStoredDemographicSettings\(\)\)/.test(appCode));
+
+            const panelBlock = sliceComponent('const DeductionSettingsPanel = ({');
+            assert('Test 210.23: DeductionSettingsPanel is a modal with the cohort anchors table, the live preview, the scalar fields and the footer actions',
+                /data-testid="deduction-settings-panel"/.test(panelBlock) && /<MarriageAgeAnchorsTable\b/.test(panelBlock) && /<MarriageAgePreview\b/.test(panelBlock) &&
+                /<DemographicScalarFields\b/.test(panelBlock) && /<SettingsPanelFooter\b/.test(panelBlock));
+            const footerBlock = sliceComponent('const SettingsPanelFooter = ({');
+            assert('Test 210.24: The footer offers Reset to defaults, Cancel and "Apply & rebuild tree"',
+                /Reset to defaults/.test(footerBlock) && /Cancel/.test(footerBlock) && /Apply (&amp;|&) rebuild tree/.test(footerBlock));
+            const applyBlock = sliceComponent('function useDemographicSettingsApply(');
+            assert('Test 210.25: Applying persists the settings to the cookie and rebuilds from cached rows (refetching only when nothing is cached)',
+                /saveDemographicSettings\(/.test(applyBlock) && /rebuildTreeFromCachedRows\(/.test(applyBlock) && /skipCache: true/.test(applyBlock));
+        } catch (e) {
+            assertEqual('Test 210 execution failed', e.message, '');
         }
     }
 

@@ -15,8 +15,30 @@
  *   root.render(<App />);
  */
 /**
+ * Visibility of the two app-shell overlays: the home screen (sheet chooser) and the
+ * deduction-settings panel. The home screen opens on startup unless the page URL already
+ * names a sheet (`?id=`) or the app runs as a standalone export with embedded data.
+ *
+ * @param {boolean} isStandalone - Whether running inside an exported standalone file
+ * @returns {{isHomeOpen: boolean, setIsHomeOpen: Function, isSettingsOpen: boolean, setIsSettingsOpen: Function}}
+ *
+ * @example
+ * const { isHomeOpen, setIsHomeOpen } = useAppShellPanels(false);
+ * // on https://google.github.io/family-tree/  => isHomeOpen === true
+ *
+ * @example
+ * const shell = useAppShellPanels(true); // standalone export
+ * shell.isHomeOpen; // => false
+ */
+function useAppShellPanels(isStandalone) {
+    const [isHomeOpen, setIsHomeOpen] = useState(() => !isStandalone && !hasExplicitSheetQueryParam());
+    const [isSettingsOpen, setIsSettingsOpen] = useState(false);
+    return { isHomeOpen, setIsHomeOpen, isSettingsOpen, setIsSettingsOpen };
+}
+
+/**
  * Bundles top-level application state including dataset records, navigation history,
- * panel visibility, and sidebar sizing.
+ * panel visibility, shell overlays (home screen, settings), and sidebar sizing.
  *
  * @returns {object} Core application state and updater functions.
  *
@@ -25,17 +47,20 @@
  * console.log(core.tree, core.focusId);
  *
  * @example
- * const { isStandalone, isLoading, treeStats } = useAppCoreState();
+ * const { isStandalone, isLoading, treeStats, isHomeOpen } = useAppCoreState();
  */
 function useAppCoreState() {
     const isStandalone = isStandaloneExportMode();
+    // Install the user's cookie-stored deduction settings BEFORE any tree is built.
+    useState(() => applyStoredDemographicSettings());
     const data = useAncestryData();
     const nav = useTreeNavigationHistory(data.focusId);
     const panels = useAppPanels(data.isLoading);
     const sidebar = useSidebarResize(360);
+    const shell = useAppShellPanels(isStandalone);
     const treeStats = useMemo(() => data.tree.getStats(), [data.tree]);
-    const [sheetUrl, setSheetUrl] = useState(() => resolveInitialSheetUrl());
-    return { isStandalone, ...data, ...nav, ...panels, ...sidebar, treeStats, sheetUrl, setSheetUrl };
+    const [sheetUrl, setSheetUrl] = useState(() => (hasExplicitSheetQueryParam() ? resolveInitialSheetUrl() : ''));
+    return { isStandalone, ...data, ...nav, ...panels, ...sidebar, ...shell, treeStats, sheetUrl, setSheetUrl };
 }
 
 /**
@@ -151,7 +176,7 @@ function useAppFocusAndNavigation(params) {
         setShowAI: params.setShowAI, setActiveFilter: params.setActiveFilter,
         resetNavHistory: params.resetNavHistory, fetchFromUrl: params.fetchFromUrl,
         setFocusId: params.setFocusId, setIsSidebarVisible: params.setIsSidebarVisible,
-        centerOnPerson: params.centerOnPerson
+        centerOnPerson: params.centerOnPerson, setIsHomeOpen: params.setIsHomeOpen
     });
     return { handleSetFocusId, ...navActions, handleImport };
 }
@@ -218,7 +243,7 @@ function buildTopNavProps(core, viewport, focusNav, layoutExp) {
     return {
         tree: core.tree, isSidebarVisible: core.isAnySidebarOpen, sidebarWidth: core.sidebarWidth,
         isResizing: core.isResizingSidebar, sheetUrl: core.sheetUrl, setSheetUrl: core.setSheetUrl,
-        handleImport: focusNav.handleImport, isLoading: core.isLoading, searchQuery: viewport.searchQuery,
+        onOpenSettings: () => core.setIsSettingsOpen(true), isLoading: core.isLoading, searchQuery: viewport.searchQuery,
         setSearchQuery: viewport.setSearchQuery, handleSetFocusId: focusNav.handleSetFocusId,
         onFilterBy: focusNav.handleFilterBy, activeFilter: core.activeFilter, showLogs: core.showLogs,
         setShowLogs: core.setShowLogs, errorMsg: core.errorMsg, setErrorMsg: core.setErrorMsg,
@@ -313,9 +338,45 @@ function buildZoomProps(core, viewport) {
 }
 
 /**
+ * Formats properties for the app-shell overlays: the Home emblem button, the sheet-chooser
+ * home screen and the deduction-settings panel.
+ *
+ * @param {object} core - Core state slice
+ * @param {object} focusNav - Focus and navigation handlers (provides handleImport)
+ * @param {Function} applyDemographicSettingsDraft - Settings-panel Apply handler
+ * @returns {object} Props for AppRootView's shell overlays.
+ *
+ * @example
+ * const shellProps = buildShellProps(core, focusNav, applyDraft);
+ * <SheetSourceHomeScreen {...shellProps.homeScreenProps} />
+ *
+ * @example
+ * const { homeButtonProps, settingsPanelProps } = buildShellProps(core, focusNav, applyDraft);
+ */
+function buildShellProps(core, focusNav, applyDemographicSettingsDraft) {
+    const openSheet = (url) => {
+        core.setIsHomeOpen(false);
+        focusNav.handleImport(url);
+    };
+    return {
+        isHomeOpen: core.isHomeOpen,
+        homeButtonProps: { onClick: () => core.setIsHomeOpen(true) },
+        homeScreenProps: {
+            isOpen: core.isHomeOpen, hasTree: Boolean(core.tree.rootId), isLoading: core.isLoading,
+            errorMsg: core.errorMsg, onSubmit: openSheet, onClose: () => core.setIsHomeOpen(false),
+            onClearStoredData: clearStoredPreferences
+        },
+        settingsPanelProps: {
+            isOpen: core.isSettingsOpen, onClose: () => core.setIsSettingsOpen(false),
+            onApply: applyDemographicSettingsDraft
+        }
+    };
+}
+
+/**
  * Master hook that coordinates domain hooks and returns complete visual props for the root view.
  *
- * @returns {object} Object containing topNavProps, zoomProps, viewportProps, sidebarProps, and showZoom.
+ * @returns {object} Object containing topNavProps, zoomProps, viewportProps, sidebarProps, shellProps, and showZoom.
  *
  * @example
  * const { topNavProps, viewportProps } = useAppViewModel();
@@ -339,25 +400,32 @@ function useAppViewModel() {
         ...core, ...viewport, ...focusNav
     });
     useUrlViewStateSync({ ...core, ...viewport, ...focusNav });
+    const applyDemographicSettingsDraft = useDemographicSettingsApply({
+        sheetUrl: core.sheetUrl, setTree: core.setTree, appendLog: core.appendLog,
+        fetchFromUrl: core.fetchFromUrl, setIsSettingsOpen: core.setIsSettingsOpen
+    });
 
     return {
         showZoom: !core.showMap && !core.showLogs && !core.isLoading,
         topNavProps: buildTopNavProps(core, viewport, focusNav, layoutExp),
         zoomProps: buildZoomProps(core, viewport),
         viewportProps: buildViewportProps(core, viewport, focusNav, layoutExp),
-        sidebarProps: buildSidebarProps(core, viewport, focusNav)
+        sidebarProps: buildSidebarProps(core, viewport, focusNav),
+        shellProps: buildShellProps(core, focusNav, applyDemographicSettingsDraft)
     };
 }
 
 /**
  * Main application visual layout shell containing top navigation, zoom controls,
- * main canvas viewport, and collateral sidebar panels.
+ * main canvas viewport, collateral sidebar panels, and the shell overlays
+ * (Home emblem button, sheet-chooser home screen, deduction-settings panel).
  *
  * @param {object} props
  * @param {object} props.topNavProps - Props for TopNavigation component
  * @param {object} props.zoomProps - Props for ZoomControls component
  * @param {object} props.viewportProps - Props for MainCanvasViewport component
  * @param {object} props.sidebarProps - Props for PersonSidebar component
+ * @param {object} props.shellProps - Props for the home button, home screen and settings panel
  * @param {boolean} props.showZoom - Whether zoom controls should be displayed
  * @returns {React.ReactNode}
  *
@@ -367,6 +435,7 @@ function useAppViewModel() {
  *   zoomProps={{}}
  *   viewportProps={{}}
  *   sidebarProps={{}}
+ *   shellProps={{ isHomeOpen: false, homeButtonProps: {}, homeScreenProps: {}, settingsPanelProps: {} }}
  *   showZoom={true}
  * />
  *
@@ -376,17 +445,21 @@ function useAppViewModel() {
  *   zoomProps={{}}
  *   viewportProps={{}}
  *   sidebarProps={{}}
+ *   shellProps={{ isHomeOpen: true, homeButtonProps: {}, homeScreenProps: { isOpen: true }, settingsPanelProps: {} }}
  *   showZoom={false}
  * />
  */
-const AppRootView = ({ topNavProps, zoomProps, viewportProps, sidebarProps, showZoom }) => (
+const AppRootView = ({ topNavProps, zoomProps, viewportProps, sidebarProps, shellProps, showZoom }) => (
     <div className="flex h-screen w-screen bg-white overflow-hidden text-slate-800 relative" style={{ fontFamily: '"Google Sans", system-ui, -apple-system, sans-serif' }}>
         <GlobalAppStyles />
         <ButtonDocTooltipOverlay />
         <TopNavigation {...topNavProps} />
+        {!shellProps.isHomeOpen && <HomeButton {...shellProps.homeButtonProps} />}
         {showZoom && <ZoomControls {...zoomProps} />}
         <MainCanvasViewport {...viewportProps} />
         <PersonSidebar {...sidebarProps} />
+        <DeductionSettingsPanel {...shellProps.settingsPanelProps} />
+        <SheetSourceHomeScreen {...shellProps.homeScreenProps} />
     </div>
 );
 

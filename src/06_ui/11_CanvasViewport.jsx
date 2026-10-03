@@ -3059,6 +3059,107 @@ function resolveInitialSheetUrl(searchString = null) {
 }
 
 /**
+ * Whether the page URL names a spreadsheet explicitly (`?id=`, `?sheet=`, `?url=` or
+ * `?sheetId=`). Only then does the app auto-load on startup; otherwise the home screen asks.
+ *
+ * @param {string|null} [searchString=null] - Optional search query override
+ * @returns {boolean}
+ *
+ * @example
+ * hasExplicitSheetQueryParam('?id=1BQvyFoA_-u4MG-r1SRDel93F1TwEaN3I6v6p-kOH8z0');
+ * // => true
+ *
+ * @example
+ * hasExplicitSheetQueryParam('?utm_source=mail');
+ * // => false
+ */
+function hasExplicitSheetQueryParam(searchString = null) {
+    try {
+        const query = searchString !== null
+            ? searchString
+            : (typeof window !== 'undefined' && window.location ? window.location.search : '');
+        if (!query) return false;
+        const params = new URLSearchParams(query);
+        const rawParam = params.get('id') || params.get('sheet') || params.get('url') || params.get('sheetId');
+        return Boolean(rawParam && rawParam.trim());
+    } catch (err) {
+        return false;
+    }
+}
+
+/**
+ * Builds the shareable page URL for a sheet: keeps the path and the `#view` hash, drops the
+ * legacy `sheet`/`url`/`sheetId` aliases and sets `?id=<sheetId>`.
+ *
+ * @param {{pathname?: string, search?: string, hash?: string}} location - Current location parts
+ * @param {string} sheetId - Sheet ID to encode
+ * @returns {string} Relative URL (path + search + hash)
+ *
+ * @example
+ * buildSheetDeepLinkUrl({ pathname: '/family-tree/', search: '', hash: '#p=Joseph_1920' }, '1BQvyFoA_-u4MG-r1SRDel93F1TwEaN3I6v6p-kOH8z0');
+ * // => '/family-tree/?id=1BQvyFoA_-u4MG-r1SRDel93F1TwEaN3I6v6p-kOH8z0#p=Joseph_1920'
+ *
+ * @example
+ * buildSheetDeepLinkUrl({ pathname: '/', search: '?sheet=old&x=1', hash: '' }, 'NEWID_000000000000000000000000000000000');
+ * // => '/?x=1&id=NEWID_000000000000000000000000000000000'
+ */
+function buildSheetDeepLinkUrl(location, sheetId) {
+    const params = new URLSearchParams((location && location.search) || '');
+    ['sheet', 'url', 'sheetId'].forEach(key => params.delete(key));
+    params.set('id', sheetId);
+    return `${(location && location.pathname) || '/'}?${params.toString()}${(location && location.hash) || ''}`;
+}
+
+/**
+ * Rewrites the address bar (no reload, no history entry) so the current sheet is bookmarkable
+ * and a page refresh reopens it instead of the home screen.
+ *
+ * @param {string} sheetId - Sheet ID that just loaded
+ * @returns {boolean} True when the URL was changed
+ *
+ * @example
+ * syncSheetIdIntoLocation('1BQvyFoA_-u4MG-r1SRDel93F1TwEaN3I6v6p-kOH8z0');
+ * // address bar: https://google.github.io/family-tree/?id=1BQvyFoA_-u4MG-r1SRDel93F1TwEaN3I6v6p-kOH8z0
+ *
+ * @example
+ * syncSheetIdIntoLocation('1BQvyFoA_-u4MG-r1SRDel93F1TwEaN3I6v6p-kOH8z0'); // already in the URL
+ * // => false
+ */
+function syncSheetIdIntoLocation(sheetId) {
+    if (typeof window === 'undefined' || !window.history || !window.location || !sheetId) return false;
+    try {
+        if (new URLSearchParams(window.location.search).get('id') === sheetId) return false;
+        window.history.replaceState(window.history.state, '', buildSheetDeepLinkUrl(window.location, sheetId));
+        return true;
+    } catch (err) {
+        return false;
+    }
+}
+
+/**
+ * Bookkeeping after a sheet imported successfully: bump it in the cookie history (with the
+ * title learned from the CSV response, if any) and put `?id=` in the address bar.
+ *
+ * @param {string} url - The URL that was imported
+ * @returns {string|null} The sheet ID recorded, or null when the URL carried none
+ *
+ * @example
+ * commitSuccessfulSheetImport('https://docs.google.com/spreadsheets/d/1BQvyFoA_-u4MG-r1SRDel93F1TwEaN3I6v6p-kOH8z0/edit');
+ * // => '1BQvyFoA_-u4MG-r1SRDel93F1TwEaN3I6v6p-kOH8z0'
+ *
+ * @example
+ * commitSuccessfulSheetImport('https://example.com/no-id');
+ * // => null
+ */
+function commitSuccessfulSheetImport(url) {
+    const sheetId = extractSheetIdFromUrl(url);
+    if (!sheetId) return null;
+    recordSheetUse(sheetId, getRememberedSheetTitle(sheetId));
+    syncSheetIdIntoLocation(sheetId);
+    return sheetId;
+}
+
+/**
  * Initializes the tree dataset on application mount.
  * Checks for embedded standalone datasets first, then imports from the resolved initial URL.
  *
@@ -3100,8 +3201,9 @@ function initializeTreeDataset({
         return true; // Completely avoid fetching Google Sheets
     }
 
-    const initialUrl = resolveInitialSheetUrl();
-    handleImport(initialUrl);
+    // No sheet named in the URL: leave the home screen open and let the user choose.
+    if (!hasExplicitSheetQueryParam()) return false;
+    handleImport(resolveInitialSheetUrl());
     return false;
 }
 
@@ -3301,7 +3403,7 @@ function applyImportSuccessFocus({
 function useTreeImportHandler({
     setSheetUrl, resetInitialFit, setShowLogs, setShowAI,
     setActiveFilter, resetNavHistory, fetchFromUrl,
-    setFocusId, setIsSidebarVisible, centerOnPerson
+    setFocusId, setIsSidebarVisible, centerOnPerson, setIsHomeOpen = () => {}
 }) {
     return useCallback(async (directUrl = null) => {
         const urlToLoad = await resolveImportUrl(directUrl);
@@ -3323,8 +3425,13 @@ function useTreeImportHandler({
                 newRootId, setFocusId, setActiveFilter, setIsSidebarVisible,
                 centerOnPerson, setShowLogs
             });
+            commitSuccessfulSheetImport(urlToLoad);
+        } else {
+            // Nothing usable came back: bring the home screen back so the error sits next to the textbox.
+            setShowLogs(false);
+            setIsHomeOpen(true);
         }
-    }, [setSheetUrl, resetInitialFit, setShowLogs, setShowAI, setActiveFilter, resetNavHistory, fetchFromUrl, setFocusId, setIsSidebarVisible, centerOnPerson]);
+    }, [setSheetUrl, resetInitialFit, setShowLogs, setShowAI, setActiveFilter, resetNavHistory, fetchFromUrl, setFocusId, setIsSidebarVisible, centerOnPerson, setIsHomeOpen]);
 }
 
 /**
@@ -4324,6 +4431,7 @@ const MainCanvasViewport = (props) => {
             onPointerCancel={showMap ? undefined : handlePointerUp} 
             onWheel={showMap ? undefined : handleWheel}
         >
+            <BrandWatermark />
             <MainCanvasMapOverlay {...mapOverlayProps} />
             <div className={!showMap ? "w-full h-full relative" : "hidden"}>
                 <TreeCanvasContent {...canvasContentProps} />

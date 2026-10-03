@@ -134,7 +134,7 @@ class FamilyTreeBuilder {
     }
 
     static GENERATIONAL_GAPS = (() => {
-        const MATERNAL_FIRST_CHILD = 24;   // Mother age at first-born child birth
+        const MATERNAL_FIRST_CHILD = 24;   // Mother age at first-born child birth (1940s reference cohort; see MARRIAGE_AGE_MODEL)
         const SPOUSAL_GENDER_OFFSET = 2;   // Husband is assumed this many years older than his wife
         return Object.freeze({
             MATERNAL_FIRST_CHILD,
@@ -147,14 +147,210 @@ class FamilyTreeBuilder {
             // paths must agree or the same person gets two different birth years.
             PATERNAL_FIRST_CHILD: MATERNAL_FIRST_CHILD + SPOUSAL_GENDER_OFFSET,
             CONSECUTIVE_SIBLING: 2,         // Assumed gap between adjacent birth-order siblings
-            DEFAULT_FIRST_MARRIAGE_AGE_FEMALE: 18, // Default age of a woman at her first marriage
-            SECOND_WIFE_MARRIAGE_AGE: 18,   // Subsequent spouse married after previous wife's last child (alias for DEFAULT_FIRST_MARRIAGE_AGE_FEMALE)
+            DEFAULT_FIRST_MARRIAGE_AGE_FEMALE: 18, // Flat fallback age of a woman at her first marriage, used only when the cohort model has no anchors (see marriageAgeForBirthYear / brideAgeAtMarriageYear)
             MIN_PARENTAL_AGE: 14,           // Absolute physical minimum parent-child age difference
             MAX_ROW_NEIGHBOR_DISTANCE: 5,   // Maximum spreadsheet row distance for namesake fallback
             ADJACENT_ROW_MAX_DISTANCE: 3,   // Maximum spreadsheet row distance for adjacent co-spouses / immediate family grouping
             PARENT_RESOLUTION_MARGIN_YEARS: 5, // Minimum generational-gap fitness advantage (in years) to lock in a parent candidate
         });
     })();
+
+    /**
+     * Female age at first marriage, by the bride's BIRTH cohort. Marriage age rose steeply over
+     * the last century: women born in the 1910s-1920s married at about 15, women born in the
+     * 1940s at 20-25, and women born around 2000 marry at 25-30. Ages between anchors are
+     * linearly interpolated; outside the anchor range the nearest anchor applies. The curve is
+     * flat at 15 through the 1928 cohort and climbs to 22 by the 1940 cohort, so the whole rise
+     * falls on the women who married in the two decades after independence.
+     *
+     * The maternal first-child gap is this age plus FIRST_CHILD_AFTER_MARRIAGE, so the gap is
+     * cohort-dependent rather than one flat number: a mother born in 1920 is ~17 at her first
+     * child, one born in 1940 ~24 (the GENERATIONAL_GAPS.MATERNAL_FIRST_CHILD reference), one
+     * born in 2000 ~29. All values are user-tunable via applyDemographicSettings().
+     */
+    static MARRIAGE_AGE_MODEL = Object.freeze({
+        ANCHORS: Object.freeze([[1900, 15], [1928, 15], [1940, 22], [1970, 25], [2000, 27], [2020, 28]]),
+        FIRST_CHILD_AFTER_MARRIAGE: 2,  // Years from the wedding to the first birth
+        REFERENCE_COHORT_YEAR: 1940,    // Cohort assumed when a birth year is unknown (gap == MATERNAL_FIRST_CHILD)
+    });
+
+    /**
+     * Interpolates the expected age at first marriage for a woman born in `birthYear` from the
+     * piecewise-linear MARRIAGE_AGE_MODEL anchors (clamped to the first/last anchor). An unknown
+     * birth year falls back to the reference cohort.
+     *
+     * @param {number|null} birthYear - Bride's birth year, or null/0 when unknown
+     * @param {Object} [model=FamilyTreeBuilder.MARRIAGE_AGE_MODEL] - Anchor table to interpolate
+     * @returns {number} Expected age at first marriage (may be fractional between anchors)
+     *
+     * @example
+     * FamilyTreeBuilder.marriageAgeForBirthYear(1915);
+     * // => 15 (1910s-1920s brides married at about 15)
+     *
+     * @example
+     * FamilyTreeBuilder.marriageAgeForBirthYear(1955);
+     * // => 23.5 (half-way between the 1940 anchor of 22 and the 1970 anchor of 25)
+     */
+    static marriageAgeForBirthYear(birthYear, model = FamilyTreeBuilder.MARRIAGE_AGE_MODEL) {
+        const anchors = model.ANCHORS || [];
+        if (anchors.length === 0) return FamilyTreeBuilder.GENERATIONAL_GAPS.DEFAULT_FIRST_MARRIAGE_AGE_FEMALE;
+        const year = Number.isFinite(birthYear) && birthYear > 0 ? birthYear : model.REFERENCE_COHORT_YEAR;
+        if (year <= anchors[0][0]) return anchors[0][1];
+        for (let i = 1; i < anchors.length; i++) {
+            const [y0, a0] = anchors[i - 1];
+            const [y1, a1] = anchors[i];
+            if (year <= y1) return a0 + (a1 - a0) * (year - y0) / (y1 - y0);
+        }
+        return anchors[anchors.length - 1][1];
+    }
+
+    /**
+     * Expected age of a mother at her FIRST child, for a mother born in `motherYob`:
+     * cohort marriage age plus the marriage-to-first-birth interval, rounded to whole years.
+     *
+     * @param {number|null} motherYob - Mother's birth year (null/0 => reference cohort)
+     * @returns {number} Maternal first-child gap in years
+     *
+     * @example
+     * FamilyTreeBuilder.maternalFirstChildGap(1920);
+     * // => 17
+     *
+     * @example
+     * FamilyTreeBuilder.maternalFirstChildGap(1940);
+     * // => 24 (equals GENERATIONAL_GAPS.MATERNAL_FIRST_CHILD, the reference cohort)
+     */
+    static maternalFirstChildGap(motherYob) {
+        const model = FamilyTreeBuilder.MARRIAGE_AGE_MODEL;
+        return Math.round(FamilyTreeBuilder.marriageAgeForBirthYear(motherYob, model) + model.FIRST_CHILD_AFTER_MARRIAGE);
+    }
+
+    /**
+     * Expected age of a father at his FIRST child. A husband is SPOUSAL_GENDER_OFFSET years older
+     * than his wife, so the gap is the maternal gap of his (younger) wife's cohort plus the offset,
+     * which keeps "father via child" and "father via wife" deductions identical.
+     *
+     * @param {number|null} fatherYob - Father's birth year (null/0 => reference cohort)
+     * @returns {number} Paternal first-child gap in years
+     *
+     * @example
+     * FamilyTreeBuilder.paternalFirstChildGap(1938);
+     * // => 26 (wife born 1940 => maternal gap 24, plus the 2-year spousal offset)
+     *
+     * @example
+     * FamilyTreeBuilder.paternalFirstChildGap(null);
+     * // => 26 (reference cohort; equals GENERATIONAL_GAPS.PATERNAL_FIRST_CHILD)
+     */
+    static paternalFirstChildGap(fatherYob) {
+        const offset = FamilyTreeBuilder.GENERATIONAL_GAPS.SPOUSAL_GENDER_OFFSET;
+        const wifeYob = Number.isFinite(fatherYob) && fatherYob > 0 ? fatherYob + offset : null;
+        return FamilyTreeBuilder.maternalFirstChildGap(wifeYob) + offset;
+    }
+
+    /**
+     * Solves `yob + ageOfCohort(yob) == targetYear` for the birth year of someone whose age at the
+     * event depends on their own (unknown) birth cohort. The cohort curves change far more slowly
+     * than the birth year itself (slope well below 1), so plain fixed-point iteration contracts
+     * onto the unique real solution; it is rounded ONCE at the end to avoid the two-value cycles
+     * that rounding inside the loop would produce.
+     *
+     * @param {number} targetYear - Calendar year of the event (a birth, a wedding)
+     * @param {Function} ageOfCohort - Continuous age-at-event as a function of birth year
+     * @param {number} initialGuess - Starting birth year (any plausible value)
+     * @returns {number} Rounded birth year
+     *
+     * @example
+     * FamilyTreeBuilder._solveCohortBirthYear(1964, y => FamilyTreeBuilder.marriageAgeForBirthYear(y) + 2, 1940);
+     * // => 1940
+     *
+     * @example
+     * FamilyTreeBuilder._solveCohortBirthYear(2000, () => 30, 1950);
+     * // => 1970 (constant age: trivially target - age)
+     */
+    static _solveCohortBirthYear(targetYear, ageOfCohort, initialGuess) {
+        let yob = initialGuess;
+        for (let i = 0; i < 16; i++) {
+            const next = targetYear - ageOfCohort(yob);
+            const converged = Math.abs(next - yob) < 0.01;
+            yob = next;
+            if (converged) break;
+        }
+        return Math.round(yob);
+    }
+
+    /**
+     * Walks the cohort model backwards: given a FIRST child's birth year, finds the mother's
+     * birth year `m` satisfying `m + maternalFirstChildGap(m) == childYob`. Because the gap grows
+     * with the cohort, a 1960 child implies a 1937 mother (gap 23) rather than a flat 1936.
+     *
+     * @param {number} childYob - Birth year of the first child
+     * @returns {number} Inferred birth year of the mother
+     *
+     * @example
+     * FamilyTreeBuilder.inferMotherYobFromFirstChild(1935);
+     * // => 1918 (mother married at ~15, first child at 17)
+     *
+     * @example
+     * FamilyTreeBuilder.inferMotherYobFromFirstChild(1964);
+     * // => 1940 (reference cohort: gap 24)
+     */
+    static inferMotherYobFromFirstChild(childYob) {
+        const model = FamilyTreeBuilder.MARRIAGE_AGE_MODEL;
+        const gapOf = (yob) => FamilyTreeBuilder.marriageAgeForBirthYear(yob, model) + model.FIRST_CHILD_AFTER_MARRIAGE;
+        return FamilyTreeBuilder._solveCohortBirthYear(
+            childYob, gapOf, childYob - FamilyTreeBuilder.GENERATIONAL_GAPS.MATERNAL_FIRST_CHILD
+        );
+    }
+
+    /**
+     * Cohort-aware generational gap between a first child and a parent, measured from the
+     * child's side (the parent's birth year is unknown). Mothers use the inverse of the marriage
+     * model; fathers add the spousal offset on top, mirroring paternalFirstChildGap.
+     *
+     * @param {number|null} childYob - Birth year of the first child (null => reference cohort gap)
+     * @param {boolean} [isFather=false] - Whether the unknown parent is the father
+     * @returns {number} Gap in years to subtract from the child's birth year
+     *
+     * @example
+     * FamilyTreeBuilder.firstChildGapFromChild(1935);
+     * // => 17 (mother born 1918)
+     *
+     * @example
+     * FamilyTreeBuilder.firstChildGapFromChild(1935, true);
+     * // => 19 (father two years older than that mother)
+     */
+    static firstChildGapFromChild(childYob, isFather = false) {
+        const gaps = FamilyTreeBuilder.GENERATIONAL_GAPS;
+        if (!Number.isFinite(childYob) || childYob <= 0) {
+            return isFather ? gaps.PATERNAL_FIRST_CHILD : gaps.MATERNAL_FIRST_CHILD;
+        }
+        const maternalGap = childYob - FamilyTreeBuilder.inferMotherYobFromFirstChild(childYob);
+        return isFather ? maternalGap + gaps.SPOUSAL_GENDER_OFFSET : maternalGap;
+    }
+
+    /**
+     * Cohort-aware age of a bride at her wedding, used when a marriage YEAR is known but the
+     * bride's birth year is not (e.g. a widower's second wife married after his first wife's
+     * last child). Solves `b + marriageAgeForBirthYear(b) == marriageYear`.
+     *
+     * @param {number} marriageYear - Calendar year of the wedding
+     * @returns {number} Rounded age of the bride at that wedding
+     *
+     * @example
+     * FamilyTreeBuilder.brideAgeAtMarriageYear(1935);
+     * // => 15 (a bride born ~1920)
+     *
+     * @example
+     * FamilyTreeBuilder.brideAgeAtMarriageYear(1995);
+     * // => 25 (a bride born ~1970)
+     */
+    static brideAgeAtMarriageYear(marriageYear) {
+        const model = FamilyTreeBuilder.MARRIAGE_AGE_MODEL;
+        const brideYob = FamilyTreeBuilder._solveCohortBirthYear(
+            marriageYear, (yob) => FamilyTreeBuilder.marriageAgeForBirthYear(yob, model),
+            marriageYear - FamilyTreeBuilder.GENERATIONAL_GAPS.DEFAULT_FIRST_MARRIAGE_AGE_FEMALE
+        );
+        return marriageYear - brideYob;
+    }
 
     static BIOLOGICAL_BOUNDS = Object.freeze({
         MAX_MOTHER_CHILDBIRTH_AGE: 55,  // Upper bound for maternal conception
@@ -183,6 +379,155 @@ class FamilyTreeBuilder {
         // describes the convention rather than restating one family's arithmetic.
         MAX_FIRST_WIFE_AGE_DIFF: 13,
     });
+
+    /**
+     * The user-tunable social conventions, in the plain shape persisted by the Settings panel
+     * (cookie `ft_demographic_settings`). Biological limits are deliberately absent: they are
+     * facts, not preferences. Years/ages are plain numbers so the object survives JSON round-trips.
+     */
+    static DEFAULT_DEMOGRAPHIC_SETTINGS = Object.freeze({
+        marriageAgeAnchors: FamilyTreeBuilder.MARRIAGE_AGE_MODEL.ANCHORS,
+        firstChildAfterMarriage: FamilyTreeBuilder.MARRIAGE_AGE_MODEL.FIRST_CHILD_AFTER_MARRIAGE,
+        spousalGenderOffset: FamilyTreeBuilder.GENERATIONAL_GAPS.SPOUSAL_GENDER_OFFSET,
+        consecutiveSiblingGap: FamilyTreeBuilder.GENERATIONAL_GAPS.CONSECUTIVE_SIBLING,
+    });
+
+    /**
+     * Validates one [birthYear, marriageAge] anchor pair, returning null for anything that is not
+     * a plausible human cohort/age so that corrupt cookies cannot poison the model.
+     *
+     * @param {*} pair - Candidate anchor
+     * @returns {Array<number>|null} Clean [year, age] pair or null
+     *
+     * @example
+     * FamilyTreeBuilder._sanitizeMarriageAnchor([1940, 22]);
+     * // => [1940, 22]
+     *
+     * @example
+     * FamilyTreeBuilder._sanitizeMarriageAnchor(['1940', 'twenty']);
+     * // => null
+     */
+    static _sanitizeMarriageAnchor(pair) {
+        if (!Array.isArray(pair) || pair.length < 2) return null;
+        const year = Number(pair[0]);
+        const age = Number(pair[1]);
+        if (!Number.isFinite(year) || !Number.isFinite(age)) return null;
+        if (year < 1600 || year > 2200 || age < 10 || age > 60) return null;
+        return [Math.round(year), Math.round(age * 10) / 10];
+    }
+
+    /**
+     * Normalizes a raw (possibly user-edited or cookie-restored) settings object into a complete,
+     * ordered, bounded settings record. Missing or invalid fields fall back to the defaults;
+     * anchors are sorted by year and de-duplicated so interpolation stays well-defined.
+     *
+     * @param {Object} [raw={}] - Partial settings object
+     * @returns {{marriageAgeAnchors: Array<Array<number>>, firstChildAfterMarriage: number, spousalGenderOffset: number, consecutiveSiblingGap: number}}
+     *
+     * @example
+     * FamilyTreeBuilder.sanitizeDemographicSettings({ spousalGenderOffset: 3 });
+     * // => { ...defaults, spousalGenderOffset: 3 }
+     *
+     * @example
+     * FamilyTreeBuilder.sanitizeDemographicSettings({ marriageAgeAnchors: [[1970, 24], [1900, 15], ['x', 1]] });
+     * // => marriageAgeAnchors: [[1900, 15], [1970, 24]] (sorted, invalid pair dropped)
+     */
+    static sanitizeDemographicSettings(raw = {}) {
+        const defaults = FamilyTreeBuilder.DEFAULT_DEMOGRAPHIC_SETTINGS;
+        const source = raw && typeof raw === 'object' ? raw : {};
+        const seenYears = new Set();
+        const anchors = (Array.isArray(source.marriageAgeAnchors) ? source.marriageAgeAnchors : [])
+            .map(FamilyTreeBuilder._sanitizeMarriageAnchor)
+            .filter(Boolean)
+            .sort((a, b) => a[0] - b[0])
+            .filter(([year]) => !seenYears.has(year) && seenYears.add(year));
+        const bounded = (value, min, max, fallback) => {
+            const n = Number(value);
+            return Number.isFinite(n) && n >= min && n <= max ? Math.round(n) : fallback;
+        };
+        return {
+            marriageAgeAnchors: anchors.length > 0 ? anchors : defaults.marriageAgeAnchors.map(a => [...a]),
+            firstChildAfterMarriage: bounded(source.firstChildAfterMarriage, 0, 15, defaults.firstChildAfterMarriage),
+            spousalGenderOffset: bounded(source.spousalGenderOffset, 0, 15, defaults.spousalGenderOffset),
+            consecutiveSiblingGap: bounded(source.consecutiveSiblingGap, 1, 6, defaults.consecutiveSiblingGap),
+        };
+    }
+
+    /**
+     * Installs user settings into the live model tables. Both tables are frozen, so they are
+     * REPLACED rather than mutated; every reader goes through `FamilyTreeBuilder.X` at call time,
+     * so the new values take effect on the next build(). The derived knobs are recomputed here:
+     * MATERNAL_FIRST_CHILD tracks the reference cohort and PATERNAL_FIRST_CHILD keeps its
+     * `maternal + spousal offset` identity.
+     *
+     * @param {Object} [raw={}] - Settings in DEFAULT_DEMOGRAPHIC_SETTINGS shape (partial allowed)
+     * @returns {Object} The sanitized settings that were applied
+     *
+     * @example
+     * FamilyTreeBuilder.applyDemographicSettings({ spousalGenderOffset: 4 });
+     * FamilyTreeBuilder.GENERATIONAL_GAPS.PATERNAL_FIRST_CHILD; // => 28
+     *
+     * @example
+     * FamilyTreeBuilder.applyDemographicSettings({ marriageAgeAnchors: [[1900, 20], [2000, 30]] });
+     * FamilyTreeBuilder.maternalFirstChildGap(1950); // => 27
+     */
+    static applyDemographicSettings(raw = {}) {
+        const settings = FamilyTreeBuilder.sanitizeDemographicSettings(raw);
+        FamilyTreeBuilder.MARRIAGE_AGE_MODEL = Object.freeze({
+            ...FamilyTreeBuilder.MARRIAGE_AGE_MODEL,
+            ANCHORS: Object.freeze(settings.marriageAgeAnchors.map(pair => Object.freeze([...pair]))),
+            FIRST_CHILD_AFTER_MARRIAGE: settings.firstChildAfterMarriage,
+        });
+        const maternal = FamilyTreeBuilder.maternalFirstChildGap(FamilyTreeBuilder.MARRIAGE_AGE_MODEL.REFERENCE_COHORT_YEAR);
+        FamilyTreeBuilder.GENERATIONAL_GAPS = Object.freeze({
+            ...FamilyTreeBuilder.GENERATIONAL_GAPS,
+            MATERNAL_FIRST_CHILD: maternal,
+            SPOUSAL_GENDER_OFFSET: settings.spousalGenderOffset,
+            PATERNAL_FIRST_CHILD: maternal + settings.spousalGenderOffset,
+            CONSECUTIVE_SIBLING: settings.consecutiveSiblingGap,
+        });
+        return settings;
+    }
+
+    /**
+     * Reads the currently installed settings back out of the live model tables, in the same plain
+     * shape accepted by applyDemographicSettings (so the Settings panel can round-trip them).
+     *
+     * @returns {{marriageAgeAnchors: Array<Array<number>>, firstChildAfterMarriage: number, spousalGenderOffset: number, consecutiveSiblingGap: number}}
+     *
+     * @example
+     * FamilyTreeBuilder.getDemographicSettings().spousalGenderOffset;
+     * // => 2 (defaults)
+     *
+     * @example
+     * FamilyTreeBuilder.applyDemographicSettings({ consecutiveSiblingGap: 3 });
+     * FamilyTreeBuilder.getDemographicSettings().consecutiveSiblingGap; // => 3
+     */
+    static getDemographicSettings() {
+        return {
+            marriageAgeAnchors: FamilyTreeBuilder.MARRIAGE_AGE_MODEL.ANCHORS.map(pair => [...pair]),
+            firstChildAfterMarriage: FamilyTreeBuilder.MARRIAGE_AGE_MODEL.FIRST_CHILD_AFTER_MARRIAGE,
+            spousalGenderOffset: FamilyTreeBuilder.GENERATIONAL_GAPS.SPOUSAL_GENDER_OFFSET,
+            consecutiveSiblingGap: FamilyTreeBuilder.GENERATIONAL_GAPS.CONSECUTIVE_SIBLING,
+        };
+    }
+
+    /**
+     * Restores the shipped defaults (undoes any applyDemographicSettings call).
+     *
+     * @returns {Object} The default settings that were re-applied
+     *
+     * @example
+     * FamilyTreeBuilder.applyDemographicSettings({ spousalGenderOffset: 5 });
+     * FamilyTreeBuilder.resetDemographicSettings().spousalGenderOffset; // => 2
+     *
+     * @example
+     * FamilyTreeBuilder.resetDemographicSettings();
+     * FamilyTreeBuilder.maternalFirstChildGap(1940); // => 24
+     */
+    static resetDemographicSettings() {
+        return FamilyTreeBuilder.applyDemographicSettings(FamilyTreeBuilder.DEFAULT_DEMOGRAPHIC_SETTINGS);
+    }
 
     static RELATIONSHIP_TOKENS = Object.freeze({
         MALE_INDICATORS: Object.freeze(['son', 'boy', 'father', 'dad', 'papa', 'grandpa', 'husband', 'brother', 'uncle', 'nephew', 'grandson']),
@@ -725,7 +1070,7 @@ class FamilyTreeBuilder {
         return Person.isInvalidLocation(p);
     }
 
-    static FAVICON_DATA_URI = 'data:image/svg+xml,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20viewBox%3D%220%200%2064%2064%22%20width%3D%2264%22%20height%3D%2264%22%3E%20%3Cdefs%3E%20%3ClinearGradient%20id%3D%22bgGrad%22%20x1%3D%220%25%22%20y1%3D%220%25%22%20x2%3D%22100%25%22%20y2%3D%22100%25%22%3E%20%3Cstop%20offset%3D%220%25%22%20stop-color%3D%22%23312e81%22%20%2F%3E%20%3Cstop%20offset%3D%2250%25%22%20stop-color%3D%22%234f46e5%22%20%2F%3E%20%3Cstop%20offset%3D%22100%25%22%20stop-color%3D%22%237c3aed%22%20%2F%3E%20%3C%2FlinearGradient%3E%20%3CradialGradient%20id%3D%22canopyGlow%22%20cx%3D%2250%25%22%20cy%3D%2238%25%22%20r%3D%2242%25%22%3E%20%3Cstop%20offset%3D%220%25%22%20stop-color%3D%22%23a5b4fc%22%20stop-opacity%3D%220.45%22%20%2F%3E%20%3Cstop%20offset%3D%22100%25%22%20stop-color%3D%22%23a5b4fc%22%20stop-opacity%3D%220%22%20%2F%3E%20%3C%2FradialGradient%3E%20%3ClinearGradient%20id%3D%22trunkGrad%22%20x1%3D%220%25%22%20y1%3D%220%25%22%20x2%3D%220%25%22%20y2%3D%22100%25%22%3E%20%3Cstop%20offset%3D%220%25%22%20stop-color%3D%22%23ffffff%22%20%2F%3E%20%3Cstop%20offset%3D%22100%25%22%20stop-color%3D%22%23c7d2fe%22%20%2F%3E%20%3C%2FlinearGradient%3E%20%3C%2Fdefs%3E%20%3Crect%20x%3D%222%22%20y%3D%222%22%20width%3D%2260%22%20height%3D%2260%22%20rx%3D%2214%22%20fill%3D%22url(%23bgGrad)%22%20stroke%3D%22%23a5b4fc%22%20stroke-opacity%3D%220.35%22%20stroke-width%3D%221.5%22%20%2F%3E%20%3Ccircle%20cx%3D%2232%22%20cy%3D%2225%22%20r%3D%2220%22%20fill%3D%22url(%23canopyGlow)%22%20%2F%3E%20%3Cg%20fill%3D%22none%22%20stroke%3D%22url(%23trunkGrad)%22%20stroke-linecap%3D%22round%22%20stroke-linejoin%3D%22round%22%3E%20%3Cpath%20d%3D%22M32%2049%20V33%22%20stroke-width%3D%224.5%22%20%2F%3E%20%3Cpath%20d%3D%22M23%2051%20C28%2051%2032%2048%2032%2043%22%20stroke-width%3D%223.2%22%20%2F%3E%20%3Cpath%20d%3D%22M41%2051%20C36%2051%2032%2048%2032%2043%22%20stroke-width%3D%223.2%22%20%2F%3E%20%3Cpath%20d%3D%22M32%2036%20C22%2036%2016%2030%2016%2021%22%20stroke-width%3D%223.4%22%20%2F%3E%20%3Cpath%20d%3D%22M32%2034%20V15%22%20stroke-width%3D%223.4%22%20%2F%3E%20%3Cpath%20d%3D%22M32%2036%20C42%2036%2048%2030%2048%2021%22%20stroke-width%3D%223.4%22%20%2F%3E%20%3C%2Fg%3E%20%3Ccircle%20cx%3D%2232%22%20cy%3D%2214%22%20r%3D%226.2%22%20fill%3D%22%23fde68a%22%20stroke%3D%22%23ffffff%22%20stroke-width%3D%222%22%20%2F%3E%20%3Ccircle%20cx%3D%2216%22%20cy%3D%2221%22%20r%3D%225.2%22%20fill%3D%22%23ffffff%22%20stroke%3D%22%23c7d2fe%22%20stroke-width%3D%221.5%22%20%2F%3E%20%3Ccircle%20cx%3D%2248%22%20cy%3D%2221%22%20r%3D%225.2%22%20fill%3D%22%23ffffff%22%20stroke%3D%22%23c7d2fe%22%20stroke-width%3D%221.5%22%20%2F%3E%20%3Ccircle%20cx%3D%2232%22%20cy%3D%2235%22%20r%3D%223.6%22%20fill%3D%22%23ffffff%22%20%2F%3E%20%3C%2Fsvg%3E';
+    static FAVICON_DATA_URI = 'data:image/svg+xml,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20viewBox%3D%220%200%2064%2064%22%20width%3D%2264%22%20height%3D%2264%22%3E%3Cdefs%3E%3ClinearGradient%20id%3D%22brandLeafGrad%22%20x1%3D%220%22%20y1%3D%220%22%20x2%3D%220%22%20y2%3D%221%22%3E%3Cstop%20offset%3D%220%25%22%20stop-color%3D%22%239cc95f%22%2F%3E%3Cstop%20offset%3D%22100%25%22%20stop-color%3D%22%235f8b35%22%2F%3E%3C%2FlinearGradient%3E%3C%2Fdefs%3E%3Ccircle%20cx%3D%2232%22%20cy%3D%2232%22%20r%3D%2229.6%22%20fill%3D%22%23fcfdf8%22%20stroke%3D%22%235c7c33%22%20stroke-width%3D%222.4%22%2F%3E%3Cg%20fill%3D%22none%22%20stroke%3D%22%235c7c33%22%20stroke-linecap%3D%22round%22%20stroke-linejoin%3D%22round%22%3E%3Cpath%20d%3D%22M32%2054%20C29.8%2054.3%2027.4%2055.1%2025%2056.6%22%20stroke-width%3D%222.3%22%2F%3E%3Cpath%20d%3D%22M32%2054%20C34.2%2054.3%2036.6%2055.1%2039%2056.6%22%20stroke-width%3D%222.3%22%2F%3E%3Cpath%20d%3D%22M32%2054.5%20C31.6%2049.5%2031.8%2045%2032%2040.5%22%20stroke-width%3D%223.4%22%2F%3E%3Cpath%20d%3D%22M32%2041%20C32.6%2035%2031.4%2029%2032%2018.5%22%20stroke-width%3D%222.7%22%2F%3E%3Cpath%20d%3D%22M32%2041%20C31%2036%2027.4%2033%2024%2028.6%20C22.8%2027%2021.9%2025.6%2021.3%2024%22%20stroke-width%3D%222.5%22%2F%3E%3Cpath%20d%3D%22M32%2041%20C33%2036%2036.6%2033%2040%2028.6%20C41.2%2027%2042.1%2025.6%2042.7%2024%22%20stroke-width%3D%222.5%22%2F%3E%3Cpath%20d%3D%22M27.6%2034.6%20C24.4%2034.8%2020.6%2034.2%2017.4%2032.6%22%20stroke-width%3D%222.1%22%2F%3E%3Cpath%20d%3D%22M36.4%2034.6%20C39.6%2034.8%2043.4%2034.2%2046.6%2032.6%22%20stroke-width%3D%222.1%22%2F%3E%3Cpath%20d%3D%22M31.8%2046.5%20C28.6%2046.8%2025.4%2045.6%2022.8%2043.2%22%20stroke-width%3D%221.9%22%2F%3E%3Cpath%20d%3D%22M32.2%2046.5%20C35.4%2046.8%2038.6%2045.6%2041.2%2043.2%22%20stroke-width%3D%221.9%22%2F%3E%3Cpath%20d%3D%22M31.8%2027.5%20C30%2027%2028.6%2026%2027.6%2024.6%22%20stroke-width%3D%221.5%22%2F%3E%3Cpath%20d%3D%22M32.2%2027.5%20C34%2027%2035.4%2026%2036.4%2024.6%22%20stroke-width%3D%221.5%22%2F%3E%3C%2Fg%3E%3Cg%20fill%3D%22url(%23brandLeafGrad)%22%20stroke%3D%22%234a6a27%22%20stroke-width%3D%220.5%22%20stroke-linejoin%3D%22round%22%3E%3Cpath%20d%3D%22M0%20-5.4%20C3.1%20-2.5%203.1%202.5%200%205.4%20C-3.1%202.5%20-3.1%20-2.5%200%20-5.4%20Z%22%20transform%3D%22translate(32%2013.2)%22%2F%3E%3Cpath%20d%3D%22M0%20-4.8%20C2.8%20-2.2%202.8%202.2%200%204.8%20C-2.8%202.2%20-2.8%20-2.2%200%20-4.8%20Z%22%20transform%3D%22translate(19.7%2019.9)%20rotate(-22)%22%2F%3E%3Cpath%20d%3D%22M0%20-4.8%20C2.8%20-2.2%202.8%202.2%200%204.8%20C-2.8%202.2%20-2.8%20-2.2%200%20-4.8%20Z%22%20transform%3D%22translate(44.3%2019.9)%20rotate(22)%22%2F%3E%3Cpath%20d%3D%22M0%20-4.5%20C2.6%20-2.1%202.6%202.1%200%204.5%20C-2.6%202.1%20-2.6%20-2.1%200%20-4.5%20Z%22%20transform%3D%22translate(13.7%2030.8)%20rotate(-64)%22%2F%3E%3Cpath%20d%3D%22M0%20-4.5%20C2.6%20-2.1%202.6%202.1%200%204.5%20C-2.6%202.1%20-2.6%20-2.1%200%20-4.5%20Z%22%20transform%3D%22translate(50.3%2030.8)%20rotate(64)%22%2F%3E%3Cpath%20d%3D%22M0%20-4.1%20C2.4%20-1.9%202.4%201.9%200%204.1%20C-2.4%201.9%20-2.4%20-1.9%200%20-4.1%20Z%22%20transform%3D%22translate(19.9%2040.5)%20rotate(-47)%22%2F%3E%3Cpath%20d%3D%22M0%20-4.1%20C2.4%20-1.9%202.4%201.9%200%204.1%20C-2.4%201.9%20-2.4%20-1.9%200%20-4.1%20Z%22%20transform%3D%22translate(44.1%2040.5)%20rotate(47)%22%2F%3E%3Cpath%20d%3D%22M0%20-3.3%20C1.9%20-1.5%201.9%201.5%200%203.3%20C-1.9%201.5%20-1.9%20-1.5%200%20-3.3%20Z%22%20transform%3D%22translate(25.8%2022.1)%20rotate(-36)%22%2F%3E%3Cpath%20d%3D%22M0%20-3.3%20C1.9%20-1.5%201.9%201.5%200%203.3%20C-1.9%201.5%20-1.9%20-1.5%200%20-3.3%20Z%22%20transform%3D%22translate(38.2%2022.1)%20rotate(36)%22%2F%3E%3C%2Fg%3E%3C%2Fsvg%3E';
 
     /**
      * Normalizes tree layout options, providing defaults for visibleNodes, collapsedNodes, ppy, and siblingGap.
@@ -2122,6 +2467,8 @@ ${b64Jsx}
 
     /**
      * Applies inferred birth year calculation to a subsequent wife based on previous wife's last child.
+     * The remarriage is assumed to follow that birth, so the bride's age is the cohort-aware
+     * bride age for THAT wedding year (brideAgeAtMarriageYear), not a flat constant.
      *
      * @param {Object} unknown - Subsequent wife person node
      * @param {number} lastPrevChildYob - Birth year of the previous wife's last child
@@ -2129,16 +2476,14 @@ ${b64Jsx}
      *
      * @example
      * FamilyTreeBuilder._applySubsequentWifeYob(wifeNode, 1920);
-     * // => true
+     * // => true (wifeNode._inferredYob = 1920 - brideAgeAtMarriageYear(1920) = 1905)
      *
      * @example
-     * FamilyTreeBuilder._applySubsequentWifeYob({ yob: 0, _inferredYob: 1902 }, 1920);
+     * FamilyTreeBuilder._applySubsequentWifeYob({ yob: 0, _inferredYob: 1905 }, 1920);
      * // => false
      */
     static _applySubsequentWifeYob(unknown, lastPrevChildYob) {
-        const firstMarriageAge = FamilyTreeBuilder.GENERATIONAL_GAPS.DEFAULT_FIRST_MARRIAGE_AGE_FEMALE ||
-                                 FamilyTreeBuilder.GENERATIONAL_GAPS.SECOND_WIFE_MARRIAGE_AGE;
-        const inferred = lastPrevChildYob - firstMarriageAge;
+        const inferred = lastPrevChildYob - FamilyTreeBuilder.brideAgeAtMarriageYear(lastPrevChildYob);
         if (unknown._inferredYob !== inferred || unknown.yob !== 0) {
             unknown.yob = 0;
             unknown._inferredYob = inferred;
@@ -2470,8 +2815,31 @@ ${b64Jsx}
     }
 
     /**
-     * Propagates inferred birth years between parent and first-born child using generational gaps.
-     * Incurs maternal (24 years) or paternal (26 years) gap depending on parent gender.
+     * Resolves which generational role a parent plays for a child, so the right gap model applies.
+     *
+     * @param {Object} parent - Parent node
+     * @param {Object} firstChild - Eldest child node
+     * @returns {'mother'|'father'|'named'|null} Role, or null when no relation can be assumed
+     *
+     * @example
+     * FamilyTreeBuilder._resolveParentGapRole({ id: 'm', gender: 'F' }, { momId: 'm' });
+     * // => 'mother'
+     *
+     * @example
+     * FamilyTreeBuilder._resolveParentGapRole({ id: 'x' }, { _namedParentId: 'x' });
+     * // => 'named' (gender unknown: flat 25-year gap)
+     */
+    static _resolveParentGapRole(parent, firstChild) {
+        if (parent.gender === 'F' || firstChild.momId === parent.id) return 'mother';
+        if (parent.gender === 'M' || firstChild.fatherId === parent.id) return 'father';
+        return firstChild._namedParentId === parent.id ? 'named' : null;
+    }
+
+    /**
+     * Propagates inferred birth years between parent and first-born child using the cohort-aware
+     * generational gaps: downward from a known parent the gap follows the PARENT's birth cohort
+     * (a 1920 mother bears at ~17, a 1970 mother at ~27); upward from a known child the marriage
+     * model is inverted so the mother lands on the cohort whose gap reproduces the child's year.
      *
      * @param {Object} parent - Parent node with known or unknown birth year
      * @param {Object} firstChild - Eldest child node with known or unknown birth year
@@ -2480,33 +2848,31 @@ ${b64Jsx}
      * @returns {boolean} True if birth year was newly inferred
      *
      * @example
-     * const mom = { gender: 'F', yob: 1950 };
+     * const mom = { gender: 'F', yob: 1940 };
      * const child = { momId: mom.id };
      * FamilyTreeBuilder._propagateParentChildYobs(mom, child, p => p.yob);
-     * // => true (child._inferredYob set to 1974)
+     * // => true (child._inferredYob set to 1964: maternalFirstChildGap(1940) == 24)
      *
      * @example
      * const dad = { gender: 'M' };
-     * const child = { fatherId: dad.id, yob: 1976 };
+     * const child = { fatherId: dad.id, yob: 1935 };
      * FamilyTreeBuilder._propagateParentChildYobs(dad, child, p => p.yob);
-     * // => true (dad._inferredYob set to 1950)
+     * // => true (dad._inferredYob set to 1916: 1918 mother, two-year spousal offset)
      */
     static _propagateParentChildYobs(parent, firstChild, getYob, nodeMap = null) {
-        const isMother = parent.gender === 'F' || firstChild.momId === parent.id;
-        const isFather = parent.gender === 'M' || firstChild.fatherId === parent.id;
-        const isNamedParent = firstChild._namedParentId === parent.id;
-        const gap = isMother ? FamilyTreeBuilder.GENERATIONAL_GAPS.MATERNAL_FIRST_CHILD :
-                    isFather ? FamilyTreeBuilder.GENERATIONAL_GAPS.PATERNAL_FIRST_CHILD :
-                    isNamedParent ? 25 : 0;
-        if (!gap) return false;
+        const role = FamilyTreeBuilder._resolveParentGapRole(parent, firstChild);
+        if (!role) return false;
 
         const parentYob = getYob(parent);
-        if (FamilyTreeBuilder._inferDownwardChildYob(parentYob, firstChild, gap)) {
+        const downwardGap = role === 'mother' ? FamilyTreeBuilder.maternalFirstChildGap(parentYob)
+            : role === 'father' ? FamilyTreeBuilder.paternalFirstChildGap(parentYob) : 25;
+        if (FamilyTreeBuilder._inferDownwardChildYob(parentYob, firstChild, downwardGap)) {
             return true;
         }
 
         const childYob = getYob(firstChild);
-        return FamilyTreeBuilder._inferUpwardParentYob(childYob, parent, gap, nodeMap);
+        const upwardGap = role === 'named' ? 25 : FamilyTreeBuilder.firstChildGapFromChild(childYob, role === 'father');
+        return FamilyTreeBuilder._inferUpwardParentYob(childYob, parent, upwardGap, nodeMap);
     }
 
     /**
@@ -10034,30 +10400,33 @@ ${b64Jsx}
 
     /**
      * Validates child birth year against biological parental limits (minimum age 14, maximum age e.g. 52/75).
-     * If child birth year is unstated, infers it using default offset; if birth year is explicit and invalid, detaches the parent.
+     * If child birth year is unstated, re-infers it from the parent's cohort-aware first-child gap;
+     * if the birth year is explicit and invalid, detaches the parent.
      * 
      * @param {Object} n - Child person node
      * @param {Object} nodeMap - Map of person ID to person record
      * @param {string} parentIdKey - 'momId' or 'fatherId'
      * @param {number} maxAge - Maximum plausible age at childbirth (e.g. 52 for mother, 75 for father)
-     * @param {number} defaultChildOffset - Generational offset to assign to child if unstated (e.g. 22 or 25)
      *
      * @example
-     * FamilyTreeBuilder._enforceParentChildBiologicalGap({ fatherId: 'f', yob: 1950 }, { f: { yob: 1945 } }, 'fatherId', 75, 25);
+     * FamilyTreeBuilder._enforceParentChildBiologicalGap({ fatherId: 'f', yob: 1950 }, { f: { yob: 1945 } }, 'fatherId', 75);
      * // => Gap of 5 < 14 violates biological bound, clearing node.fatherId
      *
      * @example
-     * FamilyTreeBuilder._enforceParentChildBiologicalGap({ momId: 'm', _inferredYob: 2010 }, { m: { yob: 1940 } }, 'momId', 52, 22);
-     * // => Gap of 70 > 52 adjusts unstated birth year to 1962
+     * FamilyTreeBuilder._enforceParentChildBiologicalGap({ momId: 'm', _inferredYob: 2010 }, { m: { yob: 1940 } }, 'momId', 52);
+     * // => Gap of 70 > 52 re-infers the unstated birth year as 1940 + maternalFirstChildGap(1940) = 1964
      */
-    static _enforceParentChildBiologicalGap(n, nodeMap, parentIdKey, maxAge, defaultChildOffset) {
+    static _enforceParentChildBiologicalGap(n, nodeMap, parentIdKey, maxAge) {
         if (!n[parentIdKey]) return;
         const parent = nodeMap[n[parentIdKey]];
         const pYob = parent ? (parent.yob || parent._inferredYob) : null;
         const nYob = n.yob || n._inferredYob;
         if (pYob && nYob && (nYob < pYob + FamilyTreeBuilder.GENERATIONAL_GAPS.MIN_PARENTAL_AGE || nYob > pYob + maxAge)) {
-            if (!n.yob) n._inferredYob = pYob + defaultChildOffset;
-            else {
+            if (!n.yob) {
+                n._inferredYob = pYob + (parentIdKey === 'momId'
+                    ? FamilyTreeBuilder.maternalFirstChildGap(pYob)
+                    : FamilyTreeBuilder.paternalFirstChildGap(pYob));
+            } else {
                 n[parentIdKey] = undefined;
                 if (n._namedParentId === parent.id) n._namedParentId = undefined;
             }
@@ -10081,14 +10450,10 @@ ${b64Jsx}
         FamilyTreeBuilder._resolveIdenticalParentId(n, this.nodeMap);
         FamilyTreeBuilder._validateCoParentAgeCompatibility(n, this.nodeMap);
         FamilyTreeBuilder._enforceParentChildBiologicalGap(
-            n, this.nodeMap, 'momId',
-            FamilyTreeBuilder.BIOLOGICAL_BOUNDS.MAX_MOTHER_CHILDBIRTH_AGE,
-            FamilyTreeBuilder.GENERATIONAL_GAPS.MATERNAL_FIRST_CHILD
+            n, this.nodeMap, 'momId', FamilyTreeBuilder.BIOLOGICAL_BOUNDS.MAX_MOTHER_CHILDBIRTH_AGE
         );
         FamilyTreeBuilder._enforceParentChildBiologicalGap(
-            n, this.nodeMap, 'fatherId',
-            FamilyTreeBuilder.BIOLOGICAL_BOUNDS.MAX_FATHER_CHILDBIRTH_AGE,
-            FamilyTreeBuilder.GENERATIONAL_GAPS.PATERNAL_FIRST_CHILD
+            n, this.nodeMap, 'fatherId', FamilyTreeBuilder.BIOLOGICAL_BOUNDS.MAX_FATHER_CHILDBIRTH_AGE
         );
     }
 
@@ -13847,14 +14212,14 @@ ${b64Jsx}
             const mom = nodeMap[n.momId];
             const momYob = getYob(mom);
             if (momYob) {
-                n._inferredYob = momYob + FamilyTreeBuilder.GENERATIONAL_GAPS.MATERNAL_FIRST_CHILD;
+                n._inferredYob = momYob + FamilyTreeBuilder.maternalFirstChildGap(momYob);
                 return true;
             }
         } else if (n.fatherId) {
             const dad = nodeMap[n.fatherId];
             const dadYob = getYob(dad);
             if (dadYob) {
-                n._inferredYob = dadYob + FamilyTreeBuilder.GENERATIONAL_GAPS.PATERNAL_FIRST_CHILD;
+                n._inferredYob = dadYob + FamilyTreeBuilder.paternalFirstChildGap(dadYob);
                 return true;
             }
         }

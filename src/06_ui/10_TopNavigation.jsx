@@ -173,11 +173,11 @@ const TopNavIconButton = ({ onClick, title, isActive = false, disabled = false, 
 };
 
 /**
- * Renders toolbar action buttons for Google Sheets import, standalone HTML export, and A4 print export.
+ * Renders toolbar action buttons for deduction settings, standalone HTML export, and A4 print export.
  *
  * @param {object} props
  * @param {boolean} props.isStandalone - Whether running in embedded standalone mode
- * @param {Function} props.handleImport - Spreadsheet import handler
+ * @param {Function} props.onOpenSettings - Opens the deduction settings panel
  * @param {boolean} props.isLoading - Whether tree data is actively loading
  * @param {Function} props.handleExportStandaloneApp - Standalone app export handler
  * @param {boolean} props.isExportingApp - Standalone app export in progress
@@ -187,26 +187,24 @@ const TopNavIconButton = ({ onClick, title, isActive = false, disabled = false, 
  * @returns {React.ReactNode}
  *
  * @example
- * <TopNavImportExportButtons isStandalone={false} handleImport={() => {}} isLoading={false} handleExportStandaloneApp={() => {}} isExportingApp={false} handleExportA4Print={() => {}} isExportingA4={false} tree={tree} />
+ * <TopNavImportExportButtons isStandalone={false} onOpenSettings={() => {}} isLoading={false} handleExportStandaloneApp={() => {}} isExportingApp={false} handleExportA4Print={() => {}} isExportingA4={false} tree={tree} />
  *
  * @example
- * <TopNavImportExportButtons isStandalone={true} handleImport={() => {}} isLoading={false} handleExportStandaloneApp={() => {}} isExportingApp={false} handleExportA4Print={() => {}} isExportingA4={false} tree={tree} />
+ * <TopNavImportExportButtons isStandalone={true} onOpenSettings={() => {}} isLoading={false} handleExportStandaloneApp={() => {}} isExportingApp={false} handleExportA4Print={() => {}} isExportingA4={false} tree={tree} />
  */
 const TopNavImportExportButtons = ({
-    isStandalone, handleImport, isLoading,
+    isStandalone, onOpenSettings, isLoading,
     handleExportStandaloneApp, isExportingApp,
     handleExportA4Print, isExportingA4, tree
 }) => (
     <>
+        <TopNavIconButton onClick={onOpenSettings} disabled={isLoading} title="Deduction Settings (marriage age by birth cohort)">
+            <Icons.Settings />
+        </TopNavIconButton>
         {!isStandalone && (
-            <>
-                <TopNavIconButton onClick={() => handleImport()} disabled={isLoading} title="Import Google Sheet from Clipboard URL">
-                    {isLoading ? <Icons.Loader /> : <Icons.Link />}
-                </TopNavIconButton>
-                <TopNavIconButton onClick={handleExportStandaloneApp} disabled={isExportingApp || isLoading} title="Download Standalone Interactive App (.html)">
-                    {isExportingApp ? <Icons.Loader /> : <Icons.Download />}
-                </TopNavIconButton>
-            </>
+            <TopNavIconButton onClick={handleExportStandaloneApp} disabled={isExportingApp || isLoading} title="Download Standalone Interactive App (.html)">
+                {isExportingApp ? <Icons.Loader /> : <Icons.Download />}
+            </TopNavIconButton>
         )}
         <TopNavIconButton onClick={handleExportA4Print} disabled={isExportingA4 || isLoading || !tree?.root} title="Print Tree / Export A4 Landscape SVGs (10pt names)">
             {isExportingA4 ? <Icons.Loader /> : <Icons.Printer />}
@@ -264,11 +262,11 @@ const TopNavViewToggleButtons = ({
 };
 
 /**
- * Top floating toolbar actions (Import, Export, Map, AI, Logs, Search).
+ * Top floating toolbar actions (Settings, Export, Map, AI, Logs, Search).
  *
  * @param {object} props
  * @param {boolean} props.isStandalone - Embedded standalone flag
- * @param {Function} props.handleImport - Import sheet handler
+ * @param {Function} props.onOpenSettings - Opens the deduction settings panel
  * @param {boolean} props.isLoading - Loading state
  * @param {Function} props.handleExportStandaloneApp - Export standalone app handler
  * @param {boolean} props.isExportingApp - Export standalone loading state
@@ -290,7 +288,7 @@ const TopNavViewToggleButtons = ({
  * @example
  *   <TopNavigationActions
  *     isStandalone={false}
- *     handleImport={() => {}}
+ *     onOpenSettings={() => {}}
  *     isLoading={false}
  *     handleExportStandaloneApp={() => {}}
  *     isExportingApp={false}
@@ -312,7 +310,7 @@ const TopNavViewToggleButtons = ({
  * @example
  *   <TopNavigationActions
  *     isStandalone={true}
- *     handleImport={fn}
+ *     onOpenSettings={fn}
  *     isLoading={true}
  *     handleExportStandaloneApp={fn}
  *     isExportingApp={false}
@@ -335,7 +333,7 @@ const TopNavigationActions = (props) => (
     <>
         <TopNavImportExportButtons
             isStandalone={props.isStandalone}
-            handleImport={props.handleImport}
+            onOpenSettings={props.onOpenSettings}
             isLoading={props.isLoading}
             handleExportStandaloneApp={props.handleExportStandaloneApp}
             isExportingApp={props.isExportingApp}
@@ -394,7 +392,7 @@ const TopNavigationErrorBanner = ({ errorMsg, onClear }) => {
  * @param {boolean} [props.isResizing=false] - Whether sidebar resize drag is active
  * @param {string} props.sheetUrl - Google sheet data source URL
  * @param {Function} props.setSheetUrl - Setter for sheet URL
- * @param {Function} props.handleImport - Import sheet handler
+ * @param {Function} props.onOpenSettings - Opens the deduction settings panel
  * @param {boolean} props.isLoading - Whether import or tree build is in progress
  * @param {string} props.searchQuery - Current omni search text
  * @param {Function} props.setSearchQuery - Setter for search text
@@ -433,7 +431,7 @@ const TopNavigationErrorBanner = ({ errorMsg, onClear }) => {
  *     isResizing={false}
  *     sheetUrl=""
  *     setSheetUrl={() => {}}
- *     handleImport={() => {}}
+ *     onOpenSettings={() => {}}
  *     isLoading={false}
  *     searchQuery=""
  *     setSearchQuery={() => {}}
@@ -718,7 +716,7 @@ const TopNavigationAiTitle = () => (
  * @param {Object} props
  * @param {boolean} props.showAI - Whether AI assistant panel is open.
  * @param {boolean} props.isStandalone - Whether running in embedded standalone mode.
- * @param {Function} props.handleImport - Spreadsheet import handler.
+ * @param {Function} props.onOpenSettings - Opens the deduction settings panel.
  * @param {boolean} props.isLoading - Whether tree data is loading.
  * @param {Function} props.handleExportStandaloneApp - Standalone app export handler.
  * @param {boolean} props.isExportingApp - Standalone app export status.
@@ -746,7 +744,7 @@ const TopNavigationAiTitle = () => (
  * <TopNavigationInactiveToolbar
  *   showAI={false}
  *   isStandalone={false}
- *   handleImport={() => {}}
+ *   onOpenSettings={() => {}}
  *   isLoading={false}
  *   handleExportStandaloneApp={() => {}}
  *   isExportingApp={false}
@@ -774,7 +772,7 @@ const TopNavigationAiTitle = () => (
  * <TopNavigationInactiveToolbar
  *   showAI={true}
  *   isStandalone={true}
- *   handleImport={() => {}}
+ *   onOpenSettings={() => {}}
  *   isLoading={false}
  *   handleExportStandaloneApp={() => {}}
  *   isExportingApp={false}
@@ -799,14 +797,14 @@ const TopNavigationAiTitle = () => (
  * />
  */
 const TopNavigationInactiveToolbar = ({
-    showAI, isStandalone, handleImport, isLoading, handleExportStandaloneApp,
+    showAI, isStandalone, onOpenSettings, isLoading, handleExportStandaloneApp,
     isExportingApp, handleExportA4Print, isExportingA4, tree, showMap,
     handleToggleMap, isAILoading, handleToggleAI, showLogs, setShowLogs,
     setShowAI, searchQuery, handleOpenSearch, isSidebarVisible, canGoBack,
     canGoForward, onGoBack, onGoForward, setFocusId
 }) => {
     const actionsProps = {
-        isStandalone, handleImport, isLoading, handleExportStandaloneApp, isExportingApp,
+        isStandalone, onOpenSettings, isLoading, handleExportStandaloneApp, isExportingApp,
         handleExportA4Print, isExportingA4, tree, showMap, onToggleMap: handleToggleMap,
         showAI, isAILoading, onToggleAI: handleToggleAI, showLogs, setShowLogs,
         setShowAI, searchQuery, handleOpenSearch
@@ -841,34 +839,9 @@ const TopNavigationInactiveToolbar = ({
  */
 const TreeLoadingBrandSplash = () => (
     <div data-testid="tree-loading-brand-splash" className="w-full h-full flex flex-col items-center justify-center gap-5 select-none pointer-events-none relative z-10 px-6">
-        <div className="flex items-center justify-center gap-5 bg-white/85 backdrop-blur-xl px-8 py-6 rounded-3xl shadow-[0_0_40px_rgba(79,70,229,0.14),0_0_12px_rgba(0,0,0,0.08)] border border-indigo-100/80">
-            <svg viewBox="0 0 64 64" className="w-[72px] h-[72px] shrink-0 drop-shadow-md" aria-hidden="true">
-                <defs>
-                    <linearGradient id="navBgGrad" x1="0%" y1="0%" x2="100%" y2="100%">
-                        <stop offset="0%" stopColor="#312e81" />
-                        <stop offset="50%" stopColor="#4f46e5" />
-                        <stop offset="100%" stopColor="#7c3aed" />
-                    </linearGradient>
-                    <linearGradient id="navTrunkGrad" x1="0%" y1="0%" x2="0%" y2="100%">
-                        <stop offset="0%" stopColor="#ffffff" />
-                        <stop offset="100%" stopColor="#c7d2fe" />
-                    </linearGradient>
-                </defs>
-                <rect x="2" y="2" width="60" height="60" rx="14" fill="url(#navBgGrad)" stroke="#a5b4fc" strokeOpacity="0.35" strokeWidth="1.5" />
-                <g fill="none" stroke="url(#navTrunkGrad)" strokeLinecap="round" strokeLinejoin="round">
-                    <path d="M32 49 V33" strokeWidth="4.5" />
-                    <path d="M23 51 C28 51 32 48 32 43" strokeWidth="3.2" />
-                    <path d="M41 51 C36 51 32 48 32 43" strokeWidth="3.2" />
-                    <path d="M32 36 C22 36 16 30 16 21" strokeWidth="3.4" />
-                    <path d="M32 34 V15" strokeWidth="3.4" />
-                    <path d="M32 36 C42 36 48 30 48 21" strokeWidth="3.4" />
-                </g>
-                <circle cx="32" cy="14" r="6.2" fill="#fde68a" stroke="#ffffff" strokeWidth="2" />
-                <circle cx="16" cy="21" r="5.2" fill="#ffffff" stroke="#c7d2fe" strokeWidth="1.5" />
-                <circle cx="48" cy="21" r="5.2" fill="#ffffff" stroke="#c7d2fe" strokeWidth="1.5" />
-                <circle cx="32" cy="35" r="3.6" fill="#ffffff" />
-            </svg>
-            <h1 className="text-[44px] leading-none tracking-wide font-bold bg-clip-text text-transparent bg-gradient-to-r from-slate-700 via-indigo-600/80 to-purple-600/80 opacity-85" style={{ fontFamily: "'Uncial Antiqua', serif" }}>Family Tree</h1>
+        <div className="flex items-center justify-center gap-5 bg-white/85 backdrop-blur-xl px-8 py-6 rounded-3xl shadow-[0_0_40px_rgba(92,124,51,0.16),0_0_12px_rgba(0,0,0,0.08)] border border-lime-900/10">
+            <BrandLogo size={96} idPrefix="splash" className="w-[96px] h-[96px] shrink-0 drop-shadow-md" />
+            <h1 className="text-[44px] leading-none tracking-wide font-bold bg-clip-text text-transparent bg-gradient-to-r from-slate-700 via-[#5c7c33] to-[#9cc95f] opacity-90" style={{ fontFamily: "'Uncial Antiqua', serif" }}>Family Tree</h1>
         </div>
         <div className="text-sm text-slate-400 font-sans tracking-wide animate-pulse">Fetching and building tree...</div>
     </div>
@@ -988,7 +961,7 @@ const TopNavigationMainBar = ({
  * @param {boolean} [props.isResizing=false] - Whether sidebar is actively being dragged/resized.
  * @param {string} props.sheetUrl - Google Sheets data source URL.
  * @param {Function} props.setSheetUrl - Sheet URL state setter.
- * @param {Function} props.handleImport - Spreadsheet import handler.
+ * @param {Function} props.onOpenSettings - Opens the deduction settings panel.
  * @param {boolean} props.isLoading - Whether tree data is actively loading.
  * @param {string} props.searchQuery - Current omni-search input query.
  * @param {Function} props.setSearchQuery - Search query state setter.
@@ -1026,7 +999,7 @@ const TopNavigationMainBar = ({
  *   tree={{ people: {} }}
  *   isSidebarVisible={false}
  *   sidebarWidth={360}
- *   handleImport={() => {}}
+ *   onOpenSettings={() => {}}
  *   isLoading={false}
  *   searchQuery=""
  *   setSearchQuery={() => {}}
@@ -1065,7 +1038,7 @@ const TopNavigationMainBar = ({
  */
 const TopNavigation = (props) => {
     const {
-        tree, isSidebarVisible, sidebarWidth = 360, isResizing = false, sheetUrl, setSheetUrl, handleImport, isLoading, searchQuery, setSearchQuery, 
+        tree, isSidebarVisible, sidebarWidth = 360, isResizing = false, sheetUrl, setSheetUrl, onOpenSettings, isLoading, searchQuery, setSearchQuery, 
         handleSetFocusId, onFilterBy, activeFilter, showLogs, setShowLogs, errorMsg, setErrorMsg,
         showAI, setShowAI, canGoBack, canGoForward, onGoBack, onGoForward, isAILoading, handleExportImage, isExporting,
         handleExportStandaloneApp, isExportingApp, handleExportA4Print, isExportingA4,
@@ -1080,7 +1053,7 @@ const TopNavigation = (props) => {
         useTopNavigationHandlers({ showMap, setShowMap, setIsSidebarVisible, setActiveFilter, setFocusId, showAI, setShowAI, setShowLogs });
 
     const activeProps = { searchContainerRef, handleSearchContainerBlur, tree, searchQuery, setSearchQuery, onFilterBy, activeFilter, handleSetFocusId, setShowMap, setShowAI, setShowLogs, onAiSubmitQuery, omniSelectedIndex, setOmniSelectedIndex, setIsSearchActive, canGoBack, canGoForward, onGoBack, onGoForward, isSidebarVisible, setFocusId };
-    const inactiveProps = { showAI, isStandalone, handleImport, isLoading, handleExportStandaloneApp, isExportingApp, handleExportA4Print, isExportingA4, tree, showMap, handleToggleMap, isAILoading, handleToggleAI, showLogs, setShowLogs, setShowAI, searchQuery, handleOpenSearch, isSidebarVisible, canGoBack, canGoForward, onGoBack, onGoForward, setFocusId };
+    const inactiveProps = { showAI, isStandalone, onOpenSettings, isLoading, handleExportStandaloneApp, isExportingApp, handleExportA4Print, isExportingA4, tree, showMap, handleToggleMap, isAILoading, handleToggleAI, showLogs, setShowLogs, setShowAI, searchQuery, handleOpenSearch, isSidebarVisible, canGoBack, canGoForward, onGoBack, onGoForward, setFocusId };
 
     return (
         <div className="absolute top-4 left-0 right-0 z-50 flex flex-col gap-3 pointer-events-none">
@@ -1095,13 +1068,22 @@ const TopNavigation = (props) => {
 };
 
 const BUTTON_DOCUMENTATION_CATALOG = {
-    'Import Google Sheet from Clipboard URL': {
-        title: 'Import Google Sheet from Clipboard',
-        badge: 'Data Sync • Clipboard URL',
-        summary: 'Reads a **Google Sheets URL** or **Spreadsheet ID** from your clipboard (or prompts for one), crawls the root sheet and all linked branch tabs in **`Links`** in parallel, and rebuilds the family tree.',
+    'Family Tree Home – choose a Google Sheet': {
+        title: 'Home: Choose a Google Sheet',
+        badge: 'Data Source • Cookie History',
+        summary: 'Returns to the **home screen**, where you paste any **Google Sheets link or ID** (shared as *Anyone with the link can view*). Every sheet you open is remembered in a **browser cookie** and offered in a dropdown, most-used first.',
         examples: [
-            { label: 'Clipboard URL Sync', detail: 'Copy `https://docs.google.com/spreadsheets/d/1ZDpcz2.../edit` and click this button to import all linked family sheets.' },
-            { label: 'Direct URL Parameter', detail: 'Append `?id=1ZDpcz2ACmG63dUjHLfoHZSW7-dG51FbzaJVcqHYdkEI` to the app URL to load that root sheet automatically on startup.' }
+            { label: 'Switch Family', detail: 'Click the emblem, pick `Ancestry Browser: Demo — 1BQvy…` from the dropdown or paste another link, then press **Enter** or **Open**.' },
+            { label: 'Shareable Link', detail: 'After a sheet loads the address bar carries `?id=<sheetId>`; share it and the recipient skips the home screen entirely.' }
+        ]
+    },
+    'Deduction Settings (marriage age by birth cohort)': {
+        title: 'Deduction Settings',
+        badge: 'Priors • Cookie Persisted',
+        summary: 'Tunes the **social conventions** behind every guessed year: the bride\'s **age at first marriage per birth cohort** (born 1910s–20s ≈ 15, 1940s ≈ 22, 2000s ≈ 27), the wedding-to-first-child interval, the husband–wife age offset and the sibling spacing. **Apply** rebuilds the tree from cached rows without refetching.',
+        examples: [
+            { label: 'Later Marriages', detail: 'Raise the `1940` cohort from **22** to **25** and every mother born in the 1940s is deduced three years older than before.' },
+            { label: 'Reset', detail: 'Click **Reset to defaults** and then **Apply & rebuild tree** to return to the shipped curve; the cookie is overwritten with the defaults.' }
         ]
     },
     'Download Standalone Interactive App (.html)': {

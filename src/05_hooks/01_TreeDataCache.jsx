@@ -1107,6 +1107,7 @@ async function fetchCSVData(sheetId, sheetName = '', timeoutMs = 8000, bypassCac
         if (!response.ok) {
             return sheetName ? null : fetchFallbackGvizCsv(sheetId, bypassCache, timeoutMs);
         }
+        if (!sheetName) rememberSheetTitleFromResponse(sheetId, response);
         const text = await response.text();
         if (!text || text.trim().startsWith('<html')) {
             return sheetName ? null : fetchFallbackGvizCsv(sheetId, bypassCache, timeoutMs);

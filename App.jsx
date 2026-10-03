@@ -644,10 +644,16 @@ const Icons = {
     Camera: () => <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M14.5 4h-5L7 7H4a2 2 0 0 0-2 2v9a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2V9a2 2 0 0 0-2-2h-3l-2.5-3z"/><circle cx="12" cy="13" r="3"/></svg>,
     Pdf: () => <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M14.5 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7.5L14.5 2z"/><polyline points="14 2 14 8 20 8"/><path d="M9 13v4"/><path d="M9 13h2a1.5 1.5 0 0 1 0 3H9"/><path d="M14 13v4"/><path d="M14 13h1.5a1.5 1.5 0 0 1 1.5 1.5v1a1.5 1.5 0 0 1-1.5 1.5H14"/></svg>,
     Download: () => <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>,
-    Printer: () => <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="6 9 6 2 18 2 18 9"/><path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"/><rect width="12" height="8" x="6" y="14"/></svg>
+    Printer: () => <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="6 9 6 2 18 2 18 9"/><path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"/><rect width="12" height="8" x="6" y="14"/></svg>,
+    Settings: () => <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z"/><circle cx="12" cy="12" r="3"/></svg>
 };
 
-const DEFAULT_URL = 'https://docs.google.com/spreadsheets/d/1ZDpcz2ACmG63dUjHLfoHZSW7-dG51FbzaJVcqHYdkEI/edit?usp=sharing';
+/**
+ * The public demo spreadsheet ("Ancestry Browser: Demo"). It is only a PREFILL for the home
+ * screen textbox when the browser has no sheet history and the clipboard holds no sheet
+ * link; nothing is loaded until the user presses Enter / OK.
+ */
+const DEFAULT_URL = 'https://docs.google.com/spreadsheets/d/1BQvyFoA_-u4MG-r1SRDel93F1TwEaN3I6v6p-kOH8z0/edit?usp=drive_link';
 
 /**
  * Geometry value objects for paginated (A4) printing of the family tree canvas.
@@ -1172,6 +1178,188 @@ class GhostWorkspace {
         return this.find(name) || this.create(name, gender, seed);
     }
 }
+
+// ============================================================================
+// MODULE: BRAND ASSETS (logo, favicon, watermark)
+// ============================================================================
+
+/**
+ * Brand palette for the "Family Tree" emblem: a thin olive ring around a leafy tree.
+ * Kept in one place so the React logo, the favicon data URI and exported documents agree.
+ */
+const BRAND_COLORS = Object.freeze({
+    ring: '#5c7c33',
+    ringFill: '#fcfdf8',
+    leafLight: '#9cc95f',
+    leafDark: '#5f8b35',
+    leafEdge: '#4a6a27',
+});
+
+/**
+ * Limb geometry of the emblem (viewBox 0 0 64 64): [path, strokeWidth] pairs for the roots,
+ * trunk, centre limb, upper/middle/lower limbs and the two twigs off the centre limb.
+ */
+const BRAND_LOGO_LIMBS = Object.freeze([
+    ['M32 54 C29.8 54.3 27.4 55.1 25 56.6', 2.3],
+    ['M32 54 C34.2 54.3 36.6 55.1 39 56.6', 2.3],
+    ['M32 54.5 C31.6 49.5 31.8 45 32 40.5', 3.4],
+    ['M32 41 C32.6 35 31.4 29 32 18.5', 2.7],
+    ['M32 41 C31 36 27.4 33 24 28.6 C22.8 27 21.9 25.6 21.3 24', 2.5],
+    ['M32 41 C33 36 36.6 33 40 28.6 C41.2 27 42.1 25.6 42.7 24', 2.5],
+    ['M27.6 34.6 C24.4 34.8 20.6 34.2 17.4 32.6', 2.1],
+    ['M36.4 34.6 C39.6 34.8 43.4 34.2 46.6 32.6', 2.1],
+    ['M31.8 46.5 C28.6 46.8 25.4 45.6 22.8 43.2', 1.9],
+    ['M32.2 46.5 C35.4 46.8 38.6 45.6 41.2 43.2', 1.9],
+    ['M31.8 27.5 C30 27 28.6 26 27.6 24.6', 1.5],
+    ['M32.2 27.5 C34 27 35.4 26 36.4 24.6', 1.5],
+]);
+
+/**
+ * Leaf placements of the emblem: [halfLength, x, y, rotationDeg]. Each leaf is a symmetric
+ * almond drawn around its own origin and then translated/rotated onto the tip of a limb.
+ */
+const BRAND_LOGO_LEAVES = Object.freeze([
+    [5.4, 32, 13.2, 0],
+    [4.8, 19.7, 19.9, -22],
+    [4.8, 44.3, 19.9, 22],
+    [4.5, 13.7, 30.8, -64],
+    [4.5, 50.3, 30.8, 64],
+    [4.1, 19.9, 40.5, -47],
+    [4.1, 44.1, 40.5, 47],
+    [3.3, 25.8, 22.1, -36],
+    [3.3, 38.2, 22.1, 36],
+]);
+
+/**
+ * Builds the almond-shaped leaf outline for a leaf of the given half-length (the control
+ * points scale with the length so every leaf keeps the same proportions).
+ *
+ * @param {number} halfLength - Distance from the leaf centre to either tip
+ * @returns {string} SVG path data centred on the origin
+ *
+ * @example
+ * buildBrandLeafPath(5.4);
+ * // => 'M0 -5.4 C3.1 -2.5 3.1 2.5 0 5.4 C-3.1 2.5 -3.1 -2.5 0 -5.4 Z'
+ *
+ * @example
+ * buildBrandLeafPath(3.3).startsWith('M0 -3.3');
+ * // => true
+ */
+const buildBrandLeafPath = (halfLength) => {
+    const w = Math.round(halfLength * 0.575 * 10) / 10;
+    const c = Math.round(halfLength * 0.46 * 10) / 10;
+    return `M0 -${halfLength} C${w} -${c} ${w} ${c} 0 ${halfLength} C-${w} ${c} -${w} -${c} 0 -${halfLength} Z`;
+};
+
+/**
+ * Serialises the emblem as a standalone SVG document string (for the favicon data URI and for
+ * exported HTML/SVG documents). The gradient id is prefixed so several copies can share a page.
+ *
+ * @param {string} [idPrefix='brand'] - Prefix for the gradient id
+ * @returns {string} Minified SVG markup
+ *
+ * @example
+ * buildBrandLogoSvgMarkup().startsWith('<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64"');
+ * // => true
+ *
+ * @example
+ * buildBrandLogoSvgMarkup('print').includes('id="printLeafGrad"');
+ * // => true
+ */
+const buildBrandLogoSvgMarkup = (idPrefix = 'brand') => {
+    const gradId = `${idPrefix}LeafGrad`;
+    const limbs = BRAND_LOGO_LIMBS.map(([d, w]) => `<path d="${d}" stroke-width="${w}"/>`).join('');
+    const leaves = BRAND_LOGO_LEAVES.map(([len, x, y, rot]) =>
+        `<path d="${buildBrandLeafPath(len)}" transform="translate(${x} ${y})${rot ? ` rotate(${rot})` : ''}"/>`).join('');
+    return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" width="64" height="64">`
+        + `<defs><linearGradient id="${gradId}" x1="0" y1="0" x2="0" y2="1">`
+        + `<stop offset="0%" stop-color="${BRAND_COLORS.leafLight}"/><stop offset="100%" stop-color="${BRAND_COLORS.leafDark}"/>`
+        + `</linearGradient></defs>`
+        + `<circle cx="32" cy="32" r="29.6" fill="${BRAND_COLORS.ringFill}" stroke="${BRAND_COLORS.ring}" stroke-width="2.4"/>`
+        + `<g fill="none" stroke="${BRAND_COLORS.ring}" stroke-linecap="round" stroke-linejoin="round">${limbs}</g>`
+        + `<g fill="url(#${gradId})" stroke="${BRAND_COLORS.leafEdge}" stroke-width="0.5" stroke-linejoin="round">${leaves}</g>`
+        + `</svg>`;
+};
+
+/**
+ * The emblem as a `data:` URI usable in `<link rel="icon">` and `<img src>`.
+ * (FamilyTreeBuilder.FAVICON_DATA_URI carries the same string as a literal because the builder
+ * class is also evaluated in isolation by the test harness.)
+ *
+ * @example
+ * BRAND_FAVICON_DATA_URI.startsWith('data:image/svg+xml,%3Csvg');
+ * // => true
+ *
+ * @example
+ * decodeURIComponent(BRAND_FAVICON_DATA_URI.slice('data:image/svg+xml,'.length)) === buildBrandLogoSvgMarkup();
+ * // => true
+ */
+const BRAND_FAVICON_DATA_URI = 'data:image/svg+xml,' + encodeURIComponent(buildBrandLogoSvgMarkup());
+
+/**
+ * React rendering of the emblem. `idPrefix` must differ between simultaneously mounted copies so
+ * their gradient ids do not collide; `title` adds an accessible label.
+ *
+ * @param {Object} props
+ * @param {number} [props.size=44] - Rendered width/height in px
+ * @param {string} [props.idPrefix='brand'] - Gradient id prefix
+ * @param {string} [props.className=''] - Extra classes on the <svg>
+ * @param {Object} [props.style] - Inline styles on the <svg>
+ * @param {string} [props.title] - Accessible title; omitted => decorative (aria-hidden)
+ * @returns {JSX.Element}
+ *
+ * @example
+ * <BrandLogo size={160} idPrefix="splash" />
+ *
+ * @example
+ * <BrandLogo size={28} idPrefix="home" title="Family Tree home" className="drop-shadow" />
+ */
+const BrandLogo = ({ size = 44, idPrefix = 'brand', className = '', style, title }) => {
+    const gradId = `${idPrefix}LeafGrad`;
+    return (
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" width={size} height={size}
+            className={className} style={style} role={title ? 'img' : undefined} aria-hidden={title ? undefined : true}>
+            {title && <title>{title}</title>}
+            <defs>
+                <linearGradient id={gradId} x1="0" y1="0" x2="0" y2="1">
+                    <stop offset="0%" stopColor={BRAND_COLORS.leafLight} />
+                    <stop offset="100%" stopColor={BRAND_COLORS.leafDark} />
+                </linearGradient>
+            </defs>
+            <circle cx="32" cy="32" r="29.6" fill={BRAND_COLORS.ringFill} stroke={BRAND_COLORS.ring} strokeWidth="2.4" />
+            <g fill="none" stroke={BRAND_COLORS.ring} strokeLinecap="round" strokeLinejoin="round">
+                {BRAND_LOGO_LIMBS.map(([d, w]) => <path key={d} d={d} strokeWidth={w} />)}
+            </g>
+            <g fill={`url(#${gradId})`} stroke={BRAND_COLORS.leafEdge} strokeWidth="0.5" strokeLinejoin="round">
+                {BRAND_LOGO_LEAVES.map(([len, x, y, rot]) => (
+                    <path key={`${x}-${y}`} d={buildBrandLeafPath(len)} transform={`translate(${x} ${y})${rot ? ` rotate(${rot})` : ''}`} />
+                ))}
+            </g>
+        </svg>
+    );
+};
+
+/**
+ * Barely visible emblem centred behind the tree canvas. Pointer-events are off so it never
+ * intercepts panning, and it sits at z-0 beneath the z-10 tree layer.
+ *
+ * @param {Object} props
+ * @param {number} [props.size=420] - Emblem size in px
+ * @param {number} [props.opacity=0.05] - Opacity (the user asked for "barely visible")
+ * @returns {JSX.Element}
+ *
+ * @example
+ * <BrandWatermark />
+ *
+ * @example
+ * <BrandWatermark size={300} opacity={0.04} />
+ */
+const BrandWatermark = ({ size = 420, opacity = 0.05 }) => (
+    <div className="absolute inset-0 z-0 flex items-center justify-center pointer-events-none select-none" aria-hidden="true"
+        data-testid="brand-watermark" style={{ opacity }}>
+        <BrandLogo size={size} idPrefix="watermark" />
+    </div>
+);
 
 // ============================================================================
 // MODULE 2: UTILITY CLASSES (Data Loading & Parsing)
@@ -6624,7 +6812,7 @@ class FamilyTreeBuilder {
     }
 
     static GENERATIONAL_GAPS = (() => {
-        const MATERNAL_FIRST_CHILD = 24;   // Mother age at first-born child birth
+        const MATERNAL_FIRST_CHILD = 24;   // Mother age at first-born child birth (1940s reference cohort; see MARRIAGE_AGE_MODEL)
         const SPOUSAL_GENDER_OFFSET = 2;   // Husband is assumed this many years older than his wife
         return Object.freeze({
             MATERNAL_FIRST_CHILD,
@@ -6637,14 +6825,210 @@ class FamilyTreeBuilder {
             // paths must agree or the same person gets two different birth years.
             PATERNAL_FIRST_CHILD: MATERNAL_FIRST_CHILD + SPOUSAL_GENDER_OFFSET,
             CONSECUTIVE_SIBLING: 2,         // Assumed gap between adjacent birth-order siblings
-            DEFAULT_FIRST_MARRIAGE_AGE_FEMALE: 18, // Default age of a woman at her first marriage
-            SECOND_WIFE_MARRIAGE_AGE: 18,   // Subsequent spouse married after previous wife's last child (alias for DEFAULT_FIRST_MARRIAGE_AGE_FEMALE)
+            DEFAULT_FIRST_MARRIAGE_AGE_FEMALE: 18, // Flat fallback age of a woman at her first marriage, used only when the cohort model has no anchors (see marriageAgeForBirthYear / brideAgeAtMarriageYear)
             MIN_PARENTAL_AGE: 14,           // Absolute physical minimum parent-child age difference
             MAX_ROW_NEIGHBOR_DISTANCE: 5,   // Maximum spreadsheet row distance for namesake fallback
             ADJACENT_ROW_MAX_DISTANCE: 3,   // Maximum spreadsheet row distance for adjacent co-spouses / immediate family grouping
             PARENT_RESOLUTION_MARGIN_YEARS: 5, // Minimum generational-gap fitness advantage (in years) to lock in a parent candidate
         });
     })();
+
+    /**
+     * Female age at first marriage, by the bride's BIRTH cohort. Marriage age rose steeply over
+     * the last century: women born in the 1910s-1920s married at about 15, women born in the
+     * 1940s at 20-25, and women born around 2000 marry at 25-30. Ages between anchors are
+     * linearly interpolated; outside the anchor range the nearest anchor applies. The curve is
+     * flat at 15 through the 1928 cohort and climbs to 22 by the 1940 cohort, so the whole rise
+     * falls on the women who married in the two decades after independence.
+     *
+     * The maternal first-child gap is this age plus FIRST_CHILD_AFTER_MARRIAGE, so the gap is
+     * cohort-dependent rather than one flat number: a mother born in 1920 is ~17 at her first
+     * child, one born in 1940 ~24 (the GENERATIONAL_GAPS.MATERNAL_FIRST_CHILD reference), one
+     * born in 2000 ~29. All values are user-tunable via applyDemographicSettings().
+     */
+    static MARRIAGE_AGE_MODEL = Object.freeze({
+        ANCHORS: Object.freeze([[1900, 15], [1928, 15], [1940, 22], [1970, 25], [2000, 27], [2020, 28]]),
+        FIRST_CHILD_AFTER_MARRIAGE: 2,  // Years from the wedding to the first birth
+        REFERENCE_COHORT_YEAR: 1940,    // Cohort assumed when a birth year is unknown (gap == MATERNAL_FIRST_CHILD)
+    });
+
+    /**
+     * Interpolates the expected age at first marriage for a woman born in `birthYear` from the
+     * piecewise-linear MARRIAGE_AGE_MODEL anchors (clamped to the first/last anchor). An unknown
+     * birth year falls back to the reference cohort.
+     *
+     * @param {number|null} birthYear - Bride's birth year, or null/0 when unknown
+     * @param {Object} [model=FamilyTreeBuilder.MARRIAGE_AGE_MODEL] - Anchor table to interpolate
+     * @returns {number} Expected age at first marriage (may be fractional between anchors)
+     *
+     * @example
+     * FamilyTreeBuilder.marriageAgeForBirthYear(1915);
+     * // => 15 (1910s-1920s brides married at about 15)
+     *
+     * @example
+     * FamilyTreeBuilder.marriageAgeForBirthYear(1955);
+     * // => 23.5 (half-way between the 1940 anchor of 22 and the 1970 anchor of 25)
+     */
+    static marriageAgeForBirthYear(birthYear, model = FamilyTreeBuilder.MARRIAGE_AGE_MODEL) {
+        const anchors = model.ANCHORS || [];
+        if (anchors.length === 0) return FamilyTreeBuilder.GENERATIONAL_GAPS.DEFAULT_FIRST_MARRIAGE_AGE_FEMALE;
+        const year = Number.isFinite(birthYear) && birthYear > 0 ? birthYear : model.REFERENCE_COHORT_YEAR;
+        if (year <= anchors[0][0]) return anchors[0][1];
+        for (let i = 1; i < anchors.length; i++) {
+            const [y0, a0] = anchors[i - 1];
+            const [y1, a1] = anchors[i];
+            if (year <= y1) return a0 + (a1 - a0) * (year - y0) / (y1 - y0);
+        }
+        return anchors[anchors.length - 1][1];
+    }
+
+    /**
+     * Expected age of a mother at her FIRST child, for a mother born in `motherYob`:
+     * cohort marriage age plus the marriage-to-first-birth interval, rounded to whole years.
+     *
+     * @param {number|null} motherYob - Mother's birth year (null/0 => reference cohort)
+     * @returns {number} Maternal first-child gap in years
+     *
+     * @example
+     * FamilyTreeBuilder.maternalFirstChildGap(1920);
+     * // => 17
+     *
+     * @example
+     * FamilyTreeBuilder.maternalFirstChildGap(1940);
+     * // => 24 (equals GENERATIONAL_GAPS.MATERNAL_FIRST_CHILD, the reference cohort)
+     */
+    static maternalFirstChildGap(motherYob) {
+        const model = FamilyTreeBuilder.MARRIAGE_AGE_MODEL;
+        return Math.round(FamilyTreeBuilder.marriageAgeForBirthYear(motherYob, model) + model.FIRST_CHILD_AFTER_MARRIAGE);
+    }
+
+    /**
+     * Expected age of a father at his FIRST child. A husband is SPOUSAL_GENDER_OFFSET years older
+     * than his wife, so the gap is the maternal gap of his (younger) wife's cohort plus the offset,
+     * which keeps "father via child" and "father via wife" deductions identical.
+     *
+     * @param {number|null} fatherYob - Father's birth year (null/0 => reference cohort)
+     * @returns {number} Paternal first-child gap in years
+     *
+     * @example
+     * FamilyTreeBuilder.paternalFirstChildGap(1938);
+     * // => 26 (wife born 1940 => maternal gap 24, plus the 2-year spousal offset)
+     *
+     * @example
+     * FamilyTreeBuilder.paternalFirstChildGap(null);
+     * // => 26 (reference cohort; equals GENERATIONAL_GAPS.PATERNAL_FIRST_CHILD)
+     */
+    static paternalFirstChildGap(fatherYob) {
+        const offset = FamilyTreeBuilder.GENERATIONAL_GAPS.SPOUSAL_GENDER_OFFSET;
+        const wifeYob = Number.isFinite(fatherYob) && fatherYob > 0 ? fatherYob + offset : null;
+        return FamilyTreeBuilder.maternalFirstChildGap(wifeYob) + offset;
+    }
+
+    /**
+     * Solves `yob + ageOfCohort(yob) == targetYear` for the birth year of someone whose age at the
+     * event depends on their own (unknown) birth cohort. The cohort curves change far more slowly
+     * than the birth year itself (slope well below 1), so plain fixed-point iteration contracts
+     * onto the unique real solution; it is rounded ONCE at the end to avoid the two-value cycles
+     * that rounding inside the loop would produce.
+     *
+     * @param {number} targetYear - Calendar year of the event (a birth, a wedding)
+     * @param {Function} ageOfCohort - Continuous age-at-event as a function of birth year
+     * @param {number} initialGuess - Starting birth year (any plausible value)
+     * @returns {number} Rounded birth year
+     *
+     * @example
+     * FamilyTreeBuilder._solveCohortBirthYear(1964, y => FamilyTreeBuilder.marriageAgeForBirthYear(y) + 2, 1940);
+     * // => 1940
+     *
+     * @example
+     * FamilyTreeBuilder._solveCohortBirthYear(2000, () => 30, 1950);
+     * // => 1970 (constant age: trivially target - age)
+     */
+    static _solveCohortBirthYear(targetYear, ageOfCohort, initialGuess) {
+        let yob = initialGuess;
+        for (let i = 0; i < 16; i++) {
+            const next = targetYear - ageOfCohort(yob);
+            const converged = Math.abs(next - yob) < 0.01;
+            yob = next;
+            if (converged) break;
+        }
+        return Math.round(yob);
+    }
+
+    /**
+     * Walks the cohort model backwards: given a FIRST child's birth year, finds the mother's
+     * birth year `m` satisfying `m + maternalFirstChildGap(m) == childYob`. Because the gap grows
+     * with the cohort, a 1960 child implies a 1937 mother (gap 23) rather than a flat 1936.
+     *
+     * @param {number} childYob - Birth year of the first child
+     * @returns {number} Inferred birth year of the mother
+     *
+     * @example
+     * FamilyTreeBuilder.inferMotherYobFromFirstChild(1935);
+     * // => 1918 (mother married at ~15, first child at 17)
+     *
+     * @example
+     * FamilyTreeBuilder.inferMotherYobFromFirstChild(1964);
+     * // => 1940 (reference cohort: gap 24)
+     */
+    static inferMotherYobFromFirstChild(childYob) {
+        const model = FamilyTreeBuilder.MARRIAGE_AGE_MODEL;
+        const gapOf = (yob) => FamilyTreeBuilder.marriageAgeForBirthYear(yob, model) + model.FIRST_CHILD_AFTER_MARRIAGE;
+        return FamilyTreeBuilder._solveCohortBirthYear(
+            childYob, gapOf, childYob - FamilyTreeBuilder.GENERATIONAL_GAPS.MATERNAL_FIRST_CHILD
+        );
+    }
+
+    /**
+     * Cohort-aware generational gap between a first child and a parent, measured from the
+     * child's side (the parent's birth year is unknown). Mothers use the inverse of the marriage
+     * model; fathers add the spousal offset on top, mirroring paternalFirstChildGap.
+     *
+     * @param {number|null} childYob - Birth year of the first child (null => reference cohort gap)
+     * @param {boolean} [isFather=false] - Whether the unknown parent is the father
+     * @returns {number} Gap in years to subtract from the child's birth year
+     *
+     * @example
+     * FamilyTreeBuilder.firstChildGapFromChild(1935);
+     * // => 17 (mother born 1918)
+     *
+     * @example
+     * FamilyTreeBuilder.firstChildGapFromChild(1935, true);
+     * // => 19 (father two years older than that mother)
+     */
+    static firstChildGapFromChild(childYob, isFather = false) {
+        const gaps = FamilyTreeBuilder.GENERATIONAL_GAPS;
+        if (!Number.isFinite(childYob) || childYob <= 0) {
+            return isFather ? gaps.PATERNAL_FIRST_CHILD : gaps.MATERNAL_FIRST_CHILD;
+        }
+        const maternalGap = childYob - FamilyTreeBuilder.inferMotherYobFromFirstChild(childYob);
+        return isFather ? maternalGap + gaps.SPOUSAL_GENDER_OFFSET : maternalGap;
+    }
+
+    /**
+     * Cohort-aware age of a bride at her wedding, used when a marriage YEAR is known but the
+     * bride's birth year is not (e.g. a widower's second wife married after his first wife's
+     * last child). Solves `b + marriageAgeForBirthYear(b) == marriageYear`.
+     *
+     * @param {number} marriageYear - Calendar year of the wedding
+     * @returns {number} Rounded age of the bride at that wedding
+     *
+     * @example
+     * FamilyTreeBuilder.brideAgeAtMarriageYear(1935);
+     * // => 15 (a bride born ~1920)
+     *
+     * @example
+     * FamilyTreeBuilder.brideAgeAtMarriageYear(1995);
+     * // => 25 (a bride born ~1970)
+     */
+    static brideAgeAtMarriageYear(marriageYear) {
+        const model = FamilyTreeBuilder.MARRIAGE_AGE_MODEL;
+        const brideYob = FamilyTreeBuilder._solveCohortBirthYear(
+            marriageYear, (yob) => FamilyTreeBuilder.marriageAgeForBirthYear(yob, model),
+            marriageYear - FamilyTreeBuilder.GENERATIONAL_GAPS.DEFAULT_FIRST_MARRIAGE_AGE_FEMALE
+        );
+        return marriageYear - brideYob;
+    }
 
     static BIOLOGICAL_BOUNDS = Object.freeze({
         MAX_MOTHER_CHILDBIRTH_AGE: 55,  // Upper bound for maternal conception
@@ -6673,6 +7057,155 @@ class FamilyTreeBuilder {
         // describes the convention rather than restating one family's arithmetic.
         MAX_FIRST_WIFE_AGE_DIFF: 13,
     });
+
+    /**
+     * The user-tunable social conventions, in the plain shape persisted by the Settings panel
+     * (cookie `ft_demographic_settings`). Biological limits are deliberately absent: they are
+     * facts, not preferences. Years/ages are plain numbers so the object survives JSON round-trips.
+     */
+    static DEFAULT_DEMOGRAPHIC_SETTINGS = Object.freeze({
+        marriageAgeAnchors: FamilyTreeBuilder.MARRIAGE_AGE_MODEL.ANCHORS,
+        firstChildAfterMarriage: FamilyTreeBuilder.MARRIAGE_AGE_MODEL.FIRST_CHILD_AFTER_MARRIAGE,
+        spousalGenderOffset: FamilyTreeBuilder.GENERATIONAL_GAPS.SPOUSAL_GENDER_OFFSET,
+        consecutiveSiblingGap: FamilyTreeBuilder.GENERATIONAL_GAPS.CONSECUTIVE_SIBLING,
+    });
+
+    /**
+     * Validates one [birthYear, marriageAge] anchor pair, returning null for anything that is not
+     * a plausible human cohort/age so that corrupt cookies cannot poison the model.
+     *
+     * @param {*} pair - Candidate anchor
+     * @returns {Array<number>|null} Clean [year, age] pair or null
+     *
+     * @example
+     * FamilyTreeBuilder._sanitizeMarriageAnchor([1940, 22]);
+     * // => [1940, 22]
+     *
+     * @example
+     * FamilyTreeBuilder._sanitizeMarriageAnchor(['1940', 'twenty']);
+     * // => null
+     */
+    static _sanitizeMarriageAnchor(pair) {
+        if (!Array.isArray(pair) || pair.length < 2) return null;
+        const year = Number(pair[0]);
+        const age = Number(pair[1]);
+        if (!Number.isFinite(year) || !Number.isFinite(age)) return null;
+        if (year < 1600 || year > 2200 || age < 10 || age > 60) return null;
+        return [Math.round(year), Math.round(age * 10) / 10];
+    }
+
+    /**
+     * Normalizes a raw (possibly user-edited or cookie-restored) settings object into a complete,
+     * ordered, bounded settings record. Missing or invalid fields fall back to the defaults;
+     * anchors are sorted by year and de-duplicated so interpolation stays well-defined.
+     *
+     * @param {Object} [raw={}] - Partial settings object
+     * @returns {{marriageAgeAnchors: Array<Array<number>>, firstChildAfterMarriage: number, spousalGenderOffset: number, consecutiveSiblingGap: number}}
+     *
+     * @example
+     * FamilyTreeBuilder.sanitizeDemographicSettings({ spousalGenderOffset: 3 });
+     * // => { ...defaults, spousalGenderOffset: 3 }
+     *
+     * @example
+     * FamilyTreeBuilder.sanitizeDemographicSettings({ marriageAgeAnchors: [[1970, 24], [1900, 15], ['x', 1]] });
+     * // => marriageAgeAnchors: [[1900, 15], [1970, 24]] (sorted, invalid pair dropped)
+     */
+    static sanitizeDemographicSettings(raw = {}) {
+        const defaults = FamilyTreeBuilder.DEFAULT_DEMOGRAPHIC_SETTINGS;
+        const source = raw && typeof raw === 'object' ? raw : {};
+        const seenYears = new Set();
+        const anchors = (Array.isArray(source.marriageAgeAnchors) ? source.marriageAgeAnchors : [])
+            .map(FamilyTreeBuilder._sanitizeMarriageAnchor)
+            .filter(Boolean)
+            .sort((a, b) => a[0] - b[0])
+            .filter(([year]) => !seenYears.has(year) && seenYears.add(year));
+        const bounded = (value, min, max, fallback) => {
+            const n = Number(value);
+            return Number.isFinite(n) && n >= min && n <= max ? Math.round(n) : fallback;
+        };
+        return {
+            marriageAgeAnchors: anchors.length > 0 ? anchors : defaults.marriageAgeAnchors.map(a => [...a]),
+            firstChildAfterMarriage: bounded(source.firstChildAfterMarriage, 0, 15, defaults.firstChildAfterMarriage),
+            spousalGenderOffset: bounded(source.spousalGenderOffset, 0, 15, defaults.spousalGenderOffset),
+            consecutiveSiblingGap: bounded(source.consecutiveSiblingGap, 1, 6, defaults.consecutiveSiblingGap),
+        };
+    }
+
+    /**
+     * Installs user settings into the live model tables. Both tables are frozen, so they are
+     * REPLACED rather than mutated; every reader goes through `FamilyTreeBuilder.X` at call time,
+     * so the new values take effect on the next build(). The derived knobs are recomputed here:
+     * MATERNAL_FIRST_CHILD tracks the reference cohort and PATERNAL_FIRST_CHILD keeps its
+     * `maternal + spousal offset` identity.
+     *
+     * @param {Object} [raw={}] - Settings in DEFAULT_DEMOGRAPHIC_SETTINGS shape (partial allowed)
+     * @returns {Object} The sanitized settings that were applied
+     *
+     * @example
+     * FamilyTreeBuilder.applyDemographicSettings({ spousalGenderOffset: 4 });
+     * FamilyTreeBuilder.GENERATIONAL_GAPS.PATERNAL_FIRST_CHILD; // => 28
+     *
+     * @example
+     * FamilyTreeBuilder.applyDemographicSettings({ marriageAgeAnchors: [[1900, 20], [2000, 30]] });
+     * FamilyTreeBuilder.maternalFirstChildGap(1950); // => 27
+     */
+    static applyDemographicSettings(raw = {}) {
+        const settings = FamilyTreeBuilder.sanitizeDemographicSettings(raw);
+        FamilyTreeBuilder.MARRIAGE_AGE_MODEL = Object.freeze({
+            ...FamilyTreeBuilder.MARRIAGE_AGE_MODEL,
+            ANCHORS: Object.freeze(settings.marriageAgeAnchors.map(pair => Object.freeze([...pair]))),
+            FIRST_CHILD_AFTER_MARRIAGE: settings.firstChildAfterMarriage,
+        });
+        const maternal = FamilyTreeBuilder.maternalFirstChildGap(FamilyTreeBuilder.MARRIAGE_AGE_MODEL.REFERENCE_COHORT_YEAR);
+        FamilyTreeBuilder.GENERATIONAL_GAPS = Object.freeze({
+            ...FamilyTreeBuilder.GENERATIONAL_GAPS,
+            MATERNAL_FIRST_CHILD: maternal,
+            SPOUSAL_GENDER_OFFSET: settings.spousalGenderOffset,
+            PATERNAL_FIRST_CHILD: maternal + settings.spousalGenderOffset,
+            CONSECUTIVE_SIBLING: settings.consecutiveSiblingGap,
+        });
+        return settings;
+    }
+
+    /**
+     * Reads the currently installed settings back out of the live model tables, in the same plain
+     * shape accepted by applyDemographicSettings (so the Settings panel can round-trip them).
+     *
+     * @returns {{marriageAgeAnchors: Array<Array<number>>, firstChildAfterMarriage: number, spousalGenderOffset: number, consecutiveSiblingGap: number}}
+     *
+     * @example
+     * FamilyTreeBuilder.getDemographicSettings().spousalGenderOffset;
+     * // => 2 (defaults)
+     *
+     * @example
+     * FamilyTreeBuilder.applyDemographicSettings({ consecutiveSiblingGap: 3 });
+     * FamilyTreeBuilder.getDemographicSettings().consecutiveSiblingGap; // => 3
+     */
+    static getDemographicSettings() {
+        return {
+            marriageAgeAnchors: FamilyTreeBuilder.MARRIAGE_AGE_MODEL.ANCHORS.map(pair => [...pair]),
+            firstChildAfterMarriage: FamilyTreeBuilder.MARRIAGE_AGE_MODEL.FIRST_CHILD_AFTER_MARRIAGE,
+            spousalGenderOffset: FamilyTreeBuilder.GENERATIONAL_GAPS.SPOUSAL_GENDER_OFFSET,
+            consecutiveSiblingGap: FamilyTreeBuilder.GENERATIONAL_GAPS.CONSECUTIVE_SIBLING,
+        };
+    }
+
+    /**
+     * Restores the shipped defaults (undoes any applyDemographicSettings call).
+     *
+     * @returns {Object} The default settings that were re-applied
+     *
+     * @example
+     * FamilyTreeBuilder.applyDemographicSettings({ spousalGenderOffset: 5 });
+     * FamilyTreeBuilder.resetDemographicSettings().spousalGenderOffset; // => 2
+     *
+     * @example
+     * FamilyTreeBuilder.resetDemographicSettings();
+     * FamilyTreeBuilder.maternalFirstChildGap(1940); // => 24
+     */
+    static resetDemographicSettings() {
+        return FamilyTreeBuilder.applyDemographicSettings(FamilyTreeBuilder.DEFAULT_DEMOGRAPHIC_SETTINGS);
+    }
 
     static RELATIONSHIP_TOKENS = Object.freeze({
         MALE_INDICATORS: Object.freeze(['son', 'boy', 'father', 'dad', 'papa', 'grandpa', 'husband', 'brother', 'uncle', 'nephew', 'grandson']),
@@ -7215,7 +7748,7 @@ class FamilyTreeBuilder {
         return Person.isInvalidLocation(p);
     }
 
-    static FAVICON_DATA_URI = 'data:image/svg+xml,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20viewBox%3D%220%200%2064%2064%22%20width%3D%2264%22%20height%3D%2264%22%3E%20%3Cdefs%3E%20%3ClinearGradient%20id%3D%22bgGrad%22%20x1%3D%220%25%22%20y1%3D%220%25%22%20x2%3D%22100%25%22%20y2%3D%22100%25%22%3E%20%3Cstop%20offset%3D%220%25%22%20stop-color%3D%22%23312e81%22%20%2F%3E%20%3Cstop%20offset%3D%2250%25%22%20stop-color%3D%22%234f46e5%22%20%2F%3E%20%3Cstop%20offset%3D%22100%25%22%20stop-color%3D%22%237c3aed%22%20%2F%3E%20%3C%2FlinearGradient%3E%20%3CradialGradient%20id%3D%22canopyGlow%22%20cx%3D%2250%25%22%20cy%3D%2238%25%22%20r%3D%2242%25%22%3E%20%3Cstop%20offset%3D%220%25%22%20stop-color%3D%22%23a5b4fc%22%20stop-opacity%3D%220.45%22%20%2F%3E%20%3Cstop%20offset%3D%22100%25%22%20stop-color%3D%22%23a5b4fc%22%20stop-opacity%3D%220%22%20%2F%3E%20%3C%2FradialGradient%3E%20%3ClinearGradient%20id%3D%22trunkGrad%22%20x1%3D%220%25%22%20y1%3D%220%25%22%20x2%3D%220%25%22%20y2%3D%22100%25%22%3E%20%3Cstop%20offset%3D%220%25%22%20stop-color%3D%22%23ffffff%22%20%2F%3E%20%3Cstop%20offset%3D%22100%25%22%20stop-color%3D%22%23c7d2fe%22%20%2F%3E%20%3C%2FlinearGradient%3E%20%3C%2Fdefs%3E%20%3Crect%20x%3D%222%22%20y%3D%222%22%20width%3D%2260%22%20height%3D%2260%22%20rx%3D%2214%22%20fill%3D%22url(%23bgGrad)%22%20stroke%3D%22%23a5b4fc%22%20stroke-opacity%3D%220.35%22%20stroke-width%3D%221.5%22%20%2F%3E%20%3Ccircle%20cx%3D%2232%22%20cy%3D%2225%22%20r%3D%2220%22%20fill%3D%22url(%23canopyGlow)%22%20%2F%3E%20%3Cg%20fill%3D%22none%22%20stroke%3D%22url(%23trunkGrad)%22%20stroke-linecap%3D%22round%22%20stroke-linejoin%3D%22round%22%3E%20%3Cpath%20d%3D%22M32%2049%20V33%22%20stroke-width%3D%224.5%22%20%2F%3E%20%3Cpath%20d%3D%22M23%2051%20C28%2051%2032%2048%2032%2043%22%20stroke-width%3D%223.2%22%20%2F%3E%20%3Cpath%20d%3D%22M41%2051%20C36%2051%2032%2048%2032%2043%22%20stroke-width%3D%223.2%22%20%2F%3E%20%3Cpath%20d%3D%22M32%2036%20C22%2036%2016%2030%2016%2021%22%20stroke-width%3D%223.4%22%20%2F%3E%20%3Cpath%20d%3D%22M32%2034%20V15%22%20stroke-width%3D%223.4%22%20%2F%3E%20%3Cpath%20d%3D%22M32%2036%20C42%2036%2048%2030%2048%2021%22%20stroke-width%3D%223.4%22%20%2F%3E%20%3C%2Fg%3E%20%3Ccircle%20cx%3D%2232%22%20cy%3D%2214%22%20r%3D%226.2%22%20fill%3D%22%23fde68a%22%20stroke%3D%22%23ffffff%22%20stroke-width%3D%222%22%20%2F%3E%20%3Ccircle%20cx%3D%2216%22%20cy%3D%2221%22%20r%3D%225.2%22%20fill%3D%22%23ffffff%22%20stroke%3D%22%23c7d2fe%22%20stroke-width%3D%221.5%22%20%2F%3E%20%3Ccircle%20cx%3D%2248%22%20cy%3D%2221%22%20r%3D%225.2%22%20fill%3D%22%23ffffff%22%20stroke%3D%22%23c7d2fe%22%20stroke-width%3D%221.5%22%20%2F%3E%20%3Ccircle%20cx%3D%2232%22%20cy%3D%2235%22%20r%3D%223.6%22%20fill%3D%22%23ffffff%22%20%2F%3E%20%3C%2Fsvg%3E';
+    static FAVICON_DATA_URI = 'data:image/svg+xml,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20viewBox%3D%220%200%2064%2064%22%20width%3D%2264%22%20height%3D%2264%22%3E%3Cdefs%3E%3ClinearGradient%20id%3D%22brandLeafGrad%22%20x1%3D%220%22%20y1%3D%220%22%20x2%3D%220%22%20y2%3D%221%22%3E%3Cstop%20offset%3D%220%25%22%20stop-color%3D%22%239cc95f%22%2F%3E%3Cstop%20offset%3D%22100%25%22%20stop-color%3D%22%235f8b35%22%2F%3E%3C%2FlinearGradient%3E%3C%2Fdefs%3E%3Ccircle%20cx%3D%2232%22%20cy%3D%2232%22%20r%3D%2229.6%22%20fill%3D%22%23fcfdf8%22%20stroke%3D%22%235c7c33%22%20stroke-width%3D%222.4%22%2F%3E%3Cg%20fill%3D%22none%22%20stroke%3D%22%235c7c33%22%20stroke-linecap%3D%22round%22%20stroke-linejoin%3D%22round%22%3E%3Cpath%20d%3D%22M32%2054%20C29.8%2054.3%2027.4%2055.1%2025%2056.6%22%20stroke-width%3D%222.3%22%2F%3E%3Cpath%20d%3D%22M32%2054%20C34.2%2054.3%2036.6%2055.1%2039%2056.6%22%20stroke-width%3D%222.3%22%2F%3E%3Cpath%20d%3D%22M32%2054.5%20C31.6%2049.5%2031.8%2045%2032%2040.5%22%20stroke-width%3D%223.4%22%2F%3E%3Cpath%20d%3D%22M32%2041%20C32.6%2035%2031.4%2029%2032%2018.5%22%20stroke-width%3D%222.7%22%2F%3E%3Cpath%20d%3D%22M32%2041%20C31%2036%2027.4%2033%2024%2028.6%20C22.8%2027%2021.9%2025.6%2021.3%2024%22%20stroke-width%3D%222.5%22%2F%3E%3Cpath%20d%3D%22M32%2041%20C33%2036%2036.6%2033%2040%2028.6%20C41.2%2027%2042.1%2025.6%2042.7%2024%22%20stroke-width%3D%222.5%22%2F%3E%3Cpath%20d%3D%22M27.6%2034.6%20C24.4%2034.8%2020.6%2034.2%2017.4%2032.6%22%20stroke-width%3D%222.1%22%2F%3E%3Cpath%20d%3D%22M36.4%2034.6%20C39.6%2034.8%2043.4%2034.2%2046.6%2032.6%22%20stroke-width%3D%222.1%22%2F%3E%3Cpath%20d%3D%22M31.8%2046.5%20C28.6%2046.8%2025.4%2045.6%2022.8%2043.2%22%20stroke-width%3D%221.9%22%2F%3E%3Cpath%20d%3D%22M32.2%2046.5%20C35.4%2046.8%2038.6%2045.6%2041.2%2043.2%22%20stroke-width%3D%221.9%22%2F%3E%3Cpath%20d%3D%22M31.8%2027.5%20C30%2027%2028.6%2026%2027.6%2024.6%22%20stroke-width%3D%221.5%22%2F%3E%3Cpath%20d%3D%22M32.2%2027.5%20C34%2027%2035.4%2026%2036.4%2024.6%22%20stroke-width%3D%221.5%22%2F%3E%3C%2Fg%3E%3Cg%20fill%3D%22url(%23brandLeafGrad)%22%20stroke%3D%22%234a6a27%22%20stroke-width%3D%220.5%22%20stroke-linejoin%3D%22round%22%3E%3Cpath%20d%3D%22M0%20-5.4%20C3.1%20-2.5%203.1%202.5%200%205.4%20C-3.1%202.5%20-3.1%20-2.5%200%20-5.4%20Z%22%20transform%3D%22translate(32%2013.2)%22%2F%3E%3Cpath%20d%3D%22M0%20-4.8%20C2.8%20-2.2%202.8%202.2%200%204.8%20C-2.8%202.2%20-2.8%20-2.2%200%20-4.8%20Z%22%20transform%3D%22translate(19.7%2019.9)%20rotate(-22)%22%2F%3E%3Cpath%20d%3D%22M0%20-4.8%20C2.8%20-2.2%202.8%202.2%200%204.8%20C-2.8%202.2%20-2.8%20-2.2%200%20-4.8%20Z%22%20transform%3D%22translate(44.3%2019.9)%20rotate(22)%22%2F%3E%3Cpath%20d%3D%22M0%20-4.5%20C2.6%20-2.1%202.6%202.1%200%204.5%20C-2.6%202.1%20-2.6%20-2.1%200%20-4.5%20Z%22%20transform%3D%22translate(13.7%2030.8)%20rotate(-64)%22%2F%3E%3Cpath%20d%3D%22M0%20-4.5%20C2.6%20-2.1%202.6%202.1%200%204.5%20C-2.6%202.1%20-2.6%20-2.1%200%20-4.5%20Z%22%20transform%3D%22translate(50.3%2030.8)%20rotate(64)%22%2F%3E%3Cpath%20d%3D%22M0%20-4.1%20C2.4%20-1.9%202.4%201.9%200%204.1%20C-2.4%201.9%20-2.4%20-1.9%200%20-4.1%20Z%22%20transform%3D%22translate(19.9%2040.5)%20rotate(-47)%22%2F%3E%3Cpath%20d%3D%22M0%20-4.1%20C2.4%20-1.9%202.4%201.9%200%204.1%20C-2.4%201.9%20-2.4%20-1.9%200%20-4.1%20Z%22%20transform%3D%22translate(44.1%2040.5)%20rotate(47)%22%2F%3E%3Cpath%20d%3D%22M0%20-3.3%20C1.9%20-1.5%201.9%201.5%200%203.3%20C-1.9%201.5%20-1.9%20-1.5%200%20-3.3%20Z%22%20transform%3D%22translate(25.8%2022.1)%20rotate(-36)%22%2F%3E%3Cpath%20d%3D%22M0%20-3.3%20C1.9%20-1.5%201.9%201.5%200%203.3%20C-1.9%201.5%20-1.9%20-1.5%200%20-3.3%20Z%22%20transform%3D%22translate(38.2%2022.1)%20rotate(36)%22%2F%3E%3C%2Fg%3E%3C%2Fsvg%3E';
 
     /**
      * Normalizes tree layout options, providing defaults for visibleNodes, collapsedNodes, ppy, and siblingGap.
@@ -8612,6 +9145,8 @@ ${b64Jsx}
 
     /**
      * Applies inferred birth year calculation to a subsequent wife based on previous wife's last child.
+     * The remarriage is assumed to follow that birth, so the bride's age is the cohort-aware
+     * bride age for THAT wedding year (brideAgeAtMarriageYear), not a flat constant.
      *
      * @param {Object} unknown - Subsequent wife person node
      * @param {number} lastPrevChildYob - Birth year of the previous wife's last child
@@ -8619,16 +9154,14 @@ ${b64Jsx}
      *
      * @example
      * FamilyTreeBuilder._applySubsequentWifeYob(wifeNode, 1920);
-     * // => true
+     * // => true (wifeNode._inferredYob = 1920 - brideAgeAtMarriageYear(1920) = 1905)
      *
      * @example
-     * FamilyTreeBuilder._applySubsequentWifeYob({ yob: 0, _inferredYob: 1902 }, 1920);
+     * FamilyTreeBuilder._applySubsequentWifeYob({ yob: 0, _inferredYob: 1905 }, 1920);
      * // => false
      */
     static _applySubsequentWifeYob(unknown, lastPrevChildYob) {
-        const firstMarriageAge = FamilyTreeBuilder.GENERATIONAL_GAPS.DEFAULT_FIRST_MARRIAGE_AGE_FEMALE ||
-                                 FamilyTreeBuilder.GENERATIONAL_GAPS.SECOND_WIFE_MARRIAGE_AGE;
-        const inferred = lastPrevChildYob - firstMarriageAge;
+        const inferred = lastPrevChildYob - FamilyTreeBuilder.brideAgeAtMarriageYear(lastPrevChildYob);
         if (unknown._inferredYob !== inferred || unknown.yob !== 0) {
             unknown.yob = 0;
             unknown._inferredYob = inferred;
@@ -8960,8 +9493,31 @@ ${b64Jsx}
     }
 
     /**
-     * Propagates inferred birth years between parent and first-born child using generational gaps.
-     * Incurs maternal (24 years) or paternal (26 years) gap depending on parent gender.
+     * Resolves which generational role a parent plays for a child, so the right gap model applies.
+     *
+     * @param {Object} parent - Parent node
+     * @param {Object} firstChild - Eldest child node
+     * @returns {'mother'|'father'|'named'|null} Role, or null when no relation can be assumed
+     *
+     * @example
+     * FamilyTreeBuilder._resolveParentGapRole({ id: 'm', gender: 'F' }, { momId: 'm' });
+     * // => 'mother'
+     *
+     * @example
+     * FamilyTreeBuilder._resolveParentGapRole({ id: 'x' }, { _namedParentId: 'x' });
+     * // => 'named' (gender unknown: flat 25-year gap)
+     */
+    static _resolveParentGapRole(parent, firstChild) {
+        if (parent.gender === 'F' || firstChild.momId === parent.id) return 'mother';
+        if (parent.gender === 'M' || firstChild.fatherId === parent.id) return 'father';
+        return firstChild._namedParentId === parent.id ? 'named' : null;
+    }
+
+    /**
+     * Propagates inferred birth years between parent and first-born child using the cohort-aware
+     * generational gaps: downward from a known parent the gap follows the PARENT's birth cohort
+     * (a 1920 mother bears at ~17, a 1970 mother at ~27); upward from a known child the marriage
+     * model is inverted so the mother lands on the cohort whose gap reproduces the child's year.
      *
      * @param {Object} parent - Parent node with known or unknown birth year
      * @param {Object} firstChild - Eldest child node with known or unknown birth year
@@ -8970,33 +9526,31 @@ ${b64Jsx}
      * @returns {boolean} True if birth year was newly inferred
      *
      * @example
-     * const mom = { gender: 'F', yob: 1950 };
+     * const mom = { gender: 'F', yob: 1940 };
      * const child = { momId: mom.id };
      * FamilyTreeBuilder._propagateParentChildYobs(mom, child, p => p.yob);
-     * // => true (child._inferredYob set to 1974)
+     * // => true (child._inferredYob set to 1964: maternalFirstChildGap(1940) == 24)
      *
      * @example
      * const dad = { gender: 'M' };
-     * const child = { fatherId: dad.id, yob: 1976 };
+     * const child = { fatherId: dad.id, yob: 1935 };
      * FamilyTreeBuilder._propagateParentChildYobs(dad, child, p => p.yob);
-     * // => true (dad._inferredYob set to 1950)
+     * // => true (dad._inferredYob set to 1916: 1918 mother, two-year spousal offset)
      */
     static _propagateParentChildYobs(parent, firstChild, getYob, nodeMap = null) {
-        const isMother = parent.gender === 'F' || firstChild.momId === parent.id;
-        const isFather = parent.gender === 'M' || firstChild.fatherId === parent.id;
-        const isNamedParent = firstChild._namedParentId === parent.id;
-        const gap = isMother ? FamilyTreeBuilder.GENERATIONAL_GAPS.MATERNAL_FIRST_CHILD :
-                    isFather ? FamilyTreeBuilder.GENERATIONAL_GAPS.PATERNAL_FIRST_CHILD :
-                    isNamedParent ? 25 : 0;
-        if (!gap) return false;
+        const role = FamilyTreeBuilder._resolveParentGapRole(parent, firstChild);
+        if (!role) return false;
 
         const parentYob = getYob(parent);
-        if (FamilyTreeBuilder._inferDownwardChildYob(parentYob, firstChild, gap)) {
+        const downwardGap = role === 'mother' ? FamilyTreeBuilder.maternalFirstChildGap(parentYob)
+            : role === 'father' ? FamilyTreeBuilder.paternalFirstChildGap(parentYob) : 25;
+        if (FamilyTreeBuilder._inferDownwardChildYob(parentYob, firstChild, downwardGap)) {
             return true;
         }
 
         const childYob = getYob(firstChild);
-        return FamilyTreeBuilder._inferUpwardParentYob(childYob, parent, gap, nodeMap);
+        const upwardGap = role === 'named' ? 25 : FamilyTreeBuilder.firstChildGapFromChild(childYob, role === 'father');
+        return FamilyTreeBuilder._inferUpwardParentYob(childYob, parent, upwardGap, nodeMap);
     }
 
     /**
@@ -16524,30 +17078,33 @@ ${b64Jsx}
 
     /**
      * Validates child birth year against biological parental limits (minimum age 14, maximum age e.g. 52/75).
-     * If child birth year is unstated, infers it using default offset; if birth year is explicit and invalid, detaches the parent.
+     * If child birth year is unstated, re-infers it from the parent's cohort-aware first-child gap;
+     * if the birth year is explicit and invalid, detaches the parent.
      * 
      * @param {Object} n - Child person node
      * @param {Object} nodeMap - Map of person ID to person record
      * @param {string} parentIdKey - 'momId' or 'fatherId'
      * @param {number} maxAge - Maximum plausible age at childbirth (e.g. 52 for mother, 75 for father)
-     * @param {number} defaultChildOffset - Generational offset to assign to child if unstated (e.g. 22 or 25)
      *
      * @example
-     * FamilyTreeBuilder._enforceParentChildBiologicalGap({ fatherId: 'f', yob: 1950 }, { f: { yob: 1945 } }, 'fatherId', 75, 25);
+     * FamilyTreeBuilder._enforceParentChildBiologicalGap({ fatherId: 'f', yob: 1950 }, { f: { yob: 1945 } }, 'fatherId', 75);
      * // => Gap of 5 < 14 violates biological bound, clearing node.fatherId
      *
      * @example
-     * FamilyTreeBuilder._enforceParentChildBiologicalGap({ momId: 'm', _inferredYob: 2010 }, { m: { yob: 1940 } }, 'momId', 52, 22);
-     * // => Gap of 70 > 52 adjusts unstated birth year to 1962
+     * FamilyTreeBuilder._enforceParentChildBiologicalGap({ momId: 'm', _inferredYob: 2010 }, { m: { yob: 1940 } }, 'momId', 52);
+     * // => Gap of 70 > 52 re-infers the unstated birth year as 1940 + maternalFirstChildGap(1940) = 1964
      */
-    static _enforceParentChildBiologicalGap(n, nodeMap, parentIdKey, maxAge, defaultChildOffset) {
+    static _enforceParentChildBiologicalGap(n, nodeMap, parentIdKey, maxAge) {
         if (!n[parentIdKey]) return;
         const parent = nodeMap[n[parentIdKey]];
         const pYob = parent ? (parent.yob || parent._inferredYob) : null;
         const nYob = n.yob || n._inferredYob;
         if (pYob && nYob && (nYob < pYob + FamilyTreeBuilder.GENERATIONAL_GAPS.MIN_PARENTAL_AGE || nYob > pYob + maxAge)) {
-            if (!n.yob) n._inferredYob = pYob + defaultChildOffset;
-            else {
+            if (!n.yob) {
+                n._inferredYob = pYob + (parentIdKey === 'momId'
+                    ? FamilyTreeBuilder.maternalFirstChildGap(pYob)
+                    : FamilyTreeBuilder.paternalFirstChildGap(pYob));
+            } else {
                 n[parentIdKey] = undefined;
                 if (n._namedParentId === parent.id) n._namedParentId = undefined;
             }
@@ -16571,14 +17128,10 @@ ${b64Jsx}
         FamilyTreeBuilder._resolveIdenticalParentId(n, this.nodeMap);
         FamilyTreeBuilder._validateCoParentAgeCompatibility(n, this.nodeMap);
         FamilyTreeBuilder._enforceParentChildBiologicalGap(
-            n, this.nodeMap, 'momId',
-            FamilyTreeBuilder.BIOLOGICAL_BOUNDS.MAX_MOTHER_CHILDBIRTH_AGE,
-            FamilyTreeBuilder.GENERATIONAL_GAPS.MATERNAL_FIRST_CHILD
+            n, this.nodeMap, 'momId', FamilyTreeBuilder.BIOLOGICAL_BOUNDS.MAX_MOTHER_CHILDBIRTH_AGE
         );
         FamilyTreeBuilder._enforceParentChildBiologicalGap(
-            n, this.nodeMap, 'fatherId',
-            FamilyTreeBuilder.BIOLOGICAL_BOUNDS.MAX_FATHER_CHILDBIRTH_AGE,
-            FamilyTreeBuilder.GENERATIONAL_GAPS.PATERNAL_FIRST_CHILD
+            n, this.nodeMap, 'fatherId', FamilyTreeBuilder.BIOLOGICAL_BOUNDS.MAX_FATHER_CHILDBIRTH_AGE
         );
     }
 
@@ -20337,14 +20890,14 @@ ${b64Jsx}
             const mom = nodeMap[n.momId];
             const momYob = getYob(mom);
             if (momYob) {
-                n._inferredYob = momYob + FamilyTreeBuilder.GENERATIONAL_GAPS.MATERNAL_FIRST_CHILD;
+                n._inferredYob = momYob + FamilyTreeBuilder.maternalFirstChildGap(momYob);
                 return true;
             }
         } else if (n.fatherId) {
             const dad = nodeMap[n.fatherId];
             const dadYob = getYob(dad);
             if (dadYob) {
-                n._inferredYob = dadYob + FamilyTreeBuilder.GENERATIONAL_GAPS.PATERNAL_FIRST_CHILD;
+                n._inferredYob = dadYob + FamilyTreeBuilder.paternalFirstChildGap(dadYob);
                 return true;
             }
         }
@@ -23600,6 +24153,848 @@ ${bodyHtml}
     }
 }
 
+// ============================================================================
+// MODULE 5.0: BROWSER PREFERENCES — cookie-backed persistence of the Google Sheet
+// history shown on the home screen and of the user-tuned demographic settings.
+//
+// Everything the user has typed or chosen stays in THIS browser (first-party
+// cookie mirrored into localStorage for file:// standalone exports where
+// document.cookie is inert). Nothing is ever sent to a server; the GDPR note on
+// the home screen describes exactly these two cookies.
+// ============================================================================
+
+/** Cookie holding the ranked list of every Google Sheet the user has opened. */
+const SHEET_HISTORY_COOKIE = 'ft_sheet_history';
+/** Cookie holding the user-tuned demographic deduction settings (JSON). */
+const DEMOGRAPHIC_SETTINGS_COOKIE = 'ft_demographic_settings';
+/** Preferences survive one year of inactivity; every write refreshes the clock. */
+const PREFERENCE_COOKIE_MAX_AGE_SECONDS = 365 * 24 * 60 * 60;
+/** Browsers cap a single cookie at 4096 bytes; a dozen compact entries stay well below. */
+const SHEET_HISTORY_LIMIT = 12;
+/** Longest sheet title persisted per entry (characters). */
+const SHEET_TITLE_MAX_LENGTH = 60;
+/** Keep the URL-encoded cookie payload under this many characters. */
+const SHEET_HISTORY_COOKIE_BUDGET = 3500;
+/** The public demo spreadsheet offered when the browser has never opened a sheet. */
+const DEMO_SHEET_ID = '1BQvyFoA_-u4MG-r1SRDel93F1TwEaN3I6v6p-kOH8z0';
+/** Human title of the demo spreadsheet (what Google reports in Content-Disposition). */
+const DEMO_SHEET_TITLE = 'Ancestry Browser: Demo';
+/** Sheet IDs are 35-60 URL-safe characters; the whole string must be the token. */
+const SHEET_ID_EXACT_PATTERN = /^[a-zA-Z0-9-_]{35,60}$/;
+
+// ─── Cookie primitives (pure parsers + thin DOM shells) ─────────────────────
+
+/**
+ * Finds one named cookie inside a raw `document.cookie` string and URL-decodes it.
+ * Pure: the cookie string is passed in, so it is unit-testable without a DOM.
+ *
+ * @param {string} cookieString - Raw `document.cookie` text (`a=1; b=2`)
+ * @param {string} name - Cookie name to look up
+ * @returns {string|null} Decoded value, or null when absent
+ *
+ * @example
+ * parseCookieHeader('theme=dark; ft_sheet_history=%5B%5D', 'ft_sheet_history');
+ * // => '[]'
+ *
+ * @example
+ * parseCookieHeader('theme=dark', 'missing');
+ * // => null
+ */
+function parseCookieHeader(cookieString, name) {
+    if (!cookieString || !name) return null;
+    const prefix = `${name}=`;
+    for (const part of String(cookieString).split(';')) {
+        const trimmed = part.trim();
+        if (!trimmed.startsWith(prefix)) continue;
+        const rawValue = trimmed.slice(prefix.length);
+        try {
+            return decodeURIComponent(rawValue);
+        } catch (e) {
+            return rawValue;
+        }
+    }
+    return null;
+}
+
+/**
+ * Builds the `document.cookie` assignment string for a first-party preference cookie:
+ * URL-encoded value, site-wide path, one-year max-age, `SameSite=Lax`, and `Secure` on https.
+ *
+ * @param {string} name - Cookie name
+ * @param {string} value - Raw value (will be URL-encoded)
+ * @param {number} [maxAgeSeconds=PREFERENCE_COOKIE_MAX_AGE_SECONDS] - Lifetime; 0 deletes
+ * @param {boolean} [secure=false] - Append the `Secure` attribute
+ * @returns {string} Cookie assignment string
+ *
+ * @example
+ * buildCookieAssignment('ft_demo', 'a b', 60);
+ * // => 'ft_demo=a%20b; path=/; max-age=60; SameSite=Lax'
+ *
+ * @example
+ * buildCookieAssignment('ft_demo', '', 0, true);
+ * // => 'ft_demo=; path=/; max-age=0; SameSite=Lax; Secure'
+ */
+function buildCookieAssignment(name, value, maxAgeSeconds = PREFERENCE_COOKIE_MAX_AGE_SECONDS, secure = false) {
+    const encoded = encodeURIComponent(value == null ? '' : String(value));
+    const maxAge = Math.max(0, Math.floor(Number(maxAgeSeconds) || 0));
+    return `${name}=${encoded}; path=/; max-age=${maxAge}; SameSite=Lax${secure ? '; Secure' : ''}`;
+}
+
+/**
+ * Reads one cookie from the live document (null outside a browser or when absent).
+ *
+ * @param {string} name - Cookie name
+ * @returns {string|null} Decoded cookie value or null
+ *
+ * @example
+ * readCookieValue('ft_sheet_history');
+ * // => '[{"i":"1BQvy...","t":"Ancestry Browser: Demo","n":3,"l":1759478400}]'
+ *
+ * @example
+ * readCookieValue('never_set');
+ * // => null
+ */
+function readCookieValue(name) {
+    if (typeof document === 'undefined') return null;
+    try {
+        return parseCookieHeader(document.cookie, name);
+    } catch (e) {
+        return null;
+    }
+}
+
+/**
+ * Writes (or, with `maxAgeSeconds = 0`, deletes) one first-party cookie on the live document.
+ *
+ * @param {string} name - Cookie name
+ * @param {string} value - Raw value
+ * @param {number} [maxAgeSeconds=PREFERENCE_COOKIE_MAX_AGE_SECONDS] - Lifetime in seconds
+ * @returns {boolean} True when the assignment did not throw (file:// silently ignores cookies)
+ *
+ * @example
+ * writeCookieValue('ft_demographic_settings', JSON.stringify({ spousalGenderOffset: 3 }));
+ * // => true
+ *
+ * @example
+ * writeCookieValue('ft_demographic_settings', '', 0); // delete
+ */
+function writeCookieValue(name, value, maxAgeSeconds = PREFERENCE_COOKIE_MAX_AGE_SECONDS) {
+    if (typeof document === 'undefined') return false;
+    try {
+        const secure = typeof window !== 'undefined' && window.location && window.location.protocol === 'https:';
+        document.cookie = buildCookieAssignment(name, value, maxAgeSeconds, secure);
+        return true;
+    } catch (e) {
+        return false;
+    }
+}
+
+// ─── Preference store: cookie first, localStorage mirror second ─────────────
+
+/**
+ * localStorage key mirroring a preference cookie (standalone `.html` exports run from
+ * `file://`, where `document.cookie` is a no-op but localStorage still works).
+ *
+ * @param {string} name - Cookie name
+ * @returns {string} Mirror key
+ *
+ * @example
+ * preferenceStorageKey('ft_sheet_history');
+ * // => 'ft_pref_ft_sheet_history'
+ *
+ * @example
+ * preferenceStorageKey('ft_demographic_settings');
+ * // => 'ft_pref_ft_demographic_settings'
+ */
+function preferenceStorageKey(name) {
+    return `ft_pref_${name}`;
+}
+
+/**
+ * Reads a preference: the cookie wins, the localStorage mirror is the fallback.
+ *
+ * @param {string} name - Preference (cookie) name
+ * @returns {string|null} Stored raw string or null
+ *
+ * @example
+ * readPreference('ft_demographic_settings');
+ * // => '{"spousalGenderOffset":3,...}'
+ *
+ * @example
+ * readPreference('ft_sheet_history'); // never written
+ * // => null
+ */
+function readPreference(name) {
+    const fromCookie = readCookieValue(name);
+    if (fromCookie !== null && fromCookie !== '') return fromCookie;
+    if (typeof localStorage === 'undefined') return null;
+    try {
+        return localStorage.getItem(preferenceStorageKey(name));
+    } catch (e) {
+        return null;
+    }
+}
+
+/**
+ * Writes a preference to both the cookie and its localStorage mirror.
+ *
+ * @param {string} name - Preference (cookie) name
+ * @param {string} value - Raw string value
+ * @returns {boolean} Whether the cookie assignment succeeded
+ *
+ * @example
+ * writePreference('ft_sheet_history', '[]');
+ * // => true
+ *
+ * @example
+ * writePreference('ft_demographic_settings', JSON.stringify(settings));
+ */
+function writePreference(name, value) {
+    const wroteCookie = writeCookieValue(name, value);
+    if (typeof localStorage !== 'undefined') {
+        try {
+            localStorage.setItem(preferenceStorageKey(name), value);
+        } catch (e) {
+            // Quota exceeded or privacy mode: the cookie (if any) is still authoritative.
+        }
+    }
+    return wroteCookie;
+}
+
+/**
+ * Deletes a preference from the cookie jar and the localStorage mirror.
+ *
+ * @param {string} name - Preference (cookie) name
+ *
+ * @example
+ * removePreference('ft_sheet_history');
+ *
+ * @example
+ * removePreference('ft_demographic_settings');
+ * readPreference('ft_demographic_settings'); // => null
+ */
+function removePreference(name) {
+    writeCookieValue(name, '', 0);
+    if (typeof localStorage !== 'undefined') {
+        try {
+            localStorage.removeItem(preferenceStorageKey(name));
+        } catch (e) {
+            // Nothing to clean up in privacy mode.
+        }
+    }
+}
+
+// ─── Sheet history: ranked record of every spreadsheet ever opened ──────────
+
+/**
+ * @typedef {Object} SheetHistoryEntry
+ * @property {string} id - Google Sheet ID
+ * @property {string} title - Spreadsheet title ('' when never learned)
+ * @property {number} uses - How many times the sheet was loaded
+ * @property {number} lastUsed - Unix time (ms) of the latest load
+ */
+
+/**
+ * Whether a string is exactly one Google Sheet ID token (35-60 URL-safe characters).
+ *
+ * @param {*} id - Candidate
+ * @returns {boolean}
+ *
+ * @example
+ * isValidSheetId('1BQvyFoA_-u4MG-r1SRDel93F1TwEaN3I6v6p-kOH8z0');
+ * // => true
+ *
+ * @example
+ * isValidSheetId('https://docs.google.com/spreadsheets/d/1BQvy/edit');
+ * // => false (not a bare token)
+ */
+function isValidSheetId(id) {
+    return typeof id === 'string' && SHEET_ID_EXACT_PATTERN.test(id);
+}
+
+/**
+ * Orders history entries most-used first, breaking ties by most recent use, then by ID
+ * for determinism. Returns a new array; the input is not mutated.
+ *
+ * @param {Array<SheetHistoryEntry>} entries - Unordered entries
+ * @returns {Array<SheetHistoryEntry>} Ranked copy
+ *
+ * @example
+ * rankSheetHistory([{ id: 'a', uses: 1, lastUsed: 9 }, { id: 'b', uses: 5, lastUsed: 1 }]).map(e => e.id);
+ * // => ['b', 'a']
+ *
+ * @example
+ * rankSheetHistory([{ id: 'a', uses: 2, lastUsed: 1 }, { id: 'b', uses: 2, lastUsed: 7 }]).map(e => e.id);
+ * // => ['b', 'a'] (same use count, b is more recent)
+ */
+function rankSheetHistory(entries) {
+    return [...(entries || [])].sort((a, b) =>
+        (b.uses - a.uses) || (b.lastUsed - a.lastUsed) || String(a.id).localeCompare(String(b.id)));
+}
+
+/**
+ * Parses the persisted JSON (compact keys `i`/`t`/`n`/`l`, long keys also accepted),
+ * dropping corrupt, duplicate, or non-ID entries so a damaged cookie can never crash the UI.
+ *
+ * @param {string|null} json - Raw stored JSON
+ * @returns {Array<SheetHistoryEntry>} Clean, ranked entries (at most SHEET_HISTORY_LIMIT)
+ *
+ * @example
+ * parseSheetHistoryJson('[{"i":"1BQvyFoA_-u4MG-r1SRDel93F1TwEaN3I6v6p-kOH8z0","t":"Demo","n":2,"l":5}]');
+ * // => [{ id: '1BQvyFoA_-u4MG-r1SRDel93F1TwEaN3I6v6p-kOH8z0', title: 'Demo', uses: 2, lastUsed: 5 }]
+ *
+ * @example
+ * parseSheetHistoryJson('not json');
+ * // => []
+ */
+function parseSheetHistoryJson(json) {
+    if (!json) return [];
+    let parsed;
+    try {
+        parsed = JSON.parse(json);
+    } catch (e) {
+        return [];
+    }
+    if (!Array.isArray(parsed)) return [];
+    const seen = new Set();
+    const entries = [];
+    for (const raw of parsed) {
+        const id = raw && (raw.i || raw.id);
+        if (!isValidSheetId(id) || seen.has(id)) continue;
+        seen.add(id);
+        const title = raw.t !== undefined ? raw.t : raw.title;
+        entries.push({
+            id,
+            title: typeof title === 'string' ? title.slice(0, SHEET_TITLE_MAX_LENGTH) : '',
+            uses: Math.max(1, Math.round(Number(raw.n !== undefined ? raw.n : raw.uses) || 1)),
+            lastUsed: Math.max(0, Math.round(Number(raw.l !== undefined ? raw.l : raw.lastUsed) || 0)),
+        });
+    }
+    return rankSheetHistory(entries).slice(0, SHEET_HISTORY_LIMIT);
+}
+
+/**
+ * Serializes entries with compact keys, trimming the lowest-ranked entries until the
+ * URL-encoded payload fits the cookie budget (browsers drop over-size cookies silently).
+ *
+ * @param {Array<SheetHistoryEntry>} entries - Entries to persist
+ * @param {number} [budget=SHEET_HISTORY_COOKIE_BUDGET] - Max encoded length
+ * @returns {string} JSON text
+ *
+ * @example
+ * serializeSheetHistory([{ id: '1BQvyFoA_-u4MG-r1SRDel93F1TwEaN3I6v6p-kOH8z0', title: 'Demo', uses: 1, lastUsed: 5 }]);
+ * // => '[{"i":"1BQvyFoA_-u4MG-r1SRDel93F1TwEaN3I6v6p-kOH8z0","t":"Demo","n":1,"l":5}]'
+ *
+ * @example
+ * serializeSheetHistory([]);
+ * // => '[]'
+ */
+function serializeSheetHistory(entries, budget = SHEET_HISTORY_COOKIE_BUDGET) {
+    const ranked = rankSheetHistory(entries).slice(0, SHEET_HISTORY_LIMIT);
+    const toJson = (list) => JSON.stringify(list.map(e => ({
+        i: e.id, t: (e.title || '').slice(0, SHEET_TITLE_MAX_LENGTH), n: e.uses, l: e.lastUsed
+    })));
+    let json = toJson(ranked);
+    while (ranked.length > 1 && encodeURIComponent(json).length > budget) {
+        ranked.pop();
+        json = toJson(ranked);
+    }
+    return json;
+}
+
+/**
+ * Returns a new history with one more use of `id`: an existing entry gains a use and a
+ * fresher title (when one is supplied), a new entry starts at one use. Pure function.
+ *
+ * @param {Array<SheetHistoryEntry>} entries - Current history
+ * @param {string} id - Sheet ID that was just loaded
+ * @param {string} [title=''] - Spreadsheet title if known
+ * @param {number} [now=Date.now()] - Timestamp of the use
+ * @returns {Array<SheetHistoryEntry>} Ranked, capped history
+ *
+ * @example
+ * mergeSheetHistoryEntry([], '1BQvyFoA_-u4MG-r1SRDel93F1TwEaN3I6v6p-kOH8z0', 'Demo', 100);
+ * // => [{ id: '1BQvyFoA_-u4MG-r1SRDel93F1TwEaN3I6v6p-kOH8z0', title: 'Demo', uses: 1, lastUsed: 100 }]
+ *
+ * @example
+ * const once = mergeSheetHistoryEntry([], '1BQvyFoA_-u4MG-r1SRDel93F1TwEaN3I6v6p-kOH8z0', '', 100);
+ * mergeSheetHistoryEntry(once, '1BQvyFoA_-u4MG-r1SRDel93F1TwEaN3I6v6p-kOH8z0', 'Demo', 200)[0];
+ * // => { id: '1BQvy…', title: 'Demo', uses: 2, lastUsed: 200 }
+ */
+function mergeSheetHistoryEntry(entries, id, title = '', now = Date.now()) {
+    if (!isValidSheetId(id)) return rankSheetHistory(entries);
+    const cleanTitle = typeof title === 'string' ? title.trim().slice(0, SHEET_TITLE_MAX_LENGTH) : '';
+    const existing = (entries || []).find(e => e.id === id);
+    const others = (entries || []).filter(e => e.id !== id);
+    const merged = existing
+        ? { ...existing, title: cleanTitle || existing.title || '', uses: existing.uses + 1, lastUsed: now }
+        : { id, title: cleanTitle, uses: 1, lastUsed: now };
+    return rankSheetHistory([merged, ...others]).slice(0, SHEET_HISTORY_LIMIT);
+}
+
+/**
+ * Picks the most-used sheet (ties → most recent), or null for an empty history.
+ *
+ * @param {Array<SheetHistoryEntry>} entries - History
+ * @returns {SheetHistoryEntry|null}
+ *
+ * @example
+ * resolveMostUsedSheet([{ id: 'a', uses: 1, lastUsed: 1 }, { id: 'b', uses: 4, lastUsed: 1 }]).id;
+ * // => 'b'
+ *
+ * @example
+ * resolveMostUsedSheet([]);
+ * // => null
+ */
+function resolveMostUsedSheet(entries) {
+    const ranked = rankSheetHistory(entries);
+    return ranked.length > 0 ? ranked[0] : null;
+}
+
+/**
+ * Loads the persisted sheet history from the cookie (or its localStorage mirror).
+ *
+ * @returns {Array<SheetHistoryEntry>} Ranked entries, [] when nothing is stored
+ *
+ * @example
+ * readSheetHistory();
+ * // => [{ id: '1BQvy…', title: 'Ancestry Browser: Demo', uses: 3, lastUsed: 1759478400000 }]
+ *
+ * @example
+ * readSheetHistory(); // fresh browser
+ * // => []
+ */
+function readSheetHistory() {
+    return parseSheetHistoryJson(readPreference(SHEET_HISTORY_COOKIE));
+}
+
+/**
+ * Persists the sheet history (cookie + localStorage mirror).
+ *
+ * @param {Array<SheetHistoryEntry>} entries - Entries to store
+ * @returns {Array<SheetHistoryEntry>} The ranked entries that were written
+ *
+ * @example
+ * writeSheetHistory([{ id: '1BQvyFoA_-u4MG-r1SRDel93F1TwEaN3I6v6p-kOH8z0', title: 'Demo', uses: 1, lastUsed: Date.now() }]);
+ *
+ * @example
+ * writeSheetHistory([]); // forget everything
+ */
+function writeSheetHistory(entries) {
+    const ranked = rankSheetHistory(entries).slice(0, SHEET_HISTORY_LIMIT);
+    writePreference(SHEET_HISTORY_COOKIE, serializeSheetHistory(ranked));
+    return ranked;
+}
+
+/**
+ * Records one successful load of a sheet (bumping its use count) and persists the history.
+ *
+ * @param {string} id - Sheet ID that was loaded
+ * @param {string} [title=''] - Spreadsheet title when known
+ * @param {number} [now=Date.now()] - Timestamp
+ * @returns {Array<SheetHistoryEntry>} Updated ranked history
+ *
+ * @example
+ * recordSheetUse('1BQvyFoA_-u4MG-r1SRDel93F1TwEaN3I6v6p-kOH8z0', 'Ancestry Browser: Demo');
+ *
+ * @example
+ * recordSheetUse('1BQvyFoA_-u4MG-r1SRDel93F1TwEaN3I6v6p-kOH8z0'); // title still unknown
+ */
+function recordSheetUse(id, title = '', now = Date.now()) {
+    return writeSheetHistory(mergeSheetHistoryEntry(readSheetHistory(), id, title, now));
+}
+
+/**
+ * Removes one sheet from the persisted history (the "×" in the home-screen dropdown).
+ *
+ * @param {string} id - Sheet ID to forget
+ * @returns {Array<SheetHistoryEntry>} Remaining ranked history
+ *
+ * @example
+ * forgetSheetHistoryEntry('1BQvyFoA_-u4MG-r1SRDel93F1TwEaN3I6v6p-kOH8z0');
+ *
+ * @example
+ * forgetSheetHistoryEntry('unknown-id'); // no-op, returns the unchanged history
+ */
+function forgetSheetHistoryEntry(id) {
+    return writeSheetHistory(readSheetHistory().filter(e => e.id !== id));
+}
+
+// ─── Sheet references: URLs and bare IDs typed, pasted, or copied ───────────
+
+/**
+ * Canonical edit URL for a sheet ID (what the history dropdown and deep links use).
+ *
+ * @param {string} id - Sheet ID
+ * @returns {string} `https://docs.google.com/spreadsheets/d/<id>/edit`
+ *
+ * @example
+ * buildSheetUrlFromId('1BQvyFoA_-u4MG-r1SRDel93F1TwEaN3I6v6p-kOH8z0');
+ * // => 'https://docs.google.com/spreadsheets/d/1BQvyFoA_-u4MG-r1SRDel93F1TwEaN3I6v6p-kOH8z0/edit'
+ *
+ * @example
+ * buildSheetUrlFromId(DEMO_SHEET_ID).startsWith('https://docs.google.com/spreadsheets/d/');
+ * // => true
+ */
+function buildSheetUrlFromId(id) {
+    return `https://docs.google.com/spreadsheets/d/${id}/edit`;
+}
+
+/**
+ * Normalizes whatever the user typed into `{ id, url }`: a Google Sheets/Drive URL
+ * containing an ID, or a bare ID token. Anything else (prose, other sites) → null.
+ *
+ * @param {string} text - Raw textbox / clipboard content
+ * @returns {{id: string, url: string}|null}
+ *
+ * @example
+ * normalizeSheetReference(' https://docs.google.com/spreadsheets/d/1BQvyFoA_-u4MG-r1SRDel93F1TwEaN3I6v6p-kOH8z0/edit?usp=drive_link ');
+ * // => { id: '1BQvyFoA_-u4MG-r1SRDel93F1TwEaN3I6v6p-kOH8z0', url: 'https://docs.google.com/spreadsheets/d/1BQvyFoA_-u4MG-r1SRDel93F1TwEaN3I6v6p-kOH8z0/edit' }
+ *
+ * @example
+ * normalizeSheetReference('https://example.com/1BQvyFoA_-u4MG-r1SRDel93F1TwEaN3I6v6p-kOH8z0');
+ * // => null (not a Google host)
+ */
+function normalizeSheetReference(text) {
+    if (typeof text !== 'string') return null;
+    const trimmed = text.trim();
+    if (!trimmed || trimmed.length > 2048) return null;
+    const isGoogleUrl = /^(https?:\/\/)?(docs|drive|sheets)\.google\.com\//i.test(trimmed);
+    const bareId = SHEET_ID_EXACT_PATTERN.test(trimmed) ? trimmed : null;
+    const id = bareId || (isGoogleUrl ? extractSheetIdFromUrl(trimmed) : null);
+    if (!id) return null;
+    return { id, url: buildSheetUrlFromId(id) };
+}
+
+/**
+ * Stricter test used for CLIPBOARD content, where the text was not typed on purpose:
+ * Google URLs always qualify, but a bare token must contain an upper-case letter or a
+ * `-`/`_` so lower-case hex digests (git SHAs, hashes) are not mistaken for sheet IDs.
+ *
+ * @param {string} text - Clipboard text
+ * @returns {boolean}
+ *
+ * @example
+ * isLikelySheetReference('1BQvyFoA_-u4MG-r1SRDel93F1TwEaN3I6v6p-kOH8z0');
+ * // => true
+ *
+ * @example
+ * isLikelySheetReference('3bd09a0f6c2e4d1b8a7f9e0c1d2b3a4f5e6d7c8b'); // 40-char git SHA
+ * // => false
+ */
+function isLikelySheetReference(text) {
+    const ref = normalizeSheetReference(text);
+    if (!ref) return false;
+    const trimmed = text.trim();
+    if (/google\.com\//i.test(trimmed)) return true;
+    return /[A-Z_-]/.test(trimmed);
+}
+
+/**
+ * Reads the clipboard and returns a sheet reference if (and only if) it plausibly holds
+ * one. Permission prompts, unfocused documents, and unsupported browsers all yield null.
+ *
+ * @returns {Promise<{id: string, url: string}|null>}
+ *
+ * @example
+ * // Clipboard: 'https://docs.google.com/spreadsheets/d/1BQvy…/edit'
+ * await readClipboardSheetReference();
+ * // => { id: '1BQvy…', url: 'https://docs.google.com/spreadsheets/d/1BQvy…/edit' }
+ *
+ * @example
+ * // Clipboard: 'Dear aunt Mary, ...'
+ * await readClipboardSheetReference();
+ * // => null
+ */
+async function readClipboardSheetReference() {
+    try {
+        if (typeof navigator === 'undefined' || !navigator.clipboard || !navigator.clipboard.readText) return null;
+        const text = await navigator.clipboard.readText();
+        return isLikelySheetReference(text) ? normalizeSheetReference(text) : null;
+    } catch (e) {
+        return null;
+    }
+}
+
+/**
+ * Decides what the home-screen textbox shows before the user touches it:
+ * clipboard sheet → most-used sheet → demo sheet. Never loads anything by itself.
+ *
+ * @param {{id: string, url: string}|null} clipboardRef - Result of readClipboardSheetReference()
+ * @param {Array<SheetHistoryEntry>} history - Persisted history
+ * @returns {{id: string, url: string, source: 'clipboard'|'history'|'demo'}}
+ *
+ * @example
+ * resolveHomeScreenPrefill(null, []).source;
+ * // => 'demo'
+ *
+ * @example
+ * resolveHomeScreenPrefill(null, [{ id: '1BQvyFoA_-u4MG-r1SRDel93F1TwEaN3I6v6p-kOH8z0', title: '', uses: 2, lastUsed: 1 }]).source;
+ * // => 'history'
+ */
+function resolveHomeScreenPrefill(clipboardRef, history) {
+    if (clipboardRef && clipboardRef.id) {
+        return { id: clipboardRef.id, url: clipboardRef.url || buildSheetUrlFromId(clipboardRef.id), source: 'clipboard' };
+    }
+    const mostUsed = resolveMostUsedSheet(history);
+    if (mostUsed) {
+        return { id: mostUsed.id, url: buildSheetUrlFromId(mostUsed.id), source: 'history' };
+    }
+    return { id: DEMO_SHEET_ID, url: DEFAULT_URL, source: 'demo' };
+}
+
+/**
+ * Dropdown label: the title (or a placeholder) followed by the ID; the rest of the URL
+ * is deliberately omitted to save space.
+ *
+ * @param {SheetHistoryEntry} entry - History entry
+ * @returns {string}
+ *
+ * @example
+ * formatSheetHistoryLabel({ id: '1BQvyFoA_-u4MG-r1SRDel93F1TwEaN3I6v6p-kOH8z0', title: 'Ancestry Browser: Demo' });
+ * // => 'Ancestry Browser: Demo — 1BQvyFoA_-u4MG-r1SRDel93F1TwEaN3I6v6p-kOH8z0'
+ *
+ * @example
+ * formatSheetHistoryLabel({ id: '1BQvyFoA_-u4MG-r1SRDel93F1TwEaN3I6v6p-kOH8z0', title: '' });
+ * // => 'Untitled sheet — 1BQvyFoA_-u4MG-r1SRDel93F1TwEaN3I6v6p-kOH8z0'
+ */
+function formatSheetHistoryLabel(entry) {
+    const title = ((entry && entry.title) || '').trim() || 'Untitled sheet';
+    return `${title} — ${entry.id}`;
+}
+
+// ─── Sheet titles learned from the CSV export response ──────────────────────
+
+/** In-memory map sheetId → spreadsheet title, filled while crawling. */
+const sheetTitleRegistry = new Map();
+
+/**
+ * Extracts the file name from a `Content-Disposition` header, preferring the RFC 5987
+ * `filename*=UTF-8''…` form (which keeps punctuation Google strips from `filename=`).
+ *
+ * @param {string|null} header - Header value
+ * @returns {string|null} Decoded file name or null
+ *
+ * @example
+ * parseContentDispositionFilename('attachment; filename="AncestryBrowserDemo-Data.csv"; filename*=UTF-8\'\'Ancestry%20Browser%3A%20Demo%20-%20Data.csv');
+ * // => 'Ancestry Browser: Demo - Data.csv'
+ *
+ * @example
+ * parseContentDispositionFilename('attachment; filename="Family - Links.csv"');
+ * // => 'Family - Links.csv'
+ */
+function parseContentDispositionFilename(header) {
+    if (!header || typeof header !== 'string') return null;
+    const star = header.match(/filename\*\s*=\s*(?:[\w-]+)?'[^']*'([^;]+)/i);
+    if (star) {
+        const raw = star[1].trim();
+        try {
+            return decodeURIComponent(raw);
+        } catch (e) {
+            return raw;
+        }
+    }
+    const plain = header.match(/filename\s*=\s*"?([^";]+)"?/i);
+    return plain ? plain[1].trim() : null;
+}
+
+/**
+ * Turns Google's export file name `<Spreadsheet title> - <Tab name>.csv` into the title.
+ * Only the LAST " - " segment is the tab, so titles containing dashes survive.
+ *
+ * @param {string|null} filename - File name from Content-Disposition
+ * @returns {string} Spreadsheet title ('' when unknown)
+ *
+ * @example
+ * deriveSpreadsheetTitle('Ancestry Browser: Demo - Data.csv');
+ * // => 'Ancestry Browser: Demo'
+ *
+ * @example
+ * deriveSpreadsheetTitle('Smith - Jones Family - Sheet1.csv');
+ * // => 'Smith - Jones Family'
+ */
+function deriveSpreadsheetTitle(filename) {
+    if (!filename) return '';
+    let title = String(filename).trim().replace(/\.csv$/i, '');
+    const separator = title.lastIndexOf(' - ');
+    if (separator > 0) title = title.slice(0, separator);
+    return title.trim().slice(0, SHEET_TITLE_MAX_LENGTH);
+}
+
+/**
+ * Remembers a spreadsheet title for a sheet ID (ignores empty titles).
+ *
+ * @param {string} sheetId - Sheet ID
+ * @param {string} title - Title to remember
+ * @param {Map<string, string>} [registry=sheetTitleRegistry] - Target map (injectable for tests)
+ * @returns {boolean} Whether something was stored
+ *
+ * @example
+ * rememberSheetTitle('1BQvyFoA_-u4MG-r1SRDel93F1TwEaN3I6v6p-kOH8z0', 'Ancestry Browser: Demo');
+ * // => true
+ *
+ * @example
+ * rememberSheetTitle('1BQvyFoA_-u4MG-r1SRDel93F1TwEaN3I6v6p-kOH8z0', '');
+ * // => false
+ */
+function rememberSheetTitle(sheetId, title, registry = sheetTitleRegistry) {
+    const clean = typeof title === 'string' ? title.trim() : '';
+    if (!sheetId || !clean) return false;
+    registry.set(sheetId, clean.slice(0, SHEET_TITLE_MAX_LENGTH));
+    return true;
+}
+
+/**
+ * Looks up a remembered spreadsheet title ('' when the crawl never saw one, e.g. when
+ * the gviz fallback served the CSV without a Content-Disposition header).
+ *
+ * @param {string} sheetId - Sheet ID
+ * @param {Map<string, string>} [registry=sheetTitleRegistry] - Source map
+ * @returns {string}
+ *
+ * @example
+ * rememberSheetTitle('1BQvyFoA_-u4MG-r1SRDel93F1TwEaN3I6v6p-kOH8z0', 'Demo');
+ * getRememberedSheetTitle('1BQvyFoA_-u4MG-r1SRDel93F1TwEaN3I6v6p-kOH8z0');
+ * // => 'Demo'
+ *
+ * @example
+ * getRememberedSheetTitle('never-fetched');
+ * // => ''
+ */
+function getRememberedSheetTitle(sheetId, registry = sheetTitleRegistry) {
+    return registry.get(sheetId) || '';
+}
+
+/**
+ * Captures the spreadsheet title from a CSV export `Response` (Google exposes
+ * `Content-Disposition` via CORS). Safe to call with any response; failures are ignored.
+ *
+ * @param {string} sheetId - Sheet ID the response belongs to
+ * @param {Response|{headers: {get: Function}}} response - Fetch response
+ * @param {Map<string, string>} [registry=sheetTitleRegistry] - Target map
+ * @returns {string} The title learned ('' when none)
+ *
+ * @example
+ * rememberSheetTitleFromResponse('1BQvy…', { headers: { get: () => "attachment; filename*=UTF-8''Ancestry%20Browser%3A%20Demo%20-%20Data.csv" } });
+ * // => 'Ancestry Browser: Demo'
+ *
+ * @example
+ * rememberSheetTitleFromResponse('1BQvy…', { headers: { get: () => null } });
+ * // => ''
+ */
+function rememberSheetTitleFromResponse(sheetId, response, registry = sheetTitleRegistry) {
+    try {
+        const header = response && response.headers && typeof response.headers.get === 'function'
+            ? response.headers.get('content-disposition')
+            : null;
+        const title = deriveSpreadsheetTitle(parseContentDispositionFilename(header));
+        rememberSheetTitle(sheetId, title, registry);
+        return title;
+    } catch (e) {
+        return '';
+    }
+}
+
+// ─── Demographic settings persistence ───────────────────────────────────────
+
+/**
+ * Loads the raw user settings object stored by the Settings panel (null when none or corrupt).
+ * Sanitization happens in FamilyTreeBuilder.applyDemographicSettings, not here.
+ *
+ * @returns {Object|null}
+ *
+ * @example
+ * loadStoredDemographicSettings();
+ * // => { marriageAgeAnchors: [[1900, 15], ...], spousalGenderOffset: 2, ... }
+ *
+ * @example
+ * loadStoredDemographicSettings(); // nothing stored
+ * // => null
+ */
+function loadStoredDemographicSettings() {
+    const raw = readPreference(DEMOGRAPHIC_SETTINGS_COOKIE);
+    if (!raw) return null;
+    try {
+        const parsed = JSON.parse(raw);
+        return parsed && typeof parsed === 'object' && !Array.isArray(parsed) ? parsed : null;
+    } catch (e) {
+        return null;
+    }
+}
+
+/**
+ * Sanitizes and persists settings from the Settings panel.
+ *
+ * @param {Object} settings - Settings in DEFAULT_DEMOGRAPHIC_SETTINGS shape (partial allowed)
+ * @returns {Object} The sanitized settings that were stored
+ *
+ * @example
+ * saveDemographicSettings({ spousalGenderOffset: 3 }).spousalGenderOffset;
+ * // => 3
+ *
+ * @example
+ * saveDemographicSettings({ consecutiveSiblingGap: 99 }).consecutiveSiblingGap;
+ * // => 2 (out-of-range value replaced by the default before storing)
+ */
+function saveDemographicSettings(settings) {
+    const clean = FamilyTreeBuilder.sanitizeDemographicSettings(settings);
+    writePreference(DEMOGRAPHIC_SETTINGS_COOKIE, JSON.stringify(clean));
+    return clean;
+}
+
+/**
+ * Forgets the stored settings (the model itself is reset by the caller if desired).
+ *
+ * @example
+ * clearStoredDemographicSettings();
+ *
+ * @example
+ * clearStoredDemographicSettings();
+ * loadStoredDemographicSettings(); // => null
+ */
+function clearStoredDemographicSettings() {
+    removePreference(DEMOGRAPHIC_SETTINGS_COOKIE);
+}
+
+/**
+ * Installs the stored settings into the live model at startup, BEFORE the first build,
+ * so a returning user sees the tree deduced with their own conventions.
+ *
+ * @returns {Object|null} The applied settings, or null when nothing was stored
+ *
+ * @example
+ * applyStoredDemographicSettings(); // cookie holds { spousalGenderOffset: 4 }
+ * FamilyTreeBuilder.GENERATIONAL_GAPS.SPOUSAL_GENDER_OFFSET; // => 4
+ *
+ * @example
+ * applyStoredDemographicSettings(); // nothing stored
+ * // => null (shipped defaults untouched)
+ */
+function applyStoredDemographicSettings() {
+    const stored = loadStoredDemographicSettings();
+    if (!stored) return null;
+    return FamilyTreeBuilder.applyDemographicSettings(stored);
+}
+
+/**
+ * The "Clear stored data" action of the GDPR notice: deletes both preference cookies and
+ * their mirrors, empties the in-memory title registry, and restores the shipped model.
+ *
+ * @example
+ * clearStoredPreferences();
+ * readSheetHistory(); // => []
+ *
+ * @example
+ * clearStoredPreferences();
+ * loadStoredDemographicSettings(); // => null
+ */
+function clearStoredPreferences() {
+    removePreference(SHEET_HISTORY_COOKIE);
+    removePreference(DEMOGRAPHIC_SETTINGS_COOKIE);
+    sheetTitleRegistry.clear();
+    FamilyTreeBuilder.resetDemographicSettings();
+}
+
 
 // ============================================================================
 // MODULE 5: CUSTOM HOOKS & DATA ENGINE (Parallel Fetching & Caching)
@@ -24710,6 +26105,7 @@ async function fetchCSVData(sheetId, sheetName = '', timeoutMs = 8000, bypassCac
         if (!response.ok) {
             return sheetName ? null : fetchFallbackGvizCsv(sheetId, bypassCache, timeoutMs);
         }
+        if (!sheetName) rememberSheetTitleFromResponse(sheetId, response);
         const text = await response.text();
         if (!text || text.trim().startsWith('<html')) {
             return sheetName ? null : fetchFallbackGvizCsv(sheetId, bypassCache, timeoutMs);
@@ -40158,11 +41554,11 @@ const TopNavIconButton = ({ onClick, title, isActive = false, disabled = false, 
 };
 
 /**
- * Renders toolbar action buttons for Google Sheets import, standalone HTML export, and A4 print export.
+ * Renders toolbar action buttons for deduction settings, standalone HTML export, and A4 print export.
  *
  * @param {object} props
  * @param {boolean} props.isStandalone - Whether running in embedded standalone mode
- * @param {Function} props.handleImport - Spreadsheet import handler
+ * @param {Function} props.onOpenSettings - Opens the deduction settings panel
  * @param {boolean} props.isLoading - Whether tree data is actively loading
  * @param {Function} props.handleExportStandaloneApp - Standalone app export handler
  * @param {boolean} props.isExportingApp - Standalone app export in progress
@@ -40172,26 +41568,24 @@ const TopNavIconButton = ({ onClick, title, isActive = false, disabled = false, 
  * @returns {React.ReactNode}
  *
  * @example
- * <TopNavImportExportButtons isStandalone={false} handleImport={() => {}} isLoading={false} handleExportStandaloneApp={() => {}} isExportingApp={false} handleExportA4Print={() => {}} isExportingA4={false} tree={tree} />
+ * <TopNavImportExportButtons isStandalone={false} onOpenSettings={() => {}} isLoading={false} handleExportStandaloneApp={() => {}} isExportingApp={false} handleExportA4Print={() => {}} isExportingA4={false} tree={tree} />
  *
  * @example
- * <TopNavImportExportButtons isStandalone={true} handleImport={() => {}} isLoading={false} handleExportStandaloneApp={() => {}} isExportingApp={false} handleExportA4Print={() => {}} isExportingA4={false} tree={tree} />
+ * <TopNavImportExportButtons isStandalone={true} onOpenSettings={() => {}} isLoading={false} handleExportStandaloneApp={() => {}} isExportingApp={false} handleExportA4Print={() => {}} isExportingA4={false} tree={tree} />
  */
 const TopNavImportExportButtons = ({
-    isStandalone, handleImport, isLoading,
+    isStandalone, onOpenSettings, isLoading,
     handleExportStandaloneApp, isExportingApp,
     handleExportA4Print, isExportingA4, tree
 }) => (
     <>
+        <TopNavIconButton onClick={onOpenSettings} disabled={isLoading} title="Deduction Settings (marriage age by birth cohort)">
+            <Icons.Settings />
+        </TopNavIconButton>
         {!isStandalone && (
-            <>
-                <TopNavIconButton onClick={() => handleImport()} disabled={isLoading} title="Import Google Sheet from Clipboard URL">
-                    {isLoading ? <Icons.Loader /> : <Icons.Link />}
-                </TopNavIconButton>
-                <TopNavIconButton onClick={handleExportStandaloneApp} disabled={isExportingApp || isLoading} title="Download Standalone Interactive App (.html)">
-                    {isExportingApp ? <Icons.Loader /> : <Icons.Download />}
-                </TopNavIconButton>
-            </>
+            <TopNavIconButton onClick={handleExportStandaloneApp} disabled={isExportingApp || isLoading} title="Download Standalone Interactive App (.html)">
+                {isExportingApp ? <Icons.Loader /> : <Icons.Download />}
+            </TopNavIconButton>
         )}
         <TopNavIconButton onClick={handleExportA4Print} disabled={isExportingA4 || isLoading || !tree?.root} title="Print Tree / Export A4 Landscape SVGs (10pt names)">
             {isExportingA4 ? <Icons.Loader /> : <Icons.Printer />}
@@ -40249,11 +41643,11 @@ const TopNavViewToggleButtons = ({
 };
 
 /**
- * Top floating toolbar actions (Import, Export, Map, AI, Logs, Search).
+ * Top floating toolbar actions (Settings, Export, Map, AI, Logs, Search).
  *
  * @param {object} props
  * @param {boolean} props.isStandalone - Embedded standalone flag
- * @param {Function} props.handleImport - Import sheet handler
+ * @param {Function} props.onOpenSettings - Opens the deduction settings panel
  * @param {boolean} props.isLoading - Loading state
  * @param {Function} props.handleExportStandaloneApp - Export standalone app handler
  * @param {boolean} props.isExportingApp - Export standalone loading state
@@ -40275,7 +41669,7 @@ const TopNavViewToggleButtons = ({
  * @example
  *   <TopNavigationActions
  *     isStandalone={false}
- *     handleImport={() => {}}
+ *     onOpenSettings={() => {}}
  *     isLoading={false}
  *     handleExportStandaloneApp={() => {}}
  *     isExportingApp={false}
@@ -40297,7 +41691,7 @@ const TopNavViewToggleButtons = ({
  * @example
  *   <TopNavigationActions
  *     isStandalone={true}
- *     handleImport={fn}
+ *     onOpenSettings={fn}
  *     isLoading={true}
  *     handleExportStandaloneApp={fn}
  *     isExportingApp={false}
@@ -40320,7 +41714,7 @@ const TopNavigationActions = (props) => (
     <>
         <TopNavImportExportButtons
             isStandalone={props.isStandalone}
-            handleImport={props.handleImport}
+            onOpenSettings={props.onOpenSettings}
             isLoading={props.isLoading}
             handleExportStandaloneApp={props.handleExportStandaloneApp}
             isExportingApp={props.isExportingApp}
@@ -40379,7 +41773,7 @@ const TopNavigationErrorBanner = ({ errorMsg, onClear }) => {
  * @param {boolean} [props.isResizing=false] - Whether sidebar resize drag is active
  * @param {string} props.sheetUrl - Google sheet data source URL
  * @param {Function} props.setSheetUrl - Setter for sheet URL
- * @param {Function} props.handleImport - Import sheet handler
+ * @param {Function} props.onOpenSettings - Opens the deduction settings panel
  * @param {boolean} props.isLoading - Whether import or tree build is in progress
  * @param {string} props.searchQuery - Current omni search text
  * @param {Function} props.setSearchQuery - Setter for search text
@@ -40418,7 +41812,7 @@ const TopNavigationErrorBanner = ({ errorMsg, onClear }) => {
  *     isResizing={false}
  *     sheetUrl=""
  *     setSheetUrl={() => {}}
- *     handleImport={() => {}}
+ *     onOpenSettings={() => {}}
  *     isLoading={false}
  *     searchQuery=""
  *     setSearchQuery={() => {}}
@@ -40703,7 +42097,7 @@ const TopNavigationAiTitle = () => (
  * @param {Object} props
  * @param {boolean} props.showAI - Whether AI assistant panel is open.
  * @param {boolean} props.isStandalone - Whether running in embedded standalone mode.
- * @param {Function} props.handleImport - Spreadsheet import handler.
+ * @param {Function} props.onOpenSettings - Opens the deduction settings panel.
  * @param {boolean} props.isLoading - Whether tree data is loading.
  * @param {Function} props.handleExportStandaloneApp - Standalone app export handler.
  * @param {boolean} props.isExportingApp - Standalone app export status.
@@ -40731,7 +42125,7 @@ const TopNavigationAiTitle = () => (
  * <TopNavigationInactiveToolbar
  *   showAI={false}
  *   isStandalone={false}
- *   handleImport={() => {}}
+ *   onOpenSettings={() => {}}
  *   isLoading={false}
  *   handleExportStandaloneApp={() => {}}
  *   isExportingApp={false}
@@ -40759,7 +42153,7 @@ const TopNavigationAiTitle = () => (
  * <TopNavigationInactiveToolbar
  *   showAI={true}
  *   isStandalone={true}
- *   handleImport={() => {}}
+ *   onOpenSettings={() => {}}
  *   isLoading={false}
  *   handleExportStandaloneApp={() => {}}
  *   isExportingApp={false}
@@ -40784,14 +42178,14 @@ const TopNavigationAiTitle = () => (
  * />
  */
 const TopNavigationInactiveToolbar = ({
-    showAI, isStandalone, handleImport, isLoading, handleExportStandaloneApp,
+    showAI, isStandalone, onOpenSettings, isLoading, handleExportStandaloneApp,
     isExportingApp, handleExportA4Print, isExportingA4, tree, showMap,
     handleToggleMap, isAILoading, handleToggleAI, showLogs, setShowLogs,
     setShowAI, searchQuery, handleOpenSearch, isSidebarVisible, canGoBack,
     canGoForward, onGoBack, onGoForward, setFocusId
 }) => {
     const actionsProps = {
-        isStandalone, handleImport, isLoading, handleExportStandaloneApp, isExportingApp,
+        isStandalone, onOpenSettings, isLoading, handleExportStandaloneApp, isExportingApp,
         handleExportA4Print, isExportingA4, tree, showMap, onToggleMap: handleToggleMap,
         showAI, isAILoading, onToggleAI: handleToggleAI, showLogs, setShowLogs,
         setShowAI, searchQuery, handleOpenSearch
@@ -40826,34 +42220,9 @@ const TopNavigationInactiveToolbar = ({
  */
 const TreeLoadingBrandSplash = () => (
     <div data-testid="tree-loading-brand-splash" className="w-full h-full flex flex-col items-center justify-center gap-5 select-none pointer-events-none relative z-10 px-6">
-        <div className="flex items-center justify-center gap-5 bg-white/85 backdrop-blur-xl px-8 py-6 rounded-3xl shadow-[0_0_40px_rgba(79,70,229,0.14),0_0_12px_rgba(0,0,0,0.08)] border border-indigo-100/80">
-            <svg viewBox="0 0 64 64" className="w-[72px] h-[72px] shrink-0 drop-shadow-md" aria-hidden="true">
-                <defs>
-                    <linearGradient id="navBgGrad" x1="0%" y1="0%" x2="100%" y2="100%">
-                        <stop offset="0%" stopColor="#312e81" />
-                        <stop offset="50%" stopColor="#4f46e5" />
-                        <stop offset="100%" stopColor="#7c3aed" />
-                    </linearGradient>
-                    <linearGradient id="navTrunkGrad" x1="0%" y1="0%" x2="0%" y2="100%">
-                        <stop offset="0%" stopColor="#ffffff" />
-                        <stop offset="100%" stopColor="#c7d2fe" />
-                    </linearGradient>
-                </defs>
-                <rect x="2" y="2" width="60" height="60" rx="14" fill="url(#navBgGrad)" stroke="#a5b4fc" strokeOpacity="0.35" strokeWidth="1.5" />
-                <g fill="none" stroke="url(#navTrunkGrad)" strokeLinecap="round" strokeLinejoin="round">
-                    <path d="M32 49 V33" strokeWidth="4.5" />
-                    <path d="M23 51 C28 51 32 48 32 43" strokeWidth="3.2" />
-                    <path d="M41 51 C36 51 32 48 32 43" strokeWidth="3.2" />
-                    <path d="M32 36 C22 36 16 30 16 21" strokeWidth="3.4" />
-                    <path d="M32 34 V15" strokeWidth="3.4" />
-                    <path d="M32 36 C42 36 48 30 48 21" strokeWidth="3.4" />
-                </g>
-                <circle cx="32" cy="14" r="6.2" fill="#fde68a" stroke="#ffffff" strokeWidth="2" />
-                <circle cx="16" cy="21" r="5.2" fill="#ffffff" stroke="#c7d2fe" strokeWidth="1.5" />
-                <circle cx="48" cy="21" r="5.2" fill="#ffffff" stroke="#c7d2fe" strokeWidth="1.5" />
-                <circle cx="32" cy="35" r="3.6" fill="#ffffff" />
-            </svg>
-            <h1 className="text-[44px] leading-none tracking-wide font-bold bg-clip-text text-transparent bg-gradient-to-r from-slate-700 via-indigo-600/80 to-purple-600/80 opacity-85" style={{ fontFamily: "'Uncial Antiqua', serif" }}>Family Tree</h1>
+        <div className="flex items-center justify-center gap-5 bg-white/85 backdrop-blur-xl px-8 py-6 rounded-3xl shadow-[0_0_40px_rgba(92,124,51,0.16),0_0_12px_rgba(0,0,0,0.08)] border border-lime-900/10">
+            <BrandLogo size={96} idPrefix="splash" className="w-[96px] h-[96px] shrink-0 drop-shadow-md" />
+            <h1 className="text-[44px] leading-none tracking-wide font-bold bg-clip-text text-transparent bg-gradient-to-r from-slate-700 via-[#5c7c33] to-[#9cc95f] opacity-90" style={{ fontFamily: "'Uncial Antiqua', serif" }}>Family Tree</h1>
         </div>
         <div className="text-sm text-slate-400 font-sans tracking-wide animate-pulse">Fetching and building tree...</div>
     </div>
@@ -40973,7 +42342,7 @@ const TopNavigationMainBar = ({
  * @param {boolean} [props.isResizing=false] - Whether sidebar is actively being dragged/resized.
  * @param {string} props.sheetUrl - Google Sheets data source URL.
  * @param {Function} props.setSheetUrl - Sheet URL state setter.
- * @param {Function} props.handleImport - Spreadsheet import handler.
+ * @param {Function} props.onOpenSettings - Opens the deduction settings panel.
  * @param {boolean} props.isLoading - Whether tree data is actively loading.
  * @param {string} props.searchQuery - Current omni-search input query.
  * @param {Function} props.setSearchQuery - Search query state setter.
@@ -41011,7 +42380,7 @@ const TopNavigationMainBar = ({
  *   tree={{ people: {} }}
  *   isSidebarVisible={false}
  *   sidebarWidth={360}
- *   handleImport={() => {}}
+ *   onOpenSettings={() => {}}
  *   isLoading={false}
  *   searchQuery=""
  *   setSearchQuery={() => {}}
@@ -41050,7 +42419,7 @@ const TopNavigationMainBar = ({
  */
 const TopNavigation = (props) => {
     const {
-        tree, isSidebarVisible, sidebarWidth = 360, isResizing = false, sheetUrl, setSheetUrl, handleImport, isLoading, searchQuery, setSearchQuery, 
+        tree, isSidebarVisible, sidebarWidth = 360, isResizing = false, sheetUrl, setSheetUrl, onOpenSettings, isLoading, searchQuery, setSearchQuery, 
         handleSetFocusId, onFilterBy, activeFilter, showLogs, setShowLogs, errorMsg, setErrorMsg,
         showAI, setShowAI, canGoBack, canGoForward, onGoBack, onGoForward, isAILoading, handleExportImage, isExporting,
         handleExportStandaloneApp, isExportingApp, handleExportA4Print, isExportingA4,
@@ -41065,7 +42434,7 @@ const TopNavigation = (props) => {
         useTopNavigationHandlers({ showMap, setShowMap, setIsSidebarVisible, setActiveFilter, setFocusId, showAI, setShowAI, setShowLogs });
 
     const activeProps = { searchContainerRef, handleSearchContainerBlur, tree, searchQuery, setSearchQuery, onFilterBy, activeFilter, handleSetFocusId, setShowMap, setShowAI, setShowLogs, onAiSubmitQuery, omniSelectedIndex, setOmniSelectedIndex, setIsSearchActive, canGoBack, canGoForward, onGoBack, onGoForward, isSidebarVisible, setFocusId };
-    const inactiveProps = { showAI, isStandalone, handleImport, isLoading, handleExportStandaloneApp, isExportingApp, handleExportA4Print, isExportingA4, tree, showMap, handleToggleMap, isAILoading, handleToggleAI, showLogs, setShowLogs, setShowAI, searchQuery, handleOpenSearch, isSidebarVisible, canGoBack, canGoForward, onGoBack, onGoForward, setFocusId };
+    const inactiveProps = { showAI, isStandalone, onOpenSettings, isLoading, handleExportStandaloneApp, isExportingApp, handleExportA4Print, isExportingA4, tree, showMap, handleToggleMap, isAILoading, handleToggleAI, showLogs, setShowLogs, setShowAI, searchQuery, handleOpenSearch, isSidebarVisible, canGoBack, canGoForward, onGoBack, onGoForward, setFocusId };
 
     return (
         <div className="absolute top-4 left-0 right-0 z-50 flex flex-col gap-3 pointer-events-none">
@@ -41080,13 +42449,22 @@ const TopNavigation = (props) => {
 };
 
 const BUTTON_DOCUMENTATION_CATALOG = {
-    'Import Google Sheet from Clipboard URL': {
-        title: 'Import Google Sheet from Clipboard',
-        badge: 'Data Sync • Clipboard URL',
-        summary: 'Reads a **Google Sheets URL** or **Spreadsheet ID** from your clipboard (or prompts for one), crawls the root sheet and all linked branch tabs in **`Links`** in parallel, and rebuilds the family tree.',
+    'Family Tree Home – choose a Google Sheet': {
+        title: 'Home: Choose a Google Sheet',
+        badge: 'Data Source • Cookie History',
+        summary: 'Returns to the **home screen**, where you paste any **Google Sheets link or ID** (shared as *Anyone with the link can view*). Every sheet you open is remembered in a **browser cookie** and offered in a dropdown, most-used first.',
         examples: [
-            { label: 'Clipboard URL Sync', detail: 'Copy `https://docs.google.com/spreadsheets/d/1ZDpcz2.../edit` and click this button to import all linked family sheets.' },
-            { label: 'Direct URL Parameter', detail: 'Append `?id=1ZDpcz2ACmG63dUjHLfoHZSW7-dG51FbzaJVcqHYdkEI` to the app URL to load that root sheet automatically on startup.' }
+            { label: 'Switch Family', detail: 'Click the emblem, pick `Ancestry Browser: Demo — 1BQvy…` from the dropdown or paste another link, then press **Enter** or **Open**.' },
+            { label: 'Shareable Link', detail: 'After a sheet loads the address bar carries `?id=<sheetId>`; share it and the recipient skips the home screen entirely.' }
+        ]
+    },
+    'Deduction Settings (marriage age by birth cohort)': {
+        title: 'Deduction Settings',
+        badge: 'Priors • Cookie Persisted',
+        summary: 'Tunes the **social conventions** behind every guessed year: the bride\'s **age at first marriage per birth cohort** (born 1910s–20s ≈ 15, 1940s ≈ 22, 2000s ≈ 27), the wedding-to-first-child interval, the husband–wife age offset and the sibling spacing. **Apply** rebuilds the tree from cached rows without refetching.',
+        examples: [
+            { label: 'Later Marriages', detail: 'Raise the `1940` cohort from **22** to **25** and every mother born in the 1940s is deduced three years older than before.' },
+            { label: 'Reset', detail: 'Click **Reset to defaults** and then **Apply & rebuild tree** to return to the shipped curve; the cookie is overwritten with the defaults.' }
         ]
     },
     'Download Standalone Interactive App (.html)': {
@@ -44680,6 +46058,107 @@ function resolveInitialSheetUrl(searchString = null) {
 }
 
 /**
+ * Whether the page URL names a spreadsheet explicitly (`?id=`, `?sheet=`, `?url=` or
+ * `?sheetId=`). Only then does the app auto-load on startup; otherwise the home screen asks.
+ *
+ * @param {string|null} [searchString=null] - Optional search query override
+ * @returns {boolean}
+ *
+ * @example
+ * hasExplicitSheetQueryParam('?id=1BQvyFoA_-u4MG-r1SRDel93F1TwEaN3I6v6p-kOH8z0');
+ * // => true
+ *
+ * @example
+ * hasExplicitSheetQueryParam('?utm_source=mail');
+ * // => false
+ */
+function hasExplicitSheetQueryParam(searchString = null) {
+    try {
+        const query = searchString !== null
+            ? searchString
+            : (typeof window !== 'undefined' && window.location ? window.location.search : '');
+        if (!query) return false;
+        const params = new URLSearchParams(query);
+        const rawParam = params.get('id') || params.get('sheet') || params.get('url') || params.get('sheetId');
+        return Boolean(rawParam && rawParam.trim());
+    } catch (err) {
+        return false;
+    }
+}
+
+/**
+ * Builds the shareable page URL for a sheet: keeps the path and the `#view` hash, drops the
+ * legacy `sheet`/`url`/`sheetId` aliases and sets `?id=<sheetId>`.
+ *
+ * @param {{pathname?: string, search?: string, hash?: string}} location - Current location parts
+ * @param {string} sheetId - Sheet ID to encode
+ * @returns {string} Relative URL (path + search + hash)
+ *
+ * @example
+ * buildSheetDeepLinkUrl({ pathname: '/family-tree/', search: '', hash: '#p=Joseph_1920' }, '1BQvyFoA_-u4MG-r1SRDel93F1TwEaN3I6v6p-kOH8z0');
+ * // => '/family-tree/?id=1BQvyFoA_-u4MG-r1SRDel93F1TwEaN3I6v6p-kOH8z0#p=Joseph_1920'
+ *
+ * @example
+ * buildSheetDeepLinkUrl({ pathname: '/', search: '?sheet=old&x=1', hash: '' }, 'NEWID_000000000000000000000000000000000');
+ * // => '/?x=1&id=NEWID_000000000000000000000000000000000'
+ */
+function buildSheetDeepLinkUrl(location, sheetId) {
+    const params = new URLSearchParams((location && location.search) || '');
+    ['sheet', 'url', 'sheetId'].forEach(key => params.delete(key));
+    params.set('id', sheetId);
+    return `${(location && location.pathname) || '/'}?${params.toString()}${(location && location.hash) || ''}`;
+}
+
+/**
+ * Rewrites the address bar (no reload, no history entry) so the current sheet is bookmarkable
+ * and a page refresh reopens it instead of the home screen.
+ *
+ * @param {string} sheetId - Sheet ID that just loaded
+ * @returns {boolean} True when the URL was changed
+ *
+ * @example
+ * syncSheetIdIntoLocation('1BQvyFoA_-u4MG-r1SRDel93F1TwEaN3I6v6p-kOH8z0');
+ * // address bar: https://google.github.io/family-tree/?id=1BQvyFoA_-u4MG-r1SRDel93F1TwEaN3I6v6p-kOH8z0
+ *
+ * @example
+ * syncSheetIdIntoLocation('1BQvyFoA_-u4MG-r1SRDel93F1TwEaN3I6v6p-kOH8z0'); // already in the URL
+ * // => false
+ */
+function syncSheetIdIntoLocation(sheetId) {
+    if (typeof window === 'undefined' || !window.history || !window.location || !sheetId) return false;
+    try {
+        if (new URLSearchParams(window.location.search).get('id') === sheetId) return false;
+        window.history.replaceState(window.history.state, '', buildSheetDeepLinkUrl(window.location, sheetId));
+        return true;
+    } catch (err) {
+        return false;
+    }
+}
+
+/**
+ * Bookkeeping after a sheet imported successfully: bump it in the cookie history (with the
+ * title learned from the CSV response, if any) and put `?id=` in the address bar.
+ *
+ * @param {string} url - The URL that was imported
+ * @returns {string|null} The sheet ID recorded, or null when the URL carried none
+ *
+ * @example
+ * commitSuccessfulSheetImport('https://docs.google.com/spreadsheets/d/1BQvyFoA_-u4MG-r1SRDel93F1TwEaN3I6v6p-kOH8z0/edit');
+ * // => '1BQvyFoA_-u4MG-r1SRDel93F1TwEaN3I6v6p-kOH8z0'
+ *
+ * @example
+ * commitSuccessfulSheetImport('https://example.com/no-id');
+ * // => null
+ */
+function commitSuccessfulSheetImport(url) {
+    const sheetId = extractSheetIdFromUrl(url);
+    if (!sheetId) return null;
+    recordSheetUse(sheetId, getRememberedSheetTitle(sheetId));
+    syncSheetIdIntoLocation(sheetId);
+    return sheetId;
+}
+
+/**
  * Initializes the tree dataset on application mount.
  * Checks for embedded standalone datasets first, then imports from the resolved initial URL.
  *
@@ -44721,8 +46200,9 @@ function initializeTreeDataset({
         return true; // Completely avoid fetching Google Sheets
     }
 
-    const initialUrl = resolveInitialSheetUrl();
-    handleImport(initialUrl);
+    // No sheet named in the URL: leave the home screen open and let the user choose.
+    if (!hasExplicitSheetQueryParam()) return false;
+    handleImport(resolveInitialSheetUrl());
     return false;
 }
 
@@ -44922,7 +46402,7 @@ function applyImportSuccessFocus({
 function useTreeImportHandler({
     setSheetUrl, resetInitialFit, setShowLogs, setShowAI,
     setActiveFilter, resetNavHistory, fetchFromUrl,
-    setFocusId, setIsSidebarVisible, centerOnPerson
+    setFocusId, setIsSidebarVisible, centerOnPerson, setIsHomeOpen = () => {}
 }) {
     return useCallback(async (directUrl = null) => {
         const urlToLoad = await resolveImportUrl(directUrl);
@@ -44944,8 +46424,13 @@ function useTreeImportHandler({
                 newRootId, setFocusId, setActiveFilter, setIsSidebarVisible,
                 centerOnPerson, setShowLogs
             });
+            commitSuccessfulSheetImport(urlToLoad);
+        } else {
+            // Nothing usable came back: bring the home screen back so the error sits next to the textbox.
+            setShowLogs(false);
+            setIsHomeOpen(true);
         }
-    }, [setSheetUrl, resetInitialFit, setShowLogs, setShowAI, setActiveFilter, resetNavHistory, fetchFromUrl, setFocusId, setIsSidebarVisible, centerOnPerson]);
+    }, [setSheetUrl, resetInitialFit, setShowLogs, setShowAI, setActiveFilter, resetNavHistory, fetchFromUrl, setFocusId, setIsSidebarVisible, centerOnPerson, setIsHomeOpen]);
 }
 
 /**
@@ -45945,6 +47430,7 @@ const MainCanvasViewport = (props) => {
             onPointerCancel={showMap ? undefined : handlePointerUp} 
             onWheel={showMap ? undefined : handleWheel}
         >
+            <BrandWatermark />
             <MainCanvasMapOverlay {...mapOverlayProps} />
             <div className={!showMap ? "w-full h-full relative" : "hidden"}>
                 <TreeCanvasContent {...canvasContentProps} />
@@ -47205,6 +48691,755 @@ function useUrlViewStateSync(params) {
 }
 
 // ============================================================================
+// MODULE 6.13: HOME SCREEN — pick the Google Sheet to visualize
+//
+// The app no longer hard-codes a spreadsheet. On first visit (or after the Home
+// button) this full-screen overlay asks for a Google Sheets link or ID. The box is
+// PREFILLED (clipboard → most-used sheet → demo) but nothing loads until the user
+// presses Enter or clicks Open. Every sheet ever opened is remembered in a cookie
+// (see 05_hooks/00_BrowserPreferences.jsx) and offered in a dropdown.
+// ============================================================================
+
+/** One-line hint under the textbox, keyed by where the prefilled value came from. */
+const HOME_PREFILL_HINTS = Object.freeze({
+    clipboard: 'Found a Google Sheets link on your clipboard — press Enter to open it.',
+    history: 'Your most-used sheet is prefilled — press Enter to open it, or pick another from the list.',
+    demo: 'Try the demo sheet, or paste your own link. The sheet must be shared as "Anyone with the link can view".',
+});
+
+/**
+ * Tries to prefill from the clipboard now, again when the window gains focus (Chrome rejects
+ * `readText()` while the document is unfocused), and once on the first pointer interaction.
+ * Returns a disposer; after disposal no prefill is applied.
+ *
+ * @param {Function} applyPrefill - Receives `{ id, url }` when the clipboard holds a sheet reference
+ * @returns {Function} Cleanup that detaches the listeners
+ *
+ * @example
+ * const dispose = attachClipboardPrefill(ref => setValue(ref.url));
+ * // later, when the home screen closes:
+ * dispose();
+ *
+ * @example
+ * useEffect(() => attachClipboardPrefill(applyPrefill), [isOpen]);
+ */
+function attachClipboardPrefill(applyPrefill) {
+    let disposed = false;
+    const attempt = async () => {
+        const ref = await readClipboardSheetReference();
+        if (!disposed && ref) applyPrefill(ref);
+    };
+    attempt();
+    if (typeof window === 'undefined') return () => { disposed = true; };
+    window.addEventListener('focus', attempt);
+    window.addEventListener('pointerdown', attempt, { once: true });
+    return () => {
+        disposed = true;
+        window.removeEventListener('focus', attempt);
+        window.removeEventListener('pointerdown', attempt);
+    };
+}
+
+/**
+ * State of the home-screen form: textbox value and where its prefill came from, the
+ * persisted sheet history, the validation error, and the dropdown open flag. Re-prefills
+ * each time the screen opens, but never overwrites text the user has already typed.
+ *
+ * @param {boolean} isOpen - Whether the home screen is showing
+ * @returns {{value: string, setValue: Function, prefillSource: string, history: Array, error: string,
+ *   isListOpen: boolean, setIsListOpen: Function, validate: Function, forget: Function, markTouched: Function}}
+ *
+ * @example
+ * const form = useSheetSourceForm(true);
+ * form.value; // => 'https://docs.google.com/spreadsheets/d/<most-used or demo id>/edit…'
+ *
+ * @example
+ * const form = useSheetSourceForm(isHomeOpen);
+ * const ref = form.validate('not a link'); // => null, form.error is set
+ */
+function useSheetSourceForm(isOpen) {
+    const [history, setHistory] = useState(() => readSheetHistory());
+    const [value, setValue] = useState('');
+    const [prefillSource, setPrefillSource] = useState('demo');
+    const [error, setError] = useState('');
+    const [isListOpen, setIsListOpen] = useState(false);
+    const touchedRef = useRef(false);
+
+    useEffect(() => {
+        if (!isOpen) return undefined;
+        touchedRef.current = false;
+        const freshHistory = readSheetHistory();
+        setHistory(freshHistory);
+        setError('');
+        setIsListOpen(false);
+        const applyPrefill = (clipboardRef) => {
+            if (touchedRef.current) return;
+            const prefill = resolveHomeScreenPrefill(clipboardRef, freshHistory);
+            setValue(prefill.url);
+            setPrefillSource(prefill.source);
+        };
+        applyPrefill(null);
+        return attachClipboardPrefill(applyPrefill);
+    }, [isOpen]);
+
+    const markTouched = useCallback(() => { touchedRef.current = true; }, []);
+    const validate = useCallback((text) => {
+        const ref = normalizeSheetReference(text);
+        setError(ref ? '' : 'That does not look like a Google Sheets link or spreadsheet ID (35–60 letters, digits, "-" or "_").');
+        return ref;
+    }, []);
+    const forget = useCallback((id) => setHistory(forgetSheetHistoryEntry(id)), []);
+    const resetHistory = useCallback(() => setHistory([]), []);
+
+    return { value, setValue, prefillSource, history, error, isListOpen, setIsListOpen, validate, forget, resetHistory, markTouched };
+}
+
+/**
+ * One row of the recent-sheets dropdown: bold title (or an "Untitled sheet" placeholder),
+ * the bare ID in monospace, the use count, and a "×" that forgets the entry.
+ *
+ * @param {object} props
+ * @param {{id: string, title: string, uses: number}} props.entry - History entry
+ * @param {Function} props.onPick - Called with the entry when the row is clicked
+ * @param {Function} props.onForget - Called with the entry ID when "×" is clicked
+ * @returns {React.ReactNode}
+ *
+ * @example
+ * <SheetHistoryRow entry={{ id: '1BQvy…', title: 'Ancestry Browser: Demo', uses: 3 }} onPick={open} onForget={forget} />
+ *
+ * @example
+ * <SheetHistoryRow entry={{ id: '1BQvy…', title: '', uses: 1 }} onPick={open} onForget={forget} />
+ */
+const SheetHistoryRow = ({ entry, onPick, onForget }) => (
+    <li className="group flex items-center gap-3 px-3 py-2 hover:bg-[#f3f8ea] cursor-pointer" onClick={() => onPick(entry)}
+        title={formatSheetHistoryLabel(entry)} data-sheet-id={entry.id}>
+        <div className="min-w-0 flex-1">
+            <div className={`truncate text-sm ${entry.title ? 'font-semibold text-slate-800' : 'italic text-slate-500'}`}>
+                {entry.title || 'Untitled sheet'}
+            </div>
+            <div className="truncate font-mono text-[11px] text-slate-500">{entry.id}</div>
+        </div>
+        <span className="shrink-0 rounded-full bg-slate-100 px-2 py-0.5 text-[11px] text-slate-500" title={`Opened ${entry.uses} time${entry.uses === 1 ? '' : 's'}`}>
+            ×{entry.uses}
+        </span>
+        <button type="button" onClick={(e) => { e.stopPropagation(); onForget(entry.id); }}
+            className="shrink-0 rounded-md p-1 text-slate-400 opacity-0 transition-opacity hover:bg-red-50 hover:text-red-600 group-hover:opacity-100"
+            title="Forget this sheet" aria-label={`Forget ${entry.title || entry.id}`}>
+            <Icons.Close />
+        </button>
+    </li>
+);
+
+/**
+ * The recent-sheets dropdown anchored under the textbox.
+ *
+ * @param {object} props
+ * @param {Array} props.entries - Ranked history entries (most used first)
+ * @param {Function} props.onPick - Row click handler
+ * @param {Function} props.onForget - "×" handler
+ * @returns {React.ReactNode|null}
+ *
+ * @example
+ * <SheetHistoryDropdown entries={history} onPick={open} onForget={forget} />
+ *
+ * @example
+ * <SheetHistoryDropdown entries={[]} onPick={open} onForget={forget} /> // renders nothing
+ */
+const SheetHistoryDropdown = ({ entries, onPick, onForget }) => {
+    if (!entries || entries.length === 0) return null;
+    return (
+        <div data-testid="sheet-history-dropdown" className="absolute left-0 right-0 top-full z-20 mt-1 overflow-hidden rounded-xl border border-slate-200 bg-white shadow-xl">
+            <div className="flex items-center justify-between border-b border-slate-100 px-3 py-1.5 text-[11px] uppercase tracking-wide text-slate-400">
+                <span>Sheets you have opened</span>
+                <span>most used first</span>
+            </div>
+            <ul className="custom-scrollbar max-h-72 overflow-y-auto py-1">
+                {entries.map(entry => (
+                    <SheetHistoryRow key={entry.id} entry={entry} onPick={onPick} onForget={onForget} />
+                ))}
+            </ul>
+        </div>
+    );
+};
+
+/**
+ * Textbox + history caret + dropdown. Typing marks the form as touched (so a late clipboard
+ * read cannot overwrite it); picking a row fills the box and opens that sheet at once.
+ *
+ * @param {object} props
+ * @param {object} props.form - Result of useSheetSourceForm()
+ * @param {Function} props.onSubmit - Called with the raw text to validate and open
+ * @returns {React.ReactNode}
+ *
+ * @example
+ * <SheetSourceInput form={form} onSubmit={handleSubmit} />
+ *
+ * @example
+ * <SheetSourceInput form={useSheetSourceForm(true)} onSubmit={(text) => console.log(text)} />
+ */
+const SheetSourceInput = ({ form, onSubmit }) => {
+    const containerRef = useRef(null);
+    useSearchContainerDismiss(containerRef, form.isListOpen, form.setIsListOpen);
+    const pickEntry = (entry) => {
+        const url = buildSheetUrlFromId(entry.id);
+        form.markTouched();
+        form.setValue(url);
+        form.setIsListOpen(false);
+        onSubmit(url);
+    };
+    return (
+        <div ref={containerRef} className="relative flex-1">
+            <input id="sheet-source-input" type="text" value={form.value} autoFocus spellCheck={false} autoComplete="off"
+                onChange={(e) => { form.markTouched(); form.setValue(e.target.value); }}
+                onKeyDown={(e) => { if (e.key === 'Escape') form.setIsListOpen(false); if (e.key === 'ArrowDown') form.setIsListOpen(true); }}
+                onFocus={(e) => e.target.select()}
+                placeholder="https://docs.google.com/spreadsheets/d/…  or a spreadsheet ID"
+                className="h-12 w-full rounded-xl border border-slate-300 bg-white pl-4 pr-11 font-mono text-[13px] text-slate-800 shadow-sm outline-none transition focus:border-[#5c7c33] focus:ring-2 focus:ring-[#9cc95f]/50" />
+            {form.history.length > 0 && (
+                <button type="button" onClick={() => form.setIsListOpen(!form.isListOpen)} aria-label="Show sheets you have opened before"
+                    title="Sheets you have opened before" aria-expanded={form.isListOpen}
+                    className="absolute right-1.5 top-1/2 flex h-9 w-9 -translate-y-1/2 items-center justify-center rounded-lg text-slate-500 hover:bg-slate-100">
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><polyline points="6 9 12 15 18 9" /></svg>
+                </button>
+            )}
+            {form.isListOpen && <SheetHistoryDropdown entries={form.history} onPick={pickEntry} onForget={form.forget} />}
+        </div>
+    );
+};
+
+/**
+ * The whole form: label, textbox row with the Open button, prefill hint, and any error
+ * (local validation or the import error passed down from the app).
+ *
+ * @param {object} props
+ * @param {object} props.form - Result of useSheetSourceForm()
+ * @param {boolean} props.isLoading - Whether an import is in flight
+ * @param {string} props.errorMsg - Last import error from the app ('' when none)
+ * @param {Function} props.onSubmit - Called with the raw text
+ * @returns {React.ReactNode}
+ *
+ * @example
+ * <SheetSourceForm form={form} isLoading={false} errorMsg="" onSubmit={handleSubmit} />
+ *
+ * @example
+ * <SheetSourceForm form={form} isLoading={true} errorMsg="Invalid Google Sheets URL." onSubmit={handleSubmit} />
+ */
+const SheetSourceForm = ({ form, isLoading, errorMsg, onSubmit }) => (
+    <form className="relative z-10 w-full max-w-2xl px-6" onSubmit={(e) => { e.preventDefault(); onSubmit(form.value); }}>
+        <label htmlFor="sheet-source-input" className="mb-2 block text-sm font-semibold text-slate-600">
+            Google Sheets link or spreadsheet ID
+        </label>
+        <div className="flex gap-2">
+            <SheetSourceInput form={form} onSubmit={onSubmit} />
+            <button type="submit" disabled={isLoading}
+                className="h-12 shrink-0 rounded-xl bg-[#5c7c33] px-6 text-sm font-semibold text-white shadow-md transition hover:bg-[#4a6a27] disabled:opacity-60">
+                {isLoading ? 'Loading…' : 'Open'}
+            </button>
+        </div>
+        <div className="mt-2 text-xs text-slate-500" data-prefill-source={form.prefillSource}>
+            {HOME_PREFILL_HINTS[form.prefillSource] || HOME_PREFILL_HINTS.demo}
+        </div>
+        {(form.error || errorMsg) && (
+            <div role="alert" className="mt-3 rounded-xl border border-red-200 bg-red-50 px-4 py-2.5 text-sm text-red-700">
+                {form.error || errorMsg}
+            </div>
+        )}
+    </form>
+);
+
+/**
+ * Emblem, title and tagline at the top of the home screen.
+ *
+ * @returns {React.ReactNode}
+ *
+ * @example
+ * <HomeScreenHeader />
+ *
+ * @example
+ * <div className="flex flex-col items-center"><HomeScreenHeader /><SheetSourceForm … /></div>
+ */
+const HomeScreenHeader = () => (
+    <div className="relative z-10 mb-8 flex flex-col items-center text-center select-none">
+        <BrandLogo size={128} idPrefix="home" className="h-[128px] w-[128px] drop-shadow-md" />
+        <h1 className="mt-5 bg-gradient-to-r from-slate-700 via-[#5c7c33] to-[#9cc95f] bg-clip-text text-[48px] font-bold leading-none tracking-wide text-transparent"
+            style={{ fontFamily: "'Uncial Antiqua', serif" }}>Family Tree</h1>
+        <p className="mt-3 max-w-xl text-sm text-slate-500">
+            Turn a family register kept in a Google Sheet into an interactive, deduced family tree.
+        </p>
+    </div>
+);
+
+/**
+ * GDPR / privacy notice pinned to the bottom of the home screen, with a one-click
+ * "Clear stored data" that deletes both preference cookies and their mirrors.
+ *
+ * @param {object} props
+ * @param {Function} props.onClearStoredData - Handler for the clear button
+ * @returns {React.ReactNode}
+ *
+ * @example
+ * <HomePrivacyNotice onClearStoredData={() => clearStoredPreferences()} />
+ *
+ * @example
+ * <HomePrivacyNotice onClearStoredData={handleClearStoredData} />
+ */
+const HomePrivacyNotice = ({ onClearStoredData }) => (
+    <footer data-testid="home-privacy-notice" className="relative z-10 mt-auto w-full max-w-3xl px-6 pb-5 pt-8 text-center text-[11px] leading-relaxed text-slate-500">
+        <strong className="text-slate-600">Privacy.</strong> For your convenience this app stores the spreadsheet links you open and your
+        deduction settings in cookies / local storage on <em>this device only</em>. Nothing is sent to any server other than
+        Google Sheets, which serves the spreadsheet you request. You can withdraw this at any time:{' '}
+        <button type="button" onClick={onClearStoredData} className="font-semibold text-[#5c7c33] underline underline-offset-2 hover:text-[#4a6a27]">
+            clear stored data
+        </button>.
+    </footer>
+);
+
+/**
+ * Full-screen home overlay (z-70, above every toolbar). Hidden entirely while `isOpen` is
+ * false, so the tree beneath keeps its state when the user returns to it.
+ *
+ * @param {object} props
+ * @param {boolean} props.isOpen - Show the overlay
+ * @param {boolean} props.hasTree - A tree is loaded (shows the "Back to the tree" link)
+ * @param {boolean} props.isLoading - Import in flight
+ * @param {string} props.errorMsg - Last import error ('' when none)
+ * @param {Function} props.onSubmit - Called with a canonical sheet URL to open
+ * @param {Function} props.onClose - Closes the overlay without loading anything
+ * @param {Function} props.onClearStoredData - GDPR clear handler
+ * @returns {React.ReactNode|null}
+ *
+ * @example
+ * <SheetSourceHomeScreen isOpen={true} hasTree={false} isLoading={false} errorMsg="" onSubmit={handleImport} onClose={() => {}} onClearStoredData={clearStoredPreferences} />
+ *
+ * @example
+ * <SheetSourceHomeScreen isOpen={isHomeOpen} hasTree={Boolean(tree.rootId)} isLoading={isLoading} errorMsg={errorMsg} onSubmit={openSheet} onClose={closeHome} onClearStoredData={clearAll} />
+ */
+const SheetSourceHomeScreen = ({ isOpen, hasTree, isLoading, errorMsg, onSubmit, onClose, onClearStoredData }) => {
+    const form = useSheetSourceForm(isOpen);
+    if (!isOpen) return null;
+    const handleSubmit = (text) => {
+        const ref = form.validate(text);
+        if (ref) onSubmit(ref.url);
+    };
+    const handleClear = () => {
+        onClearStoredData();
+        form.resetHistory();
+    };
+    return (
+        <div data-testid="sheet-source-home" className="fixed inset-0 z-[70] flex flex-col items-center overflow-y-auto bg-gradient-to-b from-white via-[#f7faf1] to-[#e9f2da] pt-[9vh]"
+            style={{ fontFamily: '"Google Sans", system-ui, -apple-system, sans-serif' }}>
+            <BrandWatermark size={640} opacity={0.06} />
+            <HomeScreenHeader />
+            <SheetSourceForm form={form} isLoading={isLoading} errorMsg={errorMsg} onSubmit={handleSubmit} />
+            {hasTree && (
+                <button type="button" onClick={onClose} className="relative z-10 mt-6 text-sm font-medium text-[#5c7c33] hover:underline">
+                    ← Back to the tree
+                </button>
+            )}
+            <HomePrivacyNotice onClearStoredData={handleClear} />
+        </div>
+    );
+};
+
+/**
+ * The emblem button pinned to the top-left corner of every tree/map view; clicking it
+ * returns to the home screen. Not rendered in standalone `.html` exports, which carry
+ * their own embedded dataset and cannot switch sheets.
+ *
+ * @param {object} props
+ * @param {Function} props.onClick - Opens the home screen
+ * @returns {React.ReactNode|null}
+ *
+ * @example
+ * <HomeButton onClick={() => setIsHomeOpen(true)} />
+ *
+ * @example
+ * {!isHomeOpen && <HomeButton onClick={openHome} />}
+ */
+const HomeButton = ({ onClick }) => {
+    if (isStandaloneExportMode()) return null;
+    return (
+        <button type="button" onClick={onClick} data-testid="home-button" title="Family Tree Home – choose a Google Sheet"
+            className="fixed left-4 top-4 z-[60] flex h-[44px] w-[44px] items-center justify-center rounded-xl border border-slate-200 bg-white/95 shadow-sm backdrop-blur-md transition-colors hover:bg-[#f3f8ea]">
+            <BrandLogo size={30} idPrefix="homebtn" className="h-[30px] w-[30px]" />
+        </button>
+    );
+};
+
+// ============================================================================
+// MODULE 6.14: DEDUCTION SETTINGS PANEL
+//
+// Lets the user tune the social conventions behind the year deductions — above all
+// the bride's age at first marriage per birth cohort (born 1910s-20s ≈ 15, 1940s
+// ≈ 20-25, 2000s ≈ 25-30). Applying rebuilds the tree from the cached rows (no
+// refetch) and persists the values in a cookie (05_hooks/00_BrowserPreferences.jsx).
+// ============================================================================
+
+/** The three scalar knobs shown under the cohort table, with their sanitizer bounds. */
+const DEMOGRAPHIC_SCALAR_FIELDS = Object.freeze([
+    { key: 'firstChildAfterMarriage', label: 'Wedding → first child', min: 0, max: 15,
+      hint: 'Added to the bride\'s marriage age to get a mother\'s age at her first child.' },
+    { key: 'spousalGenderOffset', label: 'Husband older than wife by', min: 0, max: 15,
+      hint: 'Every husband/father deduction is shifted by this many years from the wife.' },
+    { key: 'consecutiveSiblingGap', label: 'Gap between consecutive siblings', min: 1, max: 6,
+      hint: 'Spacing assumed between birth-order siblings whose years are unknown.' },
+]);
+
+/** Birth cohorts used to illustrate the anchor curve inside the panel. */
+const MARRIAGE_AGE_PREVIEW_COHORTS = Object.freeze([1915, 1945, 1975, 2005]);
+
+/**
+ * Suggests the next cohort row for the anchors table: ten years after the last row at the
+ * same age (so the curve stays flat until the user edits it), or [1900, 15] for an empty table.
+ *
+ * @param {Array<Array<number|string>>} anchors - Current (possibly half-typed) rows
+ * @returns {Array<number>} New [birthYear, marriageAge] row
+ *
+ * @example
+ * suggestNextMarriageAnchor([[1900, 15], [1940, 22]]);
+ * // => [1950, 22]
+ *
+ * @example
+ * suggestNextMarriageAnchor([]);
+ * // => [1900, 15]
+ *
+ * @example
+ * suggestNextMarriageAnchor([[1940, '']]); // age cell still blank
+ * // => [1950, 15]
+ */
+function suggestNextMarriageAnchor(anchors) {
+    const last = Array.isArray(anchors) && anchors.length > 0 ? anchors[anchors.length - 1] : null;
+    const asNumber = (v) => (v === '' || v === null || v === undefined ? Number.NaN : Number(v));
+    const year = last ? asNumber(last[0]) : Number.NaN;
+    const age = last ? asNumber(last[1]) : Number.NaN;
+    return [Number.isFinite(year) ? year + 10 : 1900, Number.isFinite(age) ? age : 15];
+}
+
+/**
+ * Evaluates a DRAFT (unapplied, possibly half-typed) settings object on a few illustrative
+ * cohorts: marriage age and age at first child, after the same sanitization Apply would do.
+ *
+ * @param {Object} draft - Settings in DEFAULT_DEMOGRAPHIC_SETTINGS shape (raw strings allowed)
+ * @param {Array<number>} [cohorts=MARRIAGE_AGE_PREVIEW_COHORTS] - Birth years to illustrate
+ * @returns {Array<{year: number, marriageAge: number, firstChildAge: number}>}
+ *
+ * @example
+ * describeMarriageAgePreview(FamilyTreeBuilder.getDemographicSettings(), [1915, 2005]);
+ * // => [{ year: 1915, marriageAge: 15, firstChildAge: 17 }, { year: 2005, marriageAge: 27.3, firstChildAge: 29 }]
+ *
+ * @example
+ * describeMarriageAgePreview({ marriageAgeAnchors: [[1900, 20], [2000, 30]], firstChildAfterMarriage: 1 }, [1950]);
+ * // => [{ year: 1950, marriageAge: 25, firstChildAge: 26 }]
+ */
+function describeMarriageAgePreview(draft, cohorts = MARRIAGE_AGE_PREVIEW_COHORTS) {
+    const clean = FamilyTreeBuilder.sanitizeDemographicSettings(draft);
+    const model = {
+        ANCHORS: clean.marriageAgeAnchors,
+        REFERENCE_COHORT_YEAR: FamilyTreeBuilder.MARRIAGE_AGE_MODEL.REFERENCE_COHORT_YEAR,
+    };
+    return cohorts.map(year => {
+        const marriageAge = FamilyTreeBuilder.marriageAgeForBirthYear(year, model);
+        return {
+            year,
+            marriageAge: Math.round(marriageAge * 10) / 10,
+            firstChildAge: Math.round(marriageAge + clean.firstChildAfterMarriage),
+        };
+    });
+}
+
+/**
+ * Draft state for the panel. Re-seeded from the LIVE model each time the panel opens, so
+ * cancelling discards edits. Cells hold raw input strings until Apply sanitizes them.
+ *
+ * @param {boolean} isOpen - Whether the panel is showing
+ * @returns {{draft: Object, setField: Function, setAnchor: Function, addAnchor: Function, removeAnchor: Function, resetDraft: Function}}
+ *
+ * @example
+ * const { draft, setField } = useDemographicSettingsDraft(true);
+ * setField('spousalGenderOffset', '3');
+ *
+ * @example
+ * const { draft, setAnchor, addAnchor } = useDemographicSettingsDraft(isSettingsOpen);
+ * addAnchor(); setAnchor(draft.marriageAgeAnchors.length, 1, '29');
+ */
+function useDemographicSettingsDraft(isOpen) {
+    const [draft, setDraft] = useState(() => FamilyTreeBuilder.getDemographicSettings());
+    useEffect(() => {
+        if (isOpen) setDraft(FamilyTreeBuilder.getDemographicSettings());
+    }, [isOpen]);
+    const setField = useCallback((key, value) => setDraft(d => ({ ...d, [key]: value })), []);
+    const setAnchor = useCallback((index, column, value) => setDraft(d => ({
+        ...d,
+        marriageAgeAnchors: d.marriageAgeAnchors.map((pair, i) =>
+            i === index ? pair.map((cell, c) => (c === column ? value : cell)) : pair),
+    })), []);
+    const addAnchor = useCallback(() => setDraft(d => ({
+        ...d, marriageAgeAnchors: [...d.marriageAgeAnchors, suggestNextMarriageAnchor(d.marriageAgeAnchors)],
+    })), []);
+    const removeAnchor = useCallback((index) => setDraft(d => ({
+        ...d, marriageAgeAnchors: d.marriageAgeAnchors.filter((_, i) => i !== index),
+    })), []);
+    const resetDraft = useCallback(() => setDraft(
+        FamilyTreeBuilder.sanitizeDemographicSettings(FamilyTreeBuilder.DEFAULT_DEMOGRAPHIC_SETTINGS)
+    ), []);
+    return { draft, setField, setAnchor, addAnchor, removeAnchor, resetDraft };
+}
+
+/**
+ * Compact numeric input used throughout the panel.
+ *
+ * @param {object} props
+ * @param {number|string} props.value - Current raw value
+ * @param {Function} props.onChange - Receives the raw input string
+ * @param {number} [props.min] - Minimum (advisory; the sanitizer enforces it)
+ * @param {number} [props.max] - Maximum (advisory)
+ * @param {string} [props.ariaLabel] - Accessible label
+ * @param {string} [props.className=''] - Extra classes
+ * @returns {React.ReactNode}
+ *
+ * @example
+ * <SettingsNumberInput value={22} onChange={v => setAnchor(2, 1, v)} min={10} max={60} ariaLabel="Marriage age" />
+ *
+ * @example
+ * <SettingsNumberInput value="2" onChange={v => setField('spousalGenderOffset', v)} min={0} max={15} />
+ */
+const SettingsNumberInput = ({ value, onChange, min, max, ariaLabel, className = '' }) => (
+    <input type="number" inputMode="numeric" value={value} min={min} max={max} aria-label={ariaLabel}
+        onChange={(e) => onChange(e.target.value)}
+        className={`h-9 w-24 rounded-lg border border-slate-300 bg-white px-2 text-right font-mono text-sm text-slate-800 outline-none focus:border-[#5c7c33] focus:ring-2 focus:ring-[#9cc95f]/50 ${className}`} />
+);
+
+/**
+ * Editable table of [birth cohort → bride's age at first marriage] anchors with add/remove.
+ *
+ * @param {object} props
+ * @param {Array<Array<number|string>>} props.anchors - Draft rows
+ * @param {Function} props.onCell - (rowIndex, column, rawValue)
+ * @param {Function} props.onAdd - Append a row
+ * @param {Function} props.onRemove - (rowIndex)
+ * @returns {React.ReactNode}
+ *
+ * @example
+ * <MarriageAgeAnchorsTable anchors={draft.marriageAgeAnchors} onCell={setAnchor} onAdd={addAnchor} onRemove={removeAnchor} />
+ *
+ * @example
+ * <MarriageAgeAnchorsTable anchors={[[1900, 15], [2000, 27]]} onCell={() => {}} onAdd={() => {}} onRemove={() => {}} />
+ */
+const MarriageAgeAnchorsTable = ({ anchors, onCell, onAdd, onRemove }) => (
+    <div data-testid="marriage-age-anchors" className="rounded-xl border border-slate-200 bg-white">
+        <div className="grid grid-cols-[1fr_1fr_40px] gap-2 border-b border-slate-100 px-3 py-2 text-[11px] font-semibold uppercase tracking-wide text-slate-500">
+            <span>Bride born in</span><span>Married at age</span><span />
+        </div>
+        {anchors.map((pair, index) => (
+            <div key={index} className="grid grid-cols-[1fr_1fr_40px] items-center gap-2 px-3 py-1.5">
+                <SettingsNumberInput value={pair[0]} min={1600} max={2200} ariaLabel={`Cohort ${index + 1} birth year`} onChange={(v) => onCell(index, 0, v)} />
+                <SettingsNumberInput value={pair[1]} min={10} max={60} ariaLabel={`Cohort ${index + 1} marriage age`} onChange={(v) => onCell(index, 1, v)} />
+                <button type="button" onClick={() => onRemove(index)} disabled={anchors.length <= 1} title="Remove this cohort"
+                    className="flex h-8 w-8 items-center justify-center rounded-lg text-slate-400 hover:bg-red-50 hover:text-red-600 disabled:opacity-30">
+                    <Icons.Close />
+                </button>
+            </div>
+        ))}
+        <button type="button" onClick={onAdd} className="w-full border-t border-slate-100 px-3 py-2 text-left text-xs font-semibold text-[#5c7c33] hover:bg-[#f3f8ea]">
+            + Add a cohort
+        </button>
+    </div>
+);
+
+/**
+ * Sentence-style preview of the draft curve ("Born 1915 → marries at 15, first child at 17 …").
+ *
+ * @param {object} props
+ * @param {Object} props.draft - Draft settings
+ * @returns {React.ReactNode}
+ *
+ * @example
+ * <MarriageAgePreview draft={draft} />
+ *
+ * @example
+ * <MarriageAgePreview draft={FamilyTreeBuilder.getDemographicSettings()} />
+ */
+const MarriageAgePreview = ({ draft }) => (
+    <ul data-testid="marriage-age-preview" className="mt-2 grid grid-cols-2 gap-x-4 gap-y-1 text-xs text-slate-500 sm:grid-cols-4">
+        {describeMarriageAgePreview(draft).map(row => (
+            <li key={row.year}>
+                <span className="font-semibold text-slate-600">Born {row.year}</span>
+                <br />marries at {row.marriageAge}, first child at {row.firstChildAge}
+            </li>
+        ))}
+    </ul>
+);
+
+/**
+ * The three scalar knobs (wedding → first child, husband/wife offset, sibling gap).
+ *
+ * @param {object} props
+ * @param {Object} props.draft - Draft settings
+ * @param {Function} props.onField - (key, rawValue)
+ * @returns {React.ReactNode}
+ *
+ * @example
+ * <DemographicScalarFields draft={draft} onField={setField} />
+ *
+ * @example
+ * <DemographicScalarFields draft={{ firstChildAfterMarriage: 2, spousalGenderOffset: 2, consecutiveSiblingGap: 2 }} onField={() => {}} />
+ */
+const DemographicScalarFields = ({ draft, onField }) => (
+    <div className="divide-y divide-slate-100 rounded-xl border border-slate-200 bg-white">
+        {DEMOGRAPHIC_SCALAR_FIELDS.map(field => (
+            <label key={field.key} className="flex items-center gap-4 px-3 py-2.5">
+                <span className="flex-1">
+                    <span className="block text-sm font-medium text-slate-700">{field.label}</span>
+                    <span className="block text-[11px] text-slate-500">{field.hint}</span>
+                </span>
+                <SettingsNumberInput value={draft[field.key]} min={field.min} max={field.max} ariaLabel={field.label}
+                    onChange={(v) => onField(field.key, v)} />
+                <span className="w-10 text-xs text-slate-400">years</span>
+            </label>
+        ))}
+    </div>
+);
+
+/**
+ * Footer actions: reset to shipped defaults, cancel, apply.
+ *
+ * @param {object} props
+ * @param {Function} props.onReset - Reset draft to defaults
+ * @param {Function} props.onCancel - Close without applying
+ * @param {Function} props.onApply - Apply the draft
+ * @returns {React.ReactNode}
+ *
+ * @example
+ * <SettingsPanelFooter onReset={resetDraft} onCancel={onClose} onApply={apply} />
+ *
+ * @example
+ * <SettingsPanelFooter onReset={() => {}} onCancel={() => {}} onApply={() => {}} />
+ */
+const SettingsPanelFooter = ({ onReset, onCancel, onApply }) => (
+    <div className="flex items-center gap-2 border-t border-slate-200 px-5 py-3">
+        <button type="button" onClick={onReset} className="text-xs font-semibold text-slate-500 hover:text-slate-700">Reset to defaults</button>
+        <span className="flex-1" />
+        <button type="button" onClick={onCancel} className="h-9 rounded-lg px-4 text-sm font-medium text-slate-600 hover:bg-slate-100">Cancel</button>
+        <button type="button" onClick={onApply} className="h-9 rounded-lg bg-[#5c7c33] px-4 text-sm font-semibold text-white shadow-sm hover:bg-[#4a6a27]">
+            Apply &amp; rebuild tree
+        </button>
+    </div>
+);
+
+/**
+ * Modal panel for the deduction settings. Apply sanitizes the draft, installs it into the
+ * live model, persists it, and asks the app to rebuild the tree from cached rows.
+ *
+ * @param {object} props
+ * @param {boolean} props.isOpen - Show the panel
+ * @param {Function} props.onClose - Close without applying
+ * @param {Function} props.onApply - Receives the raw draft to apply
+ * @returns {React.ReactNode|null}
+ *
+ * @example
+ * <DeductionSettingsPanel isOpen={isSettingsOpen} onClose={() => setIsSettingsOpen(false)} onApply={applyDemographicSettings} />
+ *
+ * @example
+ * <DeductionSettingsPanel isOpen={true} onClose={close} onApply={(draft) => console.log(draft)} />
+ */
+const DeductionSettingsPanel = ({ isOpen, onClose, onApply }) => {
+    const { draft, setField, setAnchor, addAnchor, removeAnchor, resetDraft } = useDemographicSettingsDraft(isOpen);
+    if (!isOpen) return null;
+    return (
+        <div data-testid="deduction-settings-panel" className="fixed inset-0 z-[65] flex items-center justify-center bg-slate-900/30 p-4 backdrop-blur-[2px]" onPointerDown={onClose}>
+            <div role="dialog" aria-modal="true" aria-labelledby="deduction-settings-title" onPointerDown={(e) => e.stopPropagation()}
+                className="flex max-h-full w-full max-w-xl flex-col overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-2xl">
+                <div className="flex items-start gap-3 border-b border-slate-200 px-5 py-4">
+                    <div className="flex-1">
+                        <h2 id="deduction-settings-title" className="text-lg font-bold text-slate-800">Deduction settings</h2>
+                        <p className="mt-0.5 text-xs text-slate-500">How missing birth years are guessed. Saved in a cookie on this device; applies to every sheet you open here.</p>
+                    </div>
+                    <button type="button" onClick={onClose} className="rounded-lg p-1.5 text-slate-400 hover:bg-slate-100 hover:text-slate-700" title="Close"><Icons.Close /></button>
+                </div>
+                <div className="custom-scrollbar flex-1 space-y-5 overflow-y-auto px-5 py-4">
+                    <section>
+                        <h3 className="text-sm font-semibold text-slate-700">Bride's age at first marriage, by birth cohort</h3>
+                        <p className="mb-2 text-[11px] text-slate-500">Ages between cohorts are interpolated; outside the table the nearest cohort applies.</p>
+                        <MarriageAgeAnchorsTable anchors={draft.marriageAgeAnchors} onCell={setAnchor} onAdd={addAnchor} onRemove={removeAnchor} />
+                        <MarriageAgePreview draft={draft} />
+                    </section>
+                    <section>
+                        <h3 className="mb-2 text-sm font-semibold text-slate-700">Other intervals</h3>
+                        <DemographicScalarFields draft={draft} onField={setField} />
+                    </section>
+                </div>
+                <SettingsPanelFooter onReset={resetDraft} onCancel={onClose} onApply={() => onApply(draft)} />
+            </div>
+        </div>
+    );
+};
+
+/**
+ * Rebuilds the family tree from the rows cached for `sheetUrl` (localStorage cache or the
+ * embedded standalone payload) using the CURRENT model tables — no network round-trip.
+ *
+ * @param {string} sheetUrl - Sheet URL whose rows are cached
+ * @param {Function} appendLog - Activity log callback
+ * @returns {FamilyTree|null} The rebuilt tree, or null when nothing is cached
+ *
+ * @example
+ * const tree = rebuildTreeFromCachedRows(sheetUrl, appendLog);
+ * if (tree) setTree(tree);
+ *
+ * @example
+ * rebuildTreeFromCachedRows('https://docs.google.com/spreadsheets/d/never-loaded/edit', () => {});
+ * // => null
+ */
+function rebuildTreeFromCachedRows(sheetUrl, appendLog) {
+    const cached = TreeDataCache.get(sheetUrl);
+    if (!cached || !Array.isArray(cached.rows) || cached.rows.length === 0) return null;
+    const tStart = performance.now();
+    try {
+        const tree = new FamilyTreeBuilder(cached.rows, cached.sheetTags || {}).build();
+        appendLog(`⚙️ Rebuilt ${cached.rows.length} profiles with the updated deduction settings in ${Math.round(performance.now() - tStart)}ms.`, 'success');
+        return tree;
+    } catch (e) {
+        console.error('Rebuild with new settings failed:', e);
+        return null;
+    }
+}
+
+/**
+ * Hook returning the Apply handler for the panel: install + persist the settings, then
+ * rebuild from cached rows (falling back to a fresh fetch when nothing is cached).
+ *
+ * @param {object} params
+ * @param {string} params.sheetUrl - Current sheet URL
+ * @param {Function} params.setTree - Tree state setter
+ * @param {Function} params.appendLog - Activity log callback
+ * @param {Function} params.fetchFromUrl - Network fetch fallback
+ * @param {Function} params.setIsSettingsOpen - Panel visibility setter
+ * @returns {Function} applyDemographicSettingsDraft(draft)
+ *
+ * @example
+ * const applyDraft = useDemographicSettingsApply({ sheetUrl, setTree, appendLog, fetchFromUrl, setIsSettingsOpen });
+ * <DeductionSettingsPanel isOpen={isSettingsOpen} onClose={close} onApply={applyDraft} />
+ *
+ * @example
+ * const applyDraft = useDemographicSettingsApply({ sheetUrl: '', setTree: () => {}, appendLog: () => {}, fetchFromUrl: async () => false, setIsSettingsOpen: () => {} });
+ * applyDraft({ spousalGenderOffset: 3 });
+ */
+function useDemographicSettingsApply({ sheetUrl, setTree, appendLog, fetchFromUrl, setIsSettingsOpen }) {
+    return useCallback((draft) => {
+        const applied = FamilyTreeBuilder.applyDemographicSettings(draft);
+        saveDemographicSettings(applied);
+        setIsSettingsOpen(false);
+        if (!sheetUrl) return;
+        const rebuilt = rebuildTreeFromCachedRows(sheetUrl, appendLog);
+        if (rebuilt) {
+            setTree(rebuilt);
+        } else {
+            fetchFromUrl(sheetUrl, { skipCache: true });
+        }
+    }, [sheetUrl, setTree, appendLog, fetchFromUrl, setIsSettingsOpen]);
+}
+
+// ============================================================================
 // MODULE 7: MAIN APP COMPONENT
 /**
  * Main application component for the interactive Family Tree visualizer.
@@ -47221,8 +49456,30 @@ function useUrlViewStateSync(params) {
  *   root.render(<App />);
  */
 /**
+ * Visibility of the two app-shell overlays: the home screen (sheet chooser) and the
+ * deduction-settings panel. The home screen opens on startup unless the page URL already
+ * names a sheet (`?id=`) or the app runs as a standalone export with embedded data.
+ *
+ * @param {boolean} isStandalone - Whether running inside an exported standalone file
+ * @returns {{isHomeOpen: boolean, setIsHomeOpen: Function, isSettingsOpen: boolean, setIsSettingsOpen: Function}}
+ *
+ * @example
+ * const { isHomeOpen, setIsHomeOpen } = useAppShellPanels(false);
+ * // on https://google.github.io/family-tree/  => isHomeOpen === true
+ *
+ * @example
+ * const shell = useAppShellPanels(true); // standalone export
+ * shell.isHomeOpen; // => false
+ */
+function useAppShellPanels(isStandalone) {
+    const [isHomeOpen, setIsHomeOpen] = useState(() => !isStandalone && !hasExplicitSheetQueryParam());
+    const [isSettingsOpen, setIsSettingsOpen] = useState(false);
+    return { isHomeOpen, setIsHomeOpen, isSettingsOpen, setIsSettingsOpen };
+}
+
+/**
  * Bundles top-level application state including dataset records, navigation history,
- * panel visibility, and sidebar sizing.
+ * panel visibility, shell overlays (home screen, settings), and sidebar sizing.
  *
  * @returns {object} Core application state and updater functions.
  *
@@ -47231,17 +49488,20 @@ function useUrlViewStateSync(params) {
  * console.log(core.tree, core.focusId);
  *
  * @example
- * const { isStandalone, isLoading, treeStats } = useAppCoreState();
+ * const { isStandalone, isLoading, treeStats, isHomeOpen } = useAppCoreState();
  */
 function useAppCoreState() {
     const isStandalone = isStandaloneExportMode();
+    // Install the user's cookie-stored deduction settings BEFORE any tree is built.
+    useState(() => applyStoredDemographicSettings());
     const data = useAncestryData();
     const nav = useTreeNavigationHistory(data.focusId);
     const panels = useAppPanels(data.isLoading);
     const sidebar = useSidebarResize(360);
+    const shell = useAppShellPanels(isStandalone);
     const treeStats = useMemo(() => data.tree.getStats(), [data.tree]);
-    const [sheetUrl, setSheetUrl] = useState(() => resolveInitialSheetUrl());
-    return { isStandalone, ...data, ...nav, ...panels, ...sidebar, treeStats, sheetUrl, setSheetUrl };
+    const [sheetUrl, setSheetUrl] = useState(() => (hasExplicitSheetQueryParam() ? resolveInitialSheetUrl() : ''));
+    return { isStandalone, ...data, ...nav, ...panels, ...sidebar, ...shell, treeStats, sheetUrl, setSheetUrl };
 }
 
 /**
@@ -47357,7 +49617,7 @@ function useAppFocusAndNavigation(params) {
         setShowAI: params.setShowAI, setActiveFilter: params.setActiveFilter,
         resetNavHistory: params.resetNavHistory, fetchFromUrl: params.fetchFromUrl,
         setFocusId: params.setFocusId, setIsSidebarVisible: params.setIsSidebarVisible,
-        centerOnPerson: params.centerOnPerson
+        centerOnPerson: params.centerOnPerson, setIsHomeOpen: params.setIsHomeOpen
     });
     return { handleSetFocusId, ...navActions, handleImport };
 }
@@ -47424,7 +49684,7 @@ function buildTopNavProps(core, viewport, focusNav, layoutExp) {
     return {
         tree: core.tree, isSidebarVisible: core.isAnySidebarOpen, sidebarWidth: core.sidebarWidth,
         isResizing: core.isResizingSidebar, sheetUrl: core.sheetUrl, setSheetUrl: core.setSheetUrl,
-        handleImport: focusNav.handleImport, isLoading: core.isLoading, searchQuery: viewport.searchQuery,
+        onOpenSettings: () => core.setIsSettingsOpen(true), isLoading: core.isLoading, searchQuery: viewport.searchQuery,
         setSearchQuery: viewport.setSearchQuery, handleSetFocusId: focusNav.handleSetFocusId,
         onFilterBy: focusNav.handleFilterBy, activeFilter: core.activeFilter, showLogs: core.showLogs,
         setShowLogs: core.setShowLogs, errorMsg: core.errorMsg, setErrorMsg: core.setErrorMsg,
@@ -47519,9 +49779,45 @@ function buildZoomProps(core, viewport) {
 }
 
 /**
+ * Formats properties for the app-shell overlays: the Home emblem button, the sheet-chooser
+ * home screen and the deduction-settings panel.
+ *
+ * @param {object} core - Core state slice
+ * @param {object} focusNav - Focus and navigation handlers (provides handleImport)
+ * @param {Function} applyDemographicSettingsDraft - Settings-panel Apply handler
+ * @returns {object} Props for AppRootView's shell overlays.
+ *
+ * @example
+ * const shellProps = buildShellProps(core, focusNav, applyDraft);
+ * <SheetSourceHomeScreen {...shellProps.homeScreenProps} />
+ *
+ * @example
+ * const { homeButtonProps, settingsPanelProps } = buildShellProps(core, focusNav, applyDraft);
+ */
+function buildShellProps(core, focusNav, applyDemographicSettingsDraft) {
+    const openSheet = (url) => {
+        core.setIsHomeOpen(false);
+        focusNav.handleImport(url);
+    };
+    return {
+        isHomeOpen: core.isHomeOpen,
+        homeButtonProps: { onClick: () => core.setIsHomeOpen(true) },
+        homeScreenProps: {
+            isOpen: core.isHomeOpen, hasTree: Boolean(core.tree.rootId), isLoading: core.isLoading,
+            errorMsg: core.errorMsg, onSubmit: openSheet, onClose: () => core.setIsHomeOpen(false),
+            onClearStoredData: clearStoredPreferences
+        },
+        settingsPanelProps: {
+            isOpen: core.isSettingsOpen, onClose: () => core.setIsSettingsOpen(false),
+            onApply: applyDemographicSettingsDraft
+        }
+    };
+}
+
+/**
  * Master hook that coordinates domain hooks and returns complete visual props for the root view.
  *
- * @returns {object} Object containing topNavProps, zoomProps, viewportProps, sidebarProps, and showZoom.
+ * @returns {object} Object containing topNavProps, zoomProps, viewportProps, sidebarProps, shellProps, and showZoom.
  *
  * @example
  * const { topNavProps, viewportProps } = useAppViewModel();
@@ -47545,25 +49841,32 @@ function useAppViewModel() {
         ...core, ...viewport, ...focusNav
     });
     useUrlViewStateSync({ ...core, ...viewport, ...focusNav });
+    const applyDemographicSettingsDraft = useDemographicSettingsApply({
+        sheetUrl: core.sheetUrl, setTree: core.setTree, appendLog: core.appendLog,
+        fetchFromUrl: core.fetchFromUrl, setIsSettingsOpen: core.setIsSettingsOpen
+    });
 
     return {
         showZoom: !core.showMap && !core.showLogs && !core.isLoading,
         topNavProps: buildTopNavProps(core, viewport, focusNav, layoutExp),
         zoomProps: buildZoomProps(core, viewport),
         viewportProps: buildViewportProps(core, viewport, focusNav, layoutExp),
-        sidebarProps: buildSidebarProps(core, viewport, focusNav)
+        sidebarProps: buildSidebarProps(core, viewport, focusNav),
+        shellProps: buildShellProps(core, focusNav, applyDemographicSettingsDraft)
     };
 }
 
 /**
  * Main application visual layout shell containing top navigation, zoom controls,
- * main canvas viewport, and collateral sidebar panels.
+ * main canvas viewport, collateral sidebar panels, and the shell overlays
+ * (Home emblem button, sheet-chooser home screen, deduction-settings panel).
  *
  * @param {object} props
  * @param {object} props.topNavProps - Props for TopNavigation component
  * @param {object} props.zoomProps - Props for ZoomControls component
  * @param {object} props.viewportProps - Props for MainCanvasViewport component
  * @param {object} props.sidebarProps - Props for PersonSidebar component
+ * @param {object} props.shellProps - Props for the home button, home screen and settings panel
  * @param {boolean} props.showZoom - Whether zoom controls should be displayed
  * @returns {React.ReactNode}
  *
@@ -47573,6 +49876,7 @@ function useAppViewModel() {
  *   zoomProps={{}}
  *   viewportProps={{}}
  *   sidebarProps={{}}
+ *   shellProps={{ isHomeOpen: false, homeButtonProps: {}, homeScreenProps: {}, settingsPanelProps: {} }}
  *   showZoom={true}
  * />
  *
@@ -47582,17 +49886,21 @@ function useAppViewModel() {
  *   zoomProps={{}}
  *   viewportProps={{}}
  *   sidebarProps={{}}
+ *   shellProps={{ isHomeOpen: true, homeButtonProps: {}, homeScreenProps: { isOpen: true }, settingsPanelProps: {} }}
  *   showZoom={false}
  * />
  */
-const AppRootView = ({ topNavProps, zoomProps, viewportProps, sidebarProps, showZoom }) => (
+const AppRootView = ({ topNavProps, zoomProps, viewportProps, sidebarProps, shellProps, showZoom }) => (
     <div className="flex h-screen w-screen bg-white overflow-hidden text-slate-800 relative" style={{ fontFamily: '"Google Sans", system-ui, -apple-system, sans-serif' }}>
         <GlobalAppStyles />
         <ButtonDocTooltipOverlay />
         <TopNavigation {...topNavProps} />
+        {!shellProps.isHomeOpen && <HomeButton {...shellProps.homeButtonProps} />}
         {showZoom && <ZoomControls {...zoomProps} />}
         <MainCanvasViewport {...viewportProps} />
         <PersonSidebar {...sidebarProps} />
+        <DeductionSettingsPanel {...shellProps.settingsPanelProps} />
+        <SheetSourceHomeScreen {...shellProps.homeScreenProps} />
     </div>
 );
 
