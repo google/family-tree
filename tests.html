@@ -193,16 +193,24 @@ try {
     const matchesPersonSearchSrc = extractFunction(source, 'matchesPersonSearch');
     const matchesPersonFilterSrc = extractFunction(source, 'matchesPersonFilter');
     const filterBadgeConfigSrc = "const FILTER_BADGE_CONFIG = Object.freeze(" + extractBlock(source, "{\n    family: {") + ");";
+    const colorThemesStart = source.indexOf('const TAILWIND_DEFAULT_PALETTE = {');
+    const colorThemesEndMarker = 'const TAILWIND_THEME_CONFIG_SCRIPT = buildTailwindThemeConfigScript();';
+    const colorThemesEnd = source.indexOf(colorThemesEndMarker);
+    if (colorThemesStart === -1 || colorThemesEnd === -1) throw new Error('Could not extract colour theme engine');
+    const colorThemesSrc = source.slice(colorThemesStart, colorThemesEnd + colorThemesEndMarker.length);
     const getPersonCardThemeSrc = extractFunction(source, 'getPersonCardTheme');
     const extractSheetIdFromUrlSrc = extractFunction(source, 'extractSheetIdFromUrl');
     const resolveInitialSheetUrlSrc = extractFunction(source, 'resolveInitialSheetUrl');
     const buttonDocCatalogSrc = 'const BUTTON_DOCUMENTATION_CATALOG = ' + extractBlock(source, '{\n    \'Family Tree Home – choose a Google Sheet\':') + ';';
     const resolveDynamicFilterButtonDocSrc = extractFunction(source, 'resolveDynamicFilterButtonDoc');
+    const resolveThemeCardDocSrc = extractFunction(source, 'resolveThemeCardDoc');
     const resolveContextualButtonDocSrc = extractFunction(source, 'resolveContextualButtonDoc');
     const resolveButtonDocumentationSrc = extractFunction(source, 'resolveButtonDocumentation');
     const computeButtonDocPositionSrc = extractFunction(source, 'computeButtonDocPosition');
     const buildHoveredButtonDocStateSrc = extractFunction(source, 'buildHoveredButtonDocState');
     const restoreButtonNativeTitleSrc = extractFunction(source, 'restoreButtonNativeTitle');
+    const computeRadialMenuOffsetsSrc = extractFunction(source, 'computeRadialMenuOffsets');
+    const resolveSettingsPanelTabSrc = extractFunction(source, 'resolveSettingsPanelTab');
     // Pulls a single-line `const NAME = ...;` declaration verbatim, so the harness never
     // restates a constant's value (a retune in App.jsx must not silently diverge from here).
     const extractConst = (src, name) => {
@@ -210,11 +218,22 @@ try {
         if (!m) throw new Error(`Could not find const ${name}`);
         return m[0];
     };
+    const extractFrozenArrayConst = (src, name) => {
+        const m = src.match(new RegExp(`^const ${name} = Object\\.freeze\\(\\[[\\s\\S]*?\\]\\);`, 'm'));
+        if (!m) throw new Error(`Could not find const ${name}`);
+        return m[0];
+    };
+    const settingsFabConstsSrc = [
+        extractFrozenArrayConst(source, 'SETTINGS_FAB_ACTIONS'),
+        extractConst(source, 'SETTINGS_FAB_TITLE'),
+        extractConst(source, 'SETTINGS_FAB_RADIUS'),
+        extractFrozenArrayConst(source, 'SETTINGS_PANEL_TABS')
+    ].join('\n');
     const browserPreferencesSrc = [
-        'SHEET_HISTORY_COOKIE', 'DEMOGRAPHIC_SETTINGS_COOKIE', 'PREFERENCE_COOKIE_MAX_AGE_SECONDS',
-        'SHEET_HISTORY_LIMIT', 'SHEET_TITLE_MAX_LENGTH', 'SHEET_HISTORY_COOKIE_BUDGET',
-        'DEMO_SHEET_ID', 'DEMO_SHEET_TITLE', 'SHEET_ID_EXACT_PATTERN', 'sheetTitleRegistry',
-        'MARRIAGE_AGE_PREVIEW_COHORTS'
+        'SHEET_HISTORY_COOKIE', 'DEMOGRAPHIC_SETTINGS_COOKIE', 'COLOR_THEME_COOKIE',
+        'PREFERENCE_COOKIE_MAX_AGE_SECONDS', 'SHEET_HISTORY_LIMIT', 'SHEET_TITLE_MAX_LENGTH',
+        'SHEET_HISTORY_COOKIE_BUDGET', 'DEMO_SHEET_ID', 'DEMO_SHEET_TITLE',
+        'SHEET_ID_EXACT_PATTERN', 'sheetTitleRegistry', 'MARRIAGE_AGE_PREVIEW_COHORTS'
     ].map(name => extractConst(source, name)).concat([
         'parseCookieHeader', 'buildCookieAssignment', 'readCookieValue', 'writeCookieValue',
         'preferenceStorageKey', 'readPreference', 'writePreference', 'removePreference',
@@ -222,12 +241,13 @@ try {
         'mergeSheetHistoryEntry', 'resolveMostUsedSheet', 'readSheetHistory', 'writeSheetHistory',
         'recordSheetUse', 'forgetSheetHistoryEntry', 'buildSheetUrlFromId', 'normalizeSheetReference',
         'isLikelySheetReference', 'resolveHomeScreenPrefill', 'formatSheetHistoryLabel',
-        'parseContentDispositionFilename', 'deriveSpreadsheetTitle', 'rememberSheetTitle',
-        'getRememberedSheetTitle', 'rememberSheetTitleFromResponse', 'loadStoredDemographicSettings',
-        'saveDemographicSettings', 'clearStoredDemographicSettings', 'applyStoredDemographicSettings',
-        'clearStoredPreferences', 'hasExplicitSheetQueryParam', 'buildSheetDeepLinkUrl',
-        'syncSheetIdIntoLocation', 'commitSuccessfulSheetImport', 'suggestNextMarriageAnchor',
-        'describeMarriageAgePreview'
+        'resolveKnownSheetTitle', 'parseContentDispositionFilename', 'deriveSpreadsheetTitle',
+        'rememberSheetTitle', 'getRememberedSheetTitle', 'rememberSheetTitleFromResponse',
+        'loadStoredDemographicSettings', 'saveDemographicSettings', 'clearStoredDemographicSettings',
+        'applyStoredDemographicSettings', 'loadStoredColorThemeId', 'saveColorThemeId',
+        'clearStoredColorTheme', 'applyStoredColorTheme', 'clearStoredPreferences',
+        'hasExplicitSheetQueryParam', 'buildSheetDeepLinkUrl', 'syncSheetIdIntoLocation',
+        'commitSuccessfulSheetImport', 'suggestNextMarriageAnchor', 'describeMarriageAgePreview'
     ].map(name => extractFunction(source, name))).join('\n');
     const urlViewStateSrc = [
         'formatCompactNumber', 'encodeViewStateToken', 'decodeViewStateToken',
@@ -261,26 +281,59 @@ try {
         buildCurrentViewState, writeViewStateHash, applyRestoredSelection, applyRestoredCamera,
         resolveCanvasDisplayMode,
         DEFAULT_URL, DEMO_SHEET_ID, DEMO_SHEET_TITLE, SHEET_HISTORY_LIMIT, SHEET_TITLE_MAX_LENGTH,
-        SHEET_HISTORY_COOKIE, DEMOGRAPHIC_SETTINGS_COOKIE,
+        SHEET_HISTORY_COOKIE, DEMOGRAPHIC_SETTINGS_COOKIE, COLOR_THEME_COOKIE,
         parseCookieHeader, buildCookieAssignment, readPreference, writePreference, removePreference,
         isValidSheetId, rankSheetHistory, parseSheetHistoryJson, serializeSheetHistory,
         mergeSheetHistoryEntry, resolveMostUsedSheet, readSheetHistory, recordSheetUse,
         forgetSheetHistoryEntry, buildSheetUrlFromId, normalizeSheetReference, isLikelySheetReference,
-        resolveHomeScreenPrefill, formatSheetHistoryLabel, parseContentDispositionFilename,
-        deriveSpreadsheetTitle, rememberSheetTitle, getRememberedSheetTitle, rememberSheetTitleFromResponse,
+        resolveHomeScreenPrefill, formatSheetHistoryLabel, resolveKnownSheetTitle,
+        parseContentDispositionFilename, deriveSpreadsheetTitle, rememberSheetTitle,
+        getRememberedSheetTitle, rememberSheetTitleFromResponse,
         loadStoredDemographicSettings, saveDemographicSettings, clearStoredDemographicSettings,
-        applyStoredDemographicSettings, clearStoredPreferences, hasExplicitSheetQueryParam,
-        buildSheetDeepLinkUrl, syncSheetIdIntoLocation, commitSuccessfulSheetImport,
-        suggestNextMarriageAnchor, describeMarriageAgePreview, cookieJar, fakeLocalStorage, extractSheetIdFromUrl
+        applyStoredDemographicSettings, loadStoredColorThemeId, saveColorThemeId,
+        clearStoredColorTheme, applyStoredColorTheme, clearStoredPreferences,
+        hasExplicitSheetQueryParam, buildSheetDeepLinkUrl, syncSheetIdIntoLocation,
+        commitSuccessfulSheetImport, suggestNextMarriageAnchor, describeMarriageAgePreview,
+        cookieJar, fakeLocalStorage, fakeDocElement, extractSheetIdFromUrl,
+        TAILWIND_DEFAULT_PALETTE, TAILWIND_THEME_FAMILIES, TAILWIND_SHADES,
+        DEFAULT_COLOR_THEME_ID, COLOR_THEMES, hexToRgb, rgbToHex, rgbTriplet,
+        hexToLch, lchToHex, toneHex, contrastRatio, getColorThemeDefinition,
+        isKnownColorThemeId, resolveColorTheme, themeFamilyHex, buildThemeCssVariables,
+        removeThemeCssVariables, applyColorTheme, describeThemeSwatches,
+        buildTailwindThemeConfigScript, TAILWIND_THEME_CONFIG_SCRIPT,
+        SETTINGS_FAB_ACTIONS, SETTINGS_FAB_TITLE, SETTINGS_FAB_RADIUS, SETTINGS_PANEL_TABS,
+        computeRadialMenuOffsets, resolveSettingsPanelTab, resolveThemeCardDoc
     ] = new Function(`
-        // Isolated cookie jar + localStorage: preference tests must never touch the real
-        // browser state, and Stage 3 runs in node where neither exists. Every other
+        // Isolated cookie jar + localStorage + documentElement: preference & theme tests must never
+        // touch the real browser state, and Stage 3 runs in node where neither exists. Every other
         // document member is forwarded to the host document (real or mocked).
         const cookieJar = new Map();
+        const fakeStyleProps = new Map();
+        const fakeAttrs = new Map();
+        const fakeDocElement = {
+            style: new Proxy({
+                colorScheme: '',
+                setProperty(k, v) { fakeStyleProps.set(k, String(v)); },
+                getPropertyValue(k) { return fakeStyleProps.get(k) || ''; },
+                removeProperty(k) { fakeStyleProps.delete(k); },
+                _clear() { fakeStyleProps.clear(); this.colorScheme = ''; }
+            }, {
+                get(target, prop) {
+                    if (prop === 'length') return fakeStyleProps.size;
+                    if (typeof prop === 'string' && /^\\d+$/.test(prop)) return [...fakeStyleProps.keys()][Number(prop)];
+                    return target[prop];
+                },
+                set(target, prop, value) { target[prop] = value; return true; }
+            }),
+            setAttribute(k, v) { fakeAttrs.set(k, String(v)); },
+            getAttribute(k) { return fakeAttrs.has(k) ? fakeAttrs.get(k) : null; },
+            _clear() { fakeStyleProps.clear(); fakeAttrs.clear(); this.style.colorScheme = ''; }
+        };
         const realDocument = typeof globalThis.document !== 'undefined' ? globalThis.document : {};
         const document = new Proxy({}, {
             get(_, prop) {
                 if (prop === 'cookie') return [...cookieJar].map(([k, v]) => k + '=' + v).join('; ');
+                if (prop === 'documentElement') return fakeDocElement;
                 const value = realDocument[prop];
                 return typeof value === 'function' ? value.bind(realDocument) : value;
             },
@@ -303,6 +356,7 @@ try {
             clear() { this._m.clear(); }
         };
         const localStorage = fakeLocalStorage;
+        ${colorThemesSrc}
         ${csvParserSrc}
         ${personSrc}
         ${familyTreeSrc}
@@ -347,11 +401,15 @@ try {
         ${resolveInitialSheetUrlSrc}
         ${buttonDocCatalogSrc}
         ${resolveDynamicFilterButtonDocSrc}
+        ${resolveThemeCardDocSrc}
         ${resolveContextualButtonDocSrc}
         ${resolveButtonDocumentationSrc}
         ${computeButtonDocPositionSrc}
         ${buildHoveredButtonDocStateSrc}
         ${restoreButtonNativeTitleSrc}
+        ${settingsFabConstsSrc}
+        ${computeRadialMenuOffsetsSrc}
+        ${resolveSettingsPanelTabSrc}
         const isStandaloneExportMode = () => false;
         const VIEW_STATE_MIN_SHEET_ID_LENGTH = 20;
         const resolveViewportDimensions = ({ container }) => ({
@@ -393,17 +451,28 @@ try {
             buildCurrentViewState, writeViewStateHash, applyRestoredSelection, applyRestoredCamera,
             resolveCanvasDisplayMode,
             DEFAULT_URL, DEMO_SHEET_ID, DEMO_SHEET_TITLE, SHEET_HISTORY_LIMIT, SHEET_TITLE_MAX_LENGTH,
-            SHEET_HISTORY_COOKIE, DEMOGRAPHIC_SETTINGS_COOKIE,
+            SHEET_HISTORY_COOKIE, DEMOGRAPHIC_SETTINGS_COOKIE, COLOR_THEME_COOKIE,
             parseCookieHeader, buildCookieAssignment, readPreference, writePreference, removePreference,
             isValidSheetId, rankSheetHistory, parseSheetHistoryJson, serializeSheetHistory,
             mergeSheetHistoryEntry, resolveMostUsedSheet, readSheetHistory, recordSheetUse,
             forgetSheetHistoryEntry, buildSheetUrlFromId, normalizeSheetReference, isLikelySheetReference,
-            resolveHomeScreenPrefill, formatSheetHistoryLabel, parseContentDispositionFilename,
-            deriveSpreadsheetTitle, rememberSheetTitle, getRememberedSheetTitle, rememberSheetTitleFromResponse,
+            resolveHomeScreenPrefill, formatSheetHistoryLabel, resolveKnownSheetTitle,
+            parseContentDispositionFilename, deriveSpreadsheetTitle, rememberSheetTitle,
+            getRememberedSheetTitle, rememberSheetTitleFromResponse,
             loadStoredDemographicSettings, saveDemographicSettings, clearStoredDemographicSettings,
-            applyStoredDemographicSettings, clearStoredPreferences, hasExplicitSheetQueryParam,
-            buildSheetDeepLinkUrl, syncSheetIdIntoLocation, commitSuccessfulSheetImport,
-            suggestNextMarriageAnchor, describeMarriageAgePreview, cookieJar, fakeLocalStorage, extractSheetIdFromUrl
+            applyStoredDemographicSettings, loadStoredColorThemeId, saveColorThemeId,
+            clearStoredColorTheme, applyStoredColorTheme, clearStoredPreferences,
+            hasExplicitSheetQueryParam, buildSheetDeepLinkUrl, syncSheetIdIntoLocation,
+            commitSuccessfulSheetImport, suggestNextMarriageAnchor, describeMarriageAgePreview,
+            cookieJar, fakeLocalStorage, fakeDocElement, extractSheetIdFromUrl,
+            TAILWIND_DEFAULT_PALETTE, TAILWIND_THEME_FAMILIES, TAILWIND_SHADES,
+            DEFAULT_COLOR_THEME_ID, COLOR_THEMES, hexToRgb, rgbToHex, rgbTriplet,
+            hexToLch, lchToHex, toneHex, contrastRatio, getColorThemeDefinition,
+            isKnownColorThemeId, resolveColorTheme, themeFamilyHex, buildThemeCssVariables,
+            removeThemeCssVariables, applyColorTheme, describeThemeSwatches,
+            buildTailwindThemeConfigScript, TAILWIND_THEME_CONFIG_SCRIPT,
+            SETTINGS_FAB_ACTIONS, SETTINGS_FAB_TITLE, SETTINGS_FAB_RADIUS, SETTINGS_PANEL_TABS,
+            computeRadialMenuOffsets, resolveSettingsPanelTab, resolveThemeCardDoc
         ];
     `)();
 
@@ -14598,15 +14667,19 @@ const m3 = tree.all.find(n => n.id === '3');
                 /if \(isStandaloneExportMode\(\)\) return null;/.test(homeButtonBlock));
 
             const rootBlock = sliceComponent('const AppRootView = (');
-            assert('Test 210.12: AppRootView mounts the Home button (only while the home screen is closed), the settings panel and the home screen',
-                /\{!shellProps\.isHomeOpen && <HomeButton\b/.test(rootBlock) && /<DeductionSettingsPanel\b/.test(rootBlock) && /<SheetSourceHomeScreen\b/.test(rootBlock));
+            assert('Test 210.12: AppRootView mounts the Home button (only while the home screen is closed), the settings panel, the home screen, and the radial settings FAB',
+                /\{!shellProps\.isHomeOpen && <HomeButton\b/.test(rootBlock) && /<AppSettingsPanel\b/.test(rootBlock) &&
+                /<SheetSourceHomeScreen\b/.test(rootBlock) && /<SettingsRadialFab\b/.test(rootBlock));
 
             const privacyBlock = sliceComponent('const HomePrivacyNotice = ({');
-            assert('Test 210.13: The GDPR notice names what is stored (sheet links, deduction settings), where (cookies / local storage on this device only) and offers one-click deletion',
+            assert('Test 210.13: The GDPR notice names what is stored (sheet links, deduction settings, colour theme), where (cookies / local storage on this device only) and offers one-click deletion',
                 /data-testid="home-privacy-notice"/.test(privacyBlock) && /spreadsheet links you open/.test(privacyBlock) && /deduction settings/.test(privacyBlock) &&
-                /cookies \/ local storage/.test(privacyBlock) && /this device only/.test(privacyBlock) && /onClick=\{onClearStoredData\}/.test(privacyBlock) && /clear stored data/.test(privacyBlock));
-            assert('Test 210.14: The home screen wires the GDPR button to clearStoredPreferences and empties the dropdown',
-                /onClearStoredData: clearStoredPreferences/.test(appCode) && /onClearStoredData\(\);\s*form\.resetHistory\(\);/.test(homeBlock));
+                /colour theme/.test(privacyBlock) && /cookies \/ local storage/.test(privacyBlock) && /this device only/.test(privacyBlock) &&
+                /onClick=\{onClearStoredData\}/.test(privacyBlock) && /clear stored data/.test(privacyBlock));
+            assert('Test 210.14: The home screen wires the GDPR button to clearStoredPreferences (and resets themeId) and empties the dropdown',
+                /clearStoredPreferences\(\);\s*core\.setThemeId\(DEFAULT_COLOR_THEME_ID\);/.test(appCode) &&
+                /onClearStoredData: clearAllStoredData/.test(appCode) &&
+                /onClearStoredData\(\);\s*form\.resetHistory\(\);/.test(homeBlock));
 
             const viewportBlock = sliceComponent('const MainCanvasViewport = (');
             assert('Test 210.15: The brand watermark sits behind the tree in MainCanvasViewport, and BrandWatermark is a very transparent, pointer-transparent layer',
@@ -14614,13 +14687,16 @@ const m3 = tree.all.find(n => n.id === '3');
                 /data-testid="brand-watermark"/.test(appCode) && /pointer-events-none/.test(sliceComponent('const BrandWatermark = ({')));
 
             const importExportBlock = sliceComponent('const TopNavImportExportButtons = ({');
-            assert('Test 210.16: The clipboard "Import Google Sheet" toolbar button is gone; the settings gear took its place',
+            const fabBlock = sliceComponent('const SettingsRadialFab = ({');
+            assert('Test 210.16: Both the clipboard "Import Google Sheet" button and the toolbar settings gear are gone from TopNavImportExportButtons; SettingsRadialFab replaces the toolbar gear',
                 !/Import Google Sheet from Clipboard URL/.test(appCode) && !/handleImport/.test(importExportBlock) &&
-                /onClick=\{onOpenSettings\}[^\n]*title="Deduction Settings \(marriage age by birth cohort\)"/.test(importExportBlock) && /<Icons\.Settings \/>/.test(importExportBlock));
+                !/onOpenSettings/.test(importExportBlock) && /data-testid="settings-fab"/.test(fabBlock));
             const homeDoc = BUTTON_DOCUMENTATION_CATALOG['Family Tree Home – choose a Google Sheet'];
             const settingsDoc = BUTTON_DOCUMENTATION_CATALOG['Deduction Settings (marriage age by birth cohort)'];
-            assert('Test 210.17: The hover-documentation catalog documents the Home button and the Settings gear with at least two examples each, and no longer documents the Import button',
+            const fabDoc = BUTTON_DOCUMENTATION_CATALOG[SETTINGS_FAB_TITLE];
+            assert('Test 210.17: The hover-documentation catalog documents the Home button, radial Settings FAB and Deduction Settings with at least two examples each, and no longer documents the Import button',
                 homeDoc && homeDoc.examples.length >= 2 && settingsDoc && settingsDoc.examples.length >= 2 &&
+                fabDoc && fabDoc.examples.length >= 2 &&
                 !Object.keys(BUTTON_DOCUMENTATION_CATALOG).some(k => /Import Google Sheet/.test(k)));
 
             const initBlock = sliceComponent('function initializeTreeDataset(');
@@ -14633,13 +14709,16 @@ const m3 = tree.all.find(n => n.id === '3');
                 /commitSuccessfulSheetImport\(urlToLoad\)/.test(importHandlerBlock) && /setIsHomeOpen\(true\)/.test(importHandlerBlock));
             assert('Test 210.21: The CSV crawl captures the spreadsheet title from the export response (Content-Disposition) for the first tab',
                 /if \(!sheetName\) rememberSheetTitleFromResponse\(sheetId, response\);/.test(appCode));
-            assert('Test 210.22: Stored demographic settings are applied before the first build',
-                /useState\(\(\) => applyStoredDemographicSettings\(\)\)/.test(appCode));
+            assert('Test 210.22: Stored demographic settings and colour theme are applied before the first build',
+                /useState\(\(\) => applyStoredDemographicSettings\(\)\)/.test(appCode) &&
+                /useState\(\(\) => applyStoredColorTheme\(\)\.id\)/.test(appCode));
 
-            const panelBlock = sliceComponent('const DeductionSettingsPanel = ({');
-            assert('Test 210.23: DeductionSettingsPanel is a modal with the cohort anchors table, the live preview, the scalar fields and the footer actions',
-                /data-testid="deduction-settings-panel"/.test(panelBlock) && /<MarriageAgeAnchorsTable\b/.test(panelBlock) && /<MarriageAgePreview\b/.test(panelBlock) &&
-                /<DemographicScalarFields\b/.test(panelBlock) && /<SettingsPanelFooter\b/.test(panelBlock));
+            const panelBlock = sliceComponent('const AppSettingsPanel = ({');
+            const deductionTabBlock = sliceComponent('const DeductionSettingsTab = ({');
+            assert('Test 210.23: AppSettingsPanel is a tabbed modal with AppearanceSettingsTab and DeductionSettingsTab (cohort anchors table, live preview, scalar fields and footer actions)',
+                /data-testid="app-settings-panel"/.test(panelBlock) && /<AppearanceSettingsTab\b/.test(panelBlock) && /<DeductionSettingsTab\b/.test(panelBlock) &&
+                /<MarriageAgeAnchorsTable\b/.test(deductionTabBlock) && /<MarriageAgePreview\b/.test(deductionTabBlock) &&
+                /<DemographicScalarFields\b/.test(deductionTabBlock) && /<SettingsPanelFooter\b/.test(deductionTabBlock));
             const footerBlock = sliceComponent('const SettingsPanelFooter = ({');
             assert('Test 210.24: The footer offers Reset to defaults, Cancel and "Apply & rebuild tree"',
                 /Reset to defaults/.test(footerBlock) && /Cancel/.test(footerBlock) && /Apply (&amp;|&) rebuild tree/.test(footerBlock));
@@ -14648,6 +14727,225 @@ const m3 = tree.all.find(n => n.id === '3');
                 /saveDemographicSettings\(/.test(applyBlock) && /rebuildTreeFromCachedRows\(/.test(applyBlock) && /skipCache: true/.test(applyBlock));
         } catch (e) {
             assertEqual('Test 210 execution failed', e.message, '');
+        }
+    }
+
+    // ══════════════════════════════════════════════════════════════════════════
+    //  211. Material 3 Colour Theme Engine & Tailwind Config Script
+    // ══════════════════════════════════════════════════════════════════════════
+    {
+        section('211. Material 3 Colour Theme Engine & Tailwind Config Script');
+        try {
+            const themeIds = COLOR_THEMES.map(t => t.id);
+            const expectedIds = ['classic', 'pastel', 'earthy', 'ocean', 'lavender', 'solarized-light', 'dark', 'midnight', 'solarized-dark', 'contrast'];
+            assertEqual('Test 211.01: COLOR_THEMES defines all 10 Material 3 themes in order', themeIds.join(','), expectedIds.join(','));
+
+            // Color space round-trips & gamut clamping
+            const sampleRgb = hexToRgb('#5c7c33');
+            assertEqual('Test 211.02: hexToRgb + rgbToHex round-trips brand olive #5c7c33', rgbToHex(sampleRgb), '#5c7c33');
+            assertEqual('Test 211.03: rgbTriplet formats space-separated RGB channels for CSS variables', rgbTriplet('#f8fafc'), '248 250 252');
+            const sampleLch = hexToLch('#3b82f6');
+            const roundTripBlue = lchToHex(sampleLch.l, sampleLch.c, sampleLch.h);
+            assert('Test 211.04: hexToLch -> lchToHex preserves colour within 1 RGB step', contrastRatio(roundTripBlue, '#3b82f6') < 1.02);
+            assertEqual('Test 211.05: toneHex extremes clamp to #000000 at tone 0 and #ffffff at tone 100',
+                toneHex('#5c7c33', 0) + '|' + toneHex('#5c7c33', 100), '#000000|#ffffff');
+
+            // Classic vs generated themes
+            const classicResolved = resolveColorTheme('classic');
+            assert('Test 211.06: Classic theme leaves families null (uses stock Tailwind fallback) and defines >= 25 M3 roles',
+                classicResolved.families === null && Object.keys(classicResolved.roles).length >= 25 &&
+                classicResolved.roles.primary === '#5c7c33');
+
+            for (const def of COLOR_THEMES) {
+                const res = resolveColorTheme(def.id);
+                if (def.id !== 'classic') {
+                    assert(`Test 211.07 (${def.id}): generates all 22 Tailwind families × 11 shades plus white`,
+                        Boolean(res.families && res.families.white &&
+                        TAILWIND_THEME_FAMILIES.every(f => TAILWIND_SHADES.every(s => /^#[0-9a-f]{6}$/.test(res.families[f][s])))));
+                }
+                const bg = themeFamilyHex(res, 'white');
+                const bodyText = themeFamilyHex(res, 'slate', 800);
+                const maleBg = themeFamilyHex(res, 'sky', 50);
+                const maleInk = themeFamilyHex(res, 'sky', 950);
+                const femaleBg = themeFamilyHex(res, 'rose', 50);
+                const femaleInk = themeFamilyHex(res, 'rose', 950);
+                const errBg = themeFamilyHex(res, 'red', 50);
+                const errInk = themeFamilyHex(res, 'red', 700);
+                assert(`Test 211.08 (${def.id}): meets WCAG AA contrast (>= 4.5:1) for body text, male card, female card, error banner, and primary button`,
+                    contrastRatio(bg, bodyText) >= 4.5 &&
+                    contrastRatio(maleBg, maleInk) >= 4.5 &&
+                    contrastRatio(femaleBg, femaleInk) >= 4.5 &&
+                    contrastRatio(errBg, errInk) >= 4.5 &&
+                    contrastRatio(res.roles.primary, res.roles.onPrimary) >= 4.5);
+                const swatches = describeThemeSwatches(res);
+                assert(`Test 211.09 (${def.id}): describeThemeSwatches returns valid hexes for theme preview cards`,
+                    /^#[0-9a-f]{6}$/.test(swatches.canvas) && /^#[0-9a-f]{6}$/.test(swatches.primary) &&
+                    /^#[0-9a-f]{6}$/.test(swatches.male) && /^#[0-9a-f]{6}$/.test(swatches.female));
+            }
+
+            // Authentic Solarized & OLED black checks
+            assertEqual('Test 211.10: Solarized Light uses Schoonover base3 #fdf6e3 canvas',
+                resolveColorTheme('solarized-light').families.white, '#fdf6e3');
+            assertEqual('Test 211.11: Solarized Dark uses Schoonover base03 #002b36 canvas',
+                resolveColorTheme('solarized-dark').families.white, '#002b36');
+            assertEqual('Test 211.12: Midnight Black uses pure #000000 black canvas',
+                resolveColorTheme('midnight').families.white, '#000000');
+
+            // DOM application & cleanup on fakeDocElement
+            fakeDocElement._clear();
+            const appliedMidnight = applyColorTheme('midnight', fakeDocElement);
+            assertEqual('Test 211.13: applyColorTheme("midnight") sets data-theme, data-theme-mode="dark", colorScheme="dark", and --tw-white',
+                [appliedMidnight.id, fakeDocElement.getAttribute('data-theme'), fakeDocElement.getAttribute('data-theme-mode'),
+                 fakeDocElement.style.colorScheme, fakeDocElement.style.getPropertyValue('--tw-white')].join('|'),
+                'midnight|midnight|dark|dark|' + rgbTriplet(appliedMidnight.families.white));
+            applyColorTheme('classic', fakeDocElement);
+            assertEqual('Test 211.14: Switching back to classic removes all --tw-* variables while keeping --md-sys-color-primary',
+                [fakeDocElement.getAttribute('data-theme'), fakeDocElement.style.getPropertyValue('--tw-white'),
+                 fakeDocElement.style.getPropertyValue('--md-sys-color-primary')].join('|'),
+                'classic||92 124 51');
+
+            // Stamped Tailwind config script
+            assert('Test 211.15: TAILWIND_THEME_CONFIG_SCRIPT maps all 22 Tailwind families, white, and M3 roles to CSS variables while preserving keyframes',
+                TAILWIND_THEME_FAMILIES.every(f => TAILWIND_THEME_CONFIG_SCRIPT.includes(`--tw-${f}-500`)) &&
+                TAILWIND_THEME_CONFIG_SCRIPT.includes('--tw-white') &&
+                TAILWIND_THEME_CONFIG_SCRIPT.includes('--md-sys-color-primary') &&
+                TAILWIND_THEME_CONFIG_SCRIPT.includes("'text-gradient'") &&
+                FamilyTreeBuilder._getStandaloneTailwindConfig().includes('--tw-slate-500'));
+        } catch (e) {
+            assertEqual('Test 211 execution failed', e.message, '');
+        } finally {
+            fakeDocElement._clear();
+        }
+    }
+
+    // ══════════════════════════════════════════════════════════════════════════
+    //  212. Theme Cookie Persistence & Clear Stored Data
+    // ══════════════════════════════════════════════════════════════════════════
+    {
+        section('212. Theme Cookie Persistence & Clear Stored Data');
+        try {
+            cookieJar.clear();
+            fakeLocalStorage.clear();
+            fakeDocElement._clear();
+
+            assertEqual('Test 212.01: loadStoredColorThemeId returns null when no cookie is stored, and applyStoredColorTheme falls back to "classic"',
+                [loadStoredColorThemeId(), applyStoredColorTheme().id].join('|'), '|classic');
+            saveColorThemeId('earthy');
+            assertEqual('Test 212.02: saveColorThemeId("earthy") persists to cookie and loadStoredColorThemeId reads it back',
+                [cookieJar.get(COLOR_THEME_COOKIE), loadStoredColorThemeId()].join('|'), 'earthy|earthy');
+
+            cookieJar.set(COLOR_THEME_COOKIE, 'not-a-real-theme');
+            assertEqual('Test 212.03: Unknown cookie values are rejected by loadStoredColorThemeId (returns null) and saveColorThemeId (returns false)',
+                [loadStoredColorThemeId(), saveColorThemeId('not-a-real-theme')].join('|'), '|false');
+
+            saveColorThemeId('solarized-dark');
+            const bootTheme = applyStoredColorTheme();
+            assertEqual('Test 212.04: applyStoredColorTheme() applies the stored theme onto document.documentElement',
+                [bootTheme.id, fakeDocElement.getAttribute('data-theme'), fakeDocElement.getAttribute('data-theme-mode')].join('|'),
+                'solarized-dark|solarized-dark|dark');
+
+            clearStoredColorTheme();
+            assertEqual('Test 212.05: clearStoredColorTheme() removes the ft_color_theme cookie',
+                cookieJar.has(COLOR_THEME_COOKIE), false);
+
+            // Full clearStoredPreferences wipes sheet history, deduction settings, and colour theme
+            recordSheetUse(DEMO_SHEET_ID, DEMO_SHEET_TITLE);
+            saveDemographicSettings({ ...FamilyTreeBuilder.getDemographicSettings(), siblingAgeGap: 4 });
+            saveColorThemeId('midnight');
+            applyColorTheme('midnight');
+            clearStoredPreferences();
+            assertEqual('Test 212.06: clearStoredPreferences() clears all 3 cookies and restores the classic theme on document.documentElement',
+                [cookieJar.has(SHEET_HISTORY_COOKIE), cookieJar.has(DEMOGRAPHIC_SETTINGS_COOKIE),
+                 cookieJar.has(COLOR_THEME_COOKIE), fakeDocElement.getAttribute('data-theme')].join('|'),
+                'false|false|false|classic');
+        } catch (e) {
+            assertEqual('Test 212 execution failed', e.message, '');
+        } finally {
+            FamilyTreeBuilder.resetDemographicSettings();
+            cookieJar.clear();
+            fakeLocalStorage.clear();
+            fakeDocElement._clear();
+        }
+    }
+
+    // ══════════════════════════════════════════════════════════════════════════
+    //  213. Home Screen Sheet Title Chip, Radial Settings FAB & Balloon Tooltip
+    // ══════════════════════════════════════════════════════════════════════════
+    {
+        section('213. Home Screen Sheet Title Chip, Radial Settings FAB & Balloon Tooltip');
+        try {
+            cookieJar.clear();
+            fakeLocalStorage.clear();
+
+            // 1. resolveKnownSheetTitle on prefilled URLs / IDs
+            assertEqual('Test 213.01: resolveKnownSheetTitle resolves DEMO_SHEET_TITLE for the prefilled demo sheet URL even when history is empty',
+                resolveKnownSheetTitle(buildSheetUrlFromId(DEMO_SHEET_ID), []), DEMO_SHEET_TITLE);
+            assertEqual('Test 213.02: resolveKnownSheetTitle resolves DEMO_SHEET_TITLE for the bare demo sheet ID',
+                resolveKnownSheetTitle(DEMO_SHEET_ID, []), DEMO_SHEET_TITLE);
+            const customId = '1CustomSheetIdForTitleTest0123456789ABCDEF';
+            const customHistory = [{ id: customId, title: 'Parathottiyil Family', count: 3, lastUsed: 100 }];
+            assertEqual('Test 213.03: resolveKnownSheetTitle resolves the saved title from cookie history for a prefilled URL',
+                resolveKnownSheetTitle(buildSheetUrlFromId(customId), customHistory), 'Parathottiyil Family');
+            const regMap = new Map([[customId, 'Session Cached Title']]);
+            assertEqual('Test 213.04: resolveKnownSheetTitle falls back to the in-memory sheetTitleRegistry when history has no title',
+                resolveKnownSheetTitle(customId, [{ id: customId, title: '', count: 1, lastUsed: 50 }], regMap), 'Session Cached Title');
+            assertEqual('Test 213.05: resolveKnownSheetTitle returns empty string for an unknown sheet ID or invalid input',
+                resolveKnownSheetTitle('1UnknownSheetIdWithNoRecordedTitle00000000', []) + '|' + resolveKnownSheetTitle('not a url', []), '|');
+
+            const sliceComponent = (marker) => {
+                const start = appCode.indexOf(marker);
+                const end = appCode.indexOf('/**', start + marker.length);
+                return start === -1 ? '' : appCode.slice(start, end === -1 ? start + 4000 : end);
+            };
+            const sheetFormBlock = sliceComponent('const SheetSourceForm = ({');
+            assert('Test 213.06: SheetSourceForm computes resolveKnownSheetTitle(form.value, form.history) and renders the data-testid="sheet-source-title" chip when known',
+                /resolveKnownSheetTitle\(form\.value,\s*form\.history\)/.test(sheetFormBlock) &&
+                /data-testid="sheet-source-title"/.test(sheetFormBlock) &&
+                /<Icons\.Sheet\s*\/>/.test(sheetFormBlock));
+
+            // 2. Radial Settings FAB geometry & visibility on both screens
+            const offsets = computeRadialMenuOffsets(3, 84);
+            assertEqual('Test 213.07: computeRadialMenuOffsets(3, 84) places 3 satellite buttons at 90° (0,-84), 135° (-59,-59), and 180° (-84,0)',
+                offsets.map(o => `${o.x},${o.y}`).join(' | '), '0,-84 | -59,-59 | -84,0');
+            assertEqual('Test 213.08: SETTINGS_FAB_ACTIONS exposes theme, deduction, and privacy satellite actions',
+                SETTINGS_FAB_ACTIONS.map(a => a.id).join(','), 'theme,deduction,privacy');
+            assertEqual('Test 213.09: resolveSettingsPanelTab maps "deduction" to "deduction" and everything else to "theme"',
+                [resolveSettingsPanelTab('deduction').id, resolveSettingsPanelTab('theme').id, resolveSettingsPanelTab('unknown').id].join('|'),
+                'deduction|theme|theme');
+            const fabCompBlock = sliceComponent('const SettingsRadialFab = ({');
+            assert('Test 213.10: SettingsRadialFab is fixed at bottom-6 right-6 z-[80] (above the z-50 home screen) and renders data-testid="settings-fab-toggle"',
+                /fixed bottom-6 right-6 z-\[80\]/.test(fabCompBlock) && /data-testid="settings-fab-toggle"/.test(fabCompBlock));
+
+            // 3. Speech-balloon tooltip with tail and full title without type badge
+            const midBtnRect = { left: 500, right: 540, width: 40, top: 20, bottom: 60 };
+            const midPos = computeButtonDocPosition(midBtnRect, 1280, 800);
+            const expectedTailX = Math.round(520 - midPos.left);
+            assert('Test 213.11: computeButtonDocPosition returns tail.x pointing directly at the hovered button center',
+                midPos.tail && midPos.tail.x === expectedTailX && midPos.tail.x >= 18 && midPos.tail.x <= 340 - 18);
+
+            const cornerBtnRect = { left: 1240, right: 1276, width: 36, top: 740, bottom: 776 };
+            const cornerPos = computeButtonDocPosition(cornerBtnRect, 1280, 800);
+            assert('Test 213.12: Bottom-right FAB places balloon above the button (placement="top") with tail.x clamped near the right edge',
+                cornerPos.placement === 'top' && cornerPos.tail && cornerPos.tail.x === 340 - 18);
+
+            const tooltipBlock = sliceComponent('const ButtonDocTooltipOverlay = () => {');
+            const tailBlock = sliceComponent('const ButtonDocBalloonTail = ({');
+            assert('Test 213.13: ButtonDocTooltipOverlay renders a light speech balloon with full break-words title, no doc.badge pill, and ButtonDocBalloonTail pointer',
+                /data-testid="button-doc-popover"/.test(tooltipBlock) &&
+                /break-words/.test(tooltipBlock) && !/truncate/.test(tooltipBlock) &&
+                !/doc\.badge/.test(tooltipBlock) &&
+                /<ButtonDocBalloonTail\b/.test(tooltipBlock) &&
+                /data-testid="button-doc-tail"/.test(tailBlock));
+
+            // Generic fallback & theme card docs
+            const genericDoc = resolveButtonDocumentation('', 'Custom Action Button');
+            assertEqual('Test 213.14: Generic fallback uses the full button label without "Select / Toggle:" prefix',
+                genericDoc.title, 'Custom Action Button');
+            const themeDoc = resolveThemeCardDoc('Earthy & Warm');
+            assert('Test 213.15: resolveThemeCardDoc resolves rich documentation with >= 2 examples for Material 3 theme cards',
+                Boolean(themeDoc && themeDoc.title === 'Colour theme: Earthy & Warm' && themeDoc.examples.length >= 2));
+        } catch (e) {
+            assertEqual('Test 213 execution failed', e.message, '');
         }
     }
 

@@ -173,11 +173,12 @@ const TopNavIconButton = ({ onClick, title, isActive = false, disabled = false, 
 };
 
 /**
- * Renders toolbar action buttons for deduction settings, standalone HTML export, and A4 print export.
+ * Renders toolbar action buttons for standalone HTML export and A4 print export.
+ * (Settings moved to the radial FAB in 06_ui/15_SettingsFab.jsx so they are reachable
+ * from the home screen too.)
  *
  * @param {object} props
  * @param {boolean} props.isStandalone - Whether running in embedded standalone mode
- * @param {Function} props.onOpenSettings - Opens the deduction settings panel
  * @param {boolean} props.isLoading - Whether tree data is actively loading
  * @param {Function} props.handleExportStandaloneApp - Standalone app export handler
  * @param {boolean} props.isExportingApp - Standalone app export in progress
@@ -187,20 +188,17 @@ const TopNavIconButton = ({ onClick, title, isActive = false, disabled = false, 
  * @returns {React.ReactNode}
  *
  * @example
- * <TopNavImportExportButtons isStandalone={false} onOpenSettings={() => {}} isLoading={false} handleExportStandaloneApp={() => {}} isExportingApp={false} handleExportA4Print={() => {}} isExportingA4={false} tree={tree} />
+ * <TopNavImportExportButtons isStandalone={false} isLoading={false} handleExportStandaloneApp={() => {}} isExportingApp={false} handleExportA4Print={() => {}} isExportingA4={false} tree={tree} />
  *
  * @example
- * <TopNavImportExportButtons isStandalone={true} onOpenSettings={() => {}} isLoading={false} handleExportStandaloneApp={() => {}} isExportingApp={false} handleExportA4Print={() => {}} isExportingA4={false} tree={tree} />
+ * <TopNavImportExportButtons isStandalone={true} isLoading={false} handleExportStandaloneApp={() => {}} isExportingApp={false} handleExportA4Print={() => {}} isExportingA4={false} tree={tree} />
  */
 const TopNavImportExportButtons = ({
-    isStandalone, onOpenSettings, isLoading,
+    isStandalone, isLoading,
     handleExportStandaloneApp, isExportingApp,
     handleExportA4Print, isExportingA4, tree
 }) => (
     <>
-        <TopNavIconButton onClick={onOpenSettings} disabled={isLoading} title="Deduction Settings (marriage age by birth cohort)">
-            <Icons.Settings />
-        </TopNavIconButton>
         {!isStandalone && (
             <TopNavIconButton onClick={handleExportStandaloneApp} disabled={isExportingApp || isLoading} title="Download Standalone Interactive App (.html)">
                 {isExportingApp ? <Icons.Loader /> : <Icons.Download />}
@@ -262,11 +260,10 @@ const TopNavViewToggleButtons = ({
 };
 
 /**
- * Top floating toolbar actions (Settings, Export, Map, AI, Logs, Search).
+ * Top floating toolbar actions (Export, Map, AI, Logs, Search).
  *
  * @param {object} props
  * @param {boolean} props.isStandalone - Embedded standalone flag
- * @param {Function} props.onOpenSettings - Opens the deduction settings panel
  * @param {boolean} props.isLoading - Loading state
  * @param {Function} props.handleExportStandaloneApp - Export standalone app handler
  * @param {boolean} props.isExportingApp - Export standalone loading state
@@ -288,7 +285,6 @@ const TopNavViewToggleButtons = ({
  * @example
  *   <TopNavigationActions
  *     isStandalone={false}
- *     onOpenSettings={() => {}}
  *     isLoading={false}
  *     handleExportStandaloneApp={() => {}}
  *     isExportingApp={false}
@@ -310,7 +306,6 @@ const TopNavViewToggleButtons = ({
  * @example
  *   <TopNavigationActions
  *     isStandalone={true}
- *     onOpenSettings={fn}
  *     isLoading={true}
  *     handleExportStandaloneApp={fn}
  *     isExportingApp={false}
@@ -333,7 +328,6 @@ const TopNavigationActions = (props) => (
     <>
         <TopNavImportExportButtons
             isStandalone={props.isStandalone}
-            onOpenSettings={props.onOpenSettings}
             isLoading={props.isLoading}
             handleExportStandaloneApp={props.handleExportStandaloneApp}
             isExportingApp={props.isExportingApp}
@@ -392,7 +386,6 @@ const TopNavigationErrorBanner = ({ errorMsg, onClear }) => {
  * @param {boolean} [props.isResizing=false] - Whether sidebar resize drag is active
  * @param {string} props.sheetUrl - Google sheet data source URL
  * @param {Function} props.setSheetUrl - Setter for sheet URL
- * @param {Function} props.onOpenSettings - Opens the deduction settings panel
  * @param {boolean} props.isLoading - Whether import or tree build is in progress
  * @param {string} props.searchQuery - Current omni search text
  * @param {Function} props.setSearchQuery - Setter for search text
@@ -431,7 +424,6 @@ const TopNavigationErrorBanner = ({ errorMsg, onClear }) => {
  *     isResizing={false}
  *     sheetUrl=""
  *     setSheetUrl={() => {}}
- *     onOpenSettings={() => {}}
  *     isLoading={false}
  *     searchQuery=""
  *     setSearchQuery={() => {}}
@@ -716,7 +708,6 @@ const TopNavigationAiTitle = () => (
  * @param {Object} props
  * @param {boolean} props.showAI - Whether AI assistant panel is open.
  * @param {boolean} props.isStandalone - Whether running in embedded standalone mode.
- * @param {Function} props.onOpenSettings - Opens the deduction settings panel.
  * @param {boolean} props.isLoading - Whether tree data is loading.
  * @param {Function} props.handleExportStandaloneApp - Standalone app export handler.
  * @param {boolean} props.isExportingApp - Standalone app export status.
@@ -744,7 +735,6 @@ const TopNavigationAiTitle = () => (
  * <TopNavigationInactiveToolbar
  *   showAI={false}
  *   isStandalone={false}
- *   onOpenSettings={() => {}}
  *   isLoading={false}
  *   handleExportStandaloneApp={() => {}}
  *   isExportingApp={false}
@@ -772,7 +762,6 @@ const TopNavigationAiTitle = () => (
  * <TopNavigationInactiveToolbar
  *   showAI={true}
  *   isStandalone={true}
- *   onOpenSettings={() => {}}
  *   isLoading={false}
  *   handleExportStandaloneApp={() => {}}
  *   isExportingApp={false}
@@ -797,14 +786,14 @@ const TopNavigationAiTitle = () => (
  * />
  */
 const TopNavigationInactiveToolbar = ({
-    showAI, isStandalone, onOpenSettings, isLoading, handleExportStandaloneApp,
+    showAI, isStandalone, isLoading, handleExportStandaloneApp,
     isExportingApp, handleExportA4Print, isExportingA4, tree, showMap,
     handleToggleMap, isAILoading, handleToggleAI, showLogs, setShowLogs,
     setShowAI, searchQuery, handleOpenSearch, isSidebarVisible, canGoBack,
     canGoForward, onGoBack, onGoForward, setFocusId
 }) => {
     const actionsProps = {
-        isStandalone, onOpenSettings, isLoading, handleExportStandaloneApp, isExportingApp,
+        isStandalone, isLoading, handleExportStandaloneApp, isExportingApp,
         handleExportA4Print, isExportingA4, tree, showMap, onToggleMap: handleToggleMap,
         showAI, isAILoading, onToggleAI: handleToggleAI, showLogs, setShowLogs,
         setShowAI, searchQuery, handleOpenSearch
@@ -839,9 +828,9 @@ const TopNavigationInactiveToolbar = ({
  */
 const TreeLoadingBrandSplash = () => (
     <div data-testid="tree-loading-brand-splash" className="w-full h-full flex flex-col items-center justify-center gap-5 select-none pointer-events-none relative z-10 px-6">
-        <div className="flex items-center justify-center gap-5 bg-white/85 backdrop-blur-xl px-8 py-6 rounded-3xl shadow-[0_0_40px_rgba(92,124,51,0.16),0_0_12px_rgba(0,0,0,0.08)] border border-lime-900/10">
+        <div className="flex items-center justify-center gap-5 bg-white/85 backdrop-blur-xl px-8 py-6 rounded-3xl shadow-[0_0_40px_rgba(92,124,51,0.16),0_0_12px_rgba(0,0,0,0.08)] border border-outline-variant/60">
             <BrandLogo size={96} idPrefix="splash" className="w-[96px] h-[96px] shrink-0 drop-shadow-md" />
-            <h1 className="text-[44px] leading-none tracking-wide font-bold bg-clip-text text-transparent bg-gradient-to-r from-slate-700 via-[#5c7c33] to-[#9cc95f] opacity-90" style={{ fontFamily: "'Uncial Antiqua', serif" }}>Family Tree</h1>
+            <h1 className="text-[44px] leading-none tracking-wide font-bold bg-clip-text text-transparent bg-gradient-to-r from-slate-700 via-primary to-inverse-primary opacity-90" style={{ fontFamily: "'Uncial Antiqua', serif" }}>Family Tree</h1>
         </div>
         <div className="text-sm text-slate-400 font-sans tracking-wide animate-pulse">Fetching and building tree...</div>
     </div>
@@ -961,7 +950,6 @@ const TopNavigationMainBar = ({
  * @param {boolean} [props.isResizing=false] - Whether sidebar is actively being dragged/resized.
  * @param {string} props.sheetUrl - Google Sheets data source URL.
  * @param {Function} props.setSheetUrl - Sheet URL state setter.
- * @param {Function} props.onOpenSettings - Opens the deduction settings panel.
  * @param {boolean} props.isLoading - Whether tree data is actively loading.
  * @param {string} props.searchQuery - Current omni-search input query.
  * @param {Function} props.setSearchQuery - Search query state setter.
@@ -999,7 +987,6 @@ const TopNavigationMainBar = ({
  *   tree={{ people: {} }}
  *   isSidebarVisible={false}
  *   sidebarWidth={360}
- *   onOpenSettings={() => {}}
  *   isLoading={false}
  *   searchQuery=""
  *   setSearchQuery={() => {}}
@@ -1038,7 +1025,7 @@ const TopNavigationMainBar = ({
  */
 const TopNavigation = (props) => {
     const {
-        tree, isSidebarVisible, sidebarWidth = 360, isResizing = false, sheetUrl, setSheetUrl, onOpenSettings, isLoading, searchQuery, setSearchQuery, 
+        tree, isSidebarVisible, sidebarWidth = 360, isResizing = false, sheetUrl, setSheetUrl, isLoading, searchQuery, setSearchQuery, 
         handleSetFocusId, onFilterBy, activeFilter, showLogs, setShowLogs, errorMsg, setErrorMsg,
         showAI, setShowAI, canGoBack, canGoForward, onGoBack, onGoForward, isAILoading, handleExportImage, isExporting,
         handleExportStandaloneApp, isExportingApp, handleExportA4Print, isExportingA4,
@@ -1053,7 +1040,7 @@ const TopNavigation = (props) => {
         useTopNavigationHandlers({ showMap, setShowMap, setIsSidebarVisible, setActiveFilter, setFocusId, showAI, setShowAI, setShowLogs });
 
     const activeProps = { searchContainerRef, handleSearchContainerBlur, tree, searchQuery, setSearchQuery, onFilterBy, activeFilter, handleSetFocusId, setShowMap, setShowAI, setShowLogs, onAiSubmitQuery, omniSelectedIndex, setOmniSelectedIndex, setIsSearchActive, canGoBack, canGoForward, onGoBack, onGoForward, isSidebarVisible, setFocusId };
-    const inactiveProps = { showAI, isStandalone, onOpenSettings, isLoading, handleExportStandaloneApp, isExportingApp, handleExportA4Print, isExportingA4, tree, showMap, handleToggleMap, isAILoading, handleToggleAI, showLogs, setShowLogs, setShowAI, searchQuery, handleOpenSearch, isSidebarVisible, canGoBack, canGoForward, onGoBack, onGoForward, setFocusId };
+    const inactiveProps = { showAI, isStandalone, isLoading, handleExportStandaloneApp, isExportingApp, handleExportA4Print, isExportingA4, tree, showMap, handleToggleMap, isAILoading, handleToggleAI, showLogs, setShowLogs, setShowAI, searchQuery, handleOpenSearch, isSidebarVisible, canGoBack, canGoForward, onGoBack, onGoForward, setFocusId };
 
     return (
         <div className="absolute top-4 left-0 right-0 z-50 flex flex-col gap-3 pointer-events-none">
@@ -1084,6 +1071,78 @@ const BUTTON_DOCUMENTATION_CATALOG = {
         examples: [
             { label: 'Later Marriages', detail: 'Raise the `1940` cohort from **22** to **25** and every mother born in the 1940s is deduced three years older than before.' },
             { label: 'Reset', detail: 'Click **Reset to defaults** and then **Apply & rebuild tree** to return to the shipped curve; the cookie is overwritten with the defaults.' }
+        ]
+    },
+    'Settings: theme, deduction rules, stored data': {
+        title: 'Settings',
+        badge: 'Radial Menu • Always Available',
+        summary: 'Fans out the three settings actions in a quarter circle: **Colour theme**, **Deduction rules** and **Clear stored data**. The button floats at the bottom-right of **every** screen, so you can change the look before any sheet is loaded. **Esc** or a click elsewhere closes the fan.',
+        examples: [
+            { label: 'Dark Mode', detail: 'Click the gear, choose **Colour theme**, then pick `Midnight Black` — the home screen and the tree repaint immediately.' },
+            { label: 'Keyboard', detail: 'Tab to the gear, press **Enter** to open the fan, then Tab through the three actions.' }
+        ]
+    },
+    'Colour theme (Material 3 palettes)': {
+        title: 'Colour theme',
+        badge: 'Appearance • Material 3',
+        summary: 'Opens the **Appearance** tab of Settings: ten **Material 3 tonal palettes** — `Classic Forest`, `Soft Pastels`, `Earthy & Warm`, `Ocean Breeze`, `Lavender Dusk`, `Solarized Light`, `Dark Forest`, `Midnight Black`, `Solarized Dark` and `High Contrast`. Picking a card applies it **instantly** and stores it in the `ft_color_theme` cookie.',
+        examples: [
+            { label: 'Solarized', detail: 'Choose **Solarized Light** for the cream base3 canvas by day and **Solarized Dark** for the teal base03 canvas at night.' },
+            { label: 'Back to Default', detail: 'Click **Reset to Classic** in the footer; the cookie keeps `classic` so the next visit starts there.' }
+        ]
+    },
+    'Clear stored data (cookies & local storage)': {
+        title: 'Clear stored data',
+        badge: 'Privacy • GDPR',
+        summary: 'Deletes everything this app remembers in **your browser**: the `ft_sheet_history` cookie (sheets you opened), `ft_demographic_settings` (deduction rules) and `ft_color_theme`, plus their **localStorage mirrors**. The model returns to its shipped defaults and the Classic theme. Nothing is ever sent to a server, so there is nothing to delete elsewhere.',
+        examples: [
+            { label: 'Shared Computer', detail: 'Before handing over a shared laptop, click here and confirm; the home screen dropdown of previously opened sheets is empty afterwards.' },
+            { label: 'Fresh Start', detail: 'After clearing, the home screen prefills the public **Ancestry Browser: Demo** sheet again.' }
+        ]
+    },
+    'Open the Google Sheet': {
+        title: 'Open',
+        badge: 'Home Screen • Load Sheet',
+        summary: 'Loads the spreadsheet named in the textbox (a **Google Sheets link or bare ID**, shared as *Anyone with the link can view*). The sheet is remembered in the **history cookie** and its title appears as a chip above the textbox on later visits. **Enter** does the same.',
+        examples: [
+            { label: 'Demo Data', detail: 'Leave the prefilled `Ancestry Browser: Demo` link and press **Open** to explore the sample lineage.' },
+            { label: 'Your Own Sheet', detail: 'Paste `https://docs.google.com/spreadsheets/d/<id>/edit`, press **Open**; a red note explains the fix if the sheet is not shared publicly.' }
+        ]
+    },
+    'Sheets you have opened before': {
+        title: 'Sheets you have opened before',
+        badge: 'Home Screen • History',
+        summary: 'Drops down the sheets remembered in the **`ft_sheet_history` cookie**, most-used first, each with its **title** and ID. Picking a row fills the textbox; the **×** on a row forgets that sheet.',
+        examples: [
+            { label: 'Switch Family', detail: 'Open the list and click `Smith family — 1AbC…` to prefill it, then press **Open**.' },
+            { label: 'Tidy Up', detail: 'Click **×** next to an old test sheet; it disappears from the list and from the cookie at once.' }
+        ]
+    },
+    'Forget this sheet': {
+        title: 'Forget this sheet',
+        badge: 'Home Screen • History',
+        summary: 'Removes one entry from the remembered-sheets list (and from the **history cookie**). The spreadsheet itself is untouched; you can paste its link again any time.',
+        examples: [
+            { label: 'Remove a Typo', detail: 'Forget a sheet you opened by mistake so it no longer competes for the **most-used** prefill.' },
+            { label: 'Everything', detail: 'To wipe the whole list use **clear stored data** in the privacy note instead.' }
+        ]
+    },
+    '← Back to the tree': {
+        title: 'Back to the tree',
+        badge: 'Home Screen • Navigation',
+        summary: 'Closes the home screen and returns to the **tree that is already loaded**, keeping the focused person, zoom and sidebar exactly as you left them.',
+        examples: [
+            { label: 'Changed Your Mind', detail: 'Opened the home screen via the emblem but want to keep exploring? Click here — nothing is reloaded.' },
+            { label: 'Shortcut', detail: 'Pressing **Esc** on the home screen does the same when a tree is loaded.' }
+        ]
+    },
+    'clear stored data': {
+        title: 'clear stored data',
+        badge: 'Privacy • GDPR',
+        summary: 'Same action as the radial menu\'s **Clear stored data**: deletes the **three first-party cookies** (sheet history, deduction settings, colour theme) and their localStorage mirrors after a confirmation.',
+        examples: [
+            { label: 'Verify', detail: 'After clearing, open the **Sheets you have opened before** dropdown — it is empty.' },
+            { label: 'Theme Reset', detail: 'Clearing also returns the app to the **Classic Forest** theme.' }
         ]
     },
     'Download Standalone Interactive App (.html)': {
@@ -1363,6 +1422,31 @@ function resolveDynamicFilterButtonDoc(key) {
 }
 
 /**
+ * Documentation card for one theme card of the Appearance tab (`data-doc-key="Colour theme: <name>"`).
+ *
+ * @param {string} name - Theme display name, e.g. 'Midnight Black'.
+ * @returns {object|null} Documentation entry, or null when no theme has that name.
+ *
+ * @example
+ * resolveThemeCardDoc('Classic Forest').title; // => 'Colour theme: Classic Forest'
+ *
+ * @example
+ * resolveThemeCardDoc('Neon 1999'); // => null
+ */
+function resolveThemeCardDoc(name) {
+    const theme = COLOR_THEMES.find((entry) => entry.name === name);
+    if (!theme) return null;
+    return {
+        title: `Colour theme: ${theme.name}`, badge: `Appearance • ${theme.mode === 'dark' ? 'Dark' : 'Light'} palette`,
+        summary: `${theme.blurb} Clicking applies the **${theme.name}** palette **instantly** to every screen and remembers it in the \`ft_color_theme\` cookie on this device.`,
+        examples: [
+            { label: 'Try It', detail: `Click the card; the canvas, person cards and buttons repaint at once. Pick **Classic Forest** (or **Reset to Classic**) to go back.` },
+            { label: 'Material 3', detail: 'Every theme is a tonal palette generated from a few seed colours, so text keeps its contrast on the new surfaces.' }
+        ]
+    };
+}
+
+/**
  * Resolves rich documentation for contextual buttons based on visible button label text.
  *
  * @param {string} text - Normalized visible text inside the button.
@@ -1373,9 +1457,14 @@ function resolveDynamicFilterButtonDoc(key) {
  *
  * @example
  * const aiToggleDoc = resolveContextualButtonDoc('Rule');
+ *
+ * @example
+ * resolveContextualButtonDoc('Mathayi Parathottiyil').title; // => 'Mathayi Parathottiyil' (full name, no prefix)
  */
 function resolveContextualButtonDoc(text) {
     if (/^(Show|Hide)\s+Directory$/i.test(text)) return BUTTON_DOCUMENTATION_CATALOG['Toggle Directory'];
+    const themeDoc = /^Colour theme: /.test(text) ? resolveThemeCardDoc(text.replace(/^Colour theme: /, '')) : null;
+    if (themeDoc) return themeDoc;
     if (/^Locations\s*\(/i.test(text) || /^Careers\s*\(/i.test(text) || /^Families\s*\(/i.test(text)) {
         const tabName = text.split('(')[0].trim();
         return {
@@ -1397,9 +1486,9 @@ function resolveContextualButtonDoc(text) {
             ]
         };
     }
-    const clean = text ? text.slice(0, 48) : 'Interactive Control';
+    const clean = text ? text.slice(0, 120) : 'Interactive Control';
     return {
-        title: `Select / Toggle: ${clean}`, badge: 'Interactive Control • Action',
+        title: clean, badge: 'Interactive Control • Action',
         summary: `Activates **\`${clean}\`**, updating the **focused profile or filter** in the sidebar and synchronizing the **canvas camera** or **directory tree**.`,
         examples: [
             { label: 'Focus & Synchronize View', detail: `Click **"${clean}"** to navigate directly to the selected person, relative, region, or query.` },
@@ -1458,29 +1547,37 @@ function renderRichDocText(text) {
 }
 
 /**
- * Calculates clamped viewport coordinates (`left`, `top`, `placement`) for the button documentation popover.
+ * Calculates clamped viewport coordinates for the button documentation balloon: `left`/`top`
+ * for a card placed below the button, `left`/`bottom` (distance from the viewport bottom) for a
+ * card placed above it, plus the `tail.x` abscissa (relative to the card) where the speech-bubble
+ * tail should point at the button's centre.
  *
  * @param {{ left: number, top: number, right: number, bottom: number, width: number, height: number }} rect - Button bounding rect.
  * @param {number} [viewportW=1280] - Current viewport width in pixels.
  * @param {number} [viewportH=800] - Current viewport height in pixels.
- * @returns {{ left: number, top: number, placement: string }} Clamped popover coordinates.
+ * @returns {{ left: number, top: number, bottom: number, placement: string, tail: { x: number } }} Clamped balloon coordinates.
  *
  * @example
  * const pos = computeButtonDocPosition({ left: 100, top: 20, right: 144, bottom: 64, width: 44, height: 44 }, 1280, 800);
+ * // pos.placement === 'bottom', pos.tail.x === 170 (card centred on the button)
  *
  * @example
  * const bottomPos = computeButtonDocPosition({ left: 24, top: 720, right: 64, bottom: 760, width: 40, height: 40 }, 1280, 800);
+ * // bottomPos.placement === 'top', bottomPos.tail.x === 32 (card clamped to the left margin, tail slides towards the button)
  */
 function computeButtonDocPosition(rect, viewportW = 1280, viewportH = 800) {
-    const cardW = 340, cardH = 248, gap = 10, margin = 12;
+    const cardW = 340, cardH = 248, gap = 10, margin = 12, tailInset = 18;
     const r = rect || { left: 0, top: 0, right: 0, bottom: 0, width: 0, height: 0 };
-    const idealLeft = r.left + (r.width / 2) - (cardW / 2);
+    const centerX = r.left + (r.width / 2);
+    const idealLeft = centerX - (cardW / 2);
     const left = Math.max(margin, Math.min(idealLeft, Math.max(margin, viewportW - cardW - margin)));
     const placeBelow = (r.bottom + gap + cardH <= viewportH - margin) || (r.top < cardH + gap);
     const top = placeBelow
         ? Math.min(Math.max(margin, viewportH - cardH - margin), r.bottom + gap)
         : Math.max(margin, r.top - cardH - gap);
-    return { left: Math.round(left), top: Math.round(top), placement: placeBelow ? 'bottom' : 'top' };
+    const bottom = Math.max(margin, viewportH - r.top + gap);
+    const tailX = Math.max(tailInset, Math.min(cardW - tailInset, centerX - left));
+    return { left: Math.round(left), top: Math.round(top), bottom: Math.round(bottom), placement: placeBelow ? 'bottom' : 'top', tail: { x: Math.round(tailX) } };
 }
 
 /**
@@ -1574,7 +1671,33 @@ function useButtonDocHover() {
 }
 
 /**
- * Floating rich-text documentation popover card rendered when hovering over any application button.
+ * The speech-bubble tail of the documentation balloon: a rotated square whose two outer edges
+ * carry the card border. Painted after the card so its inner half hides the card's own edge.
+ *
+ * @param {object} props
+ * @param {number} props.x - Horizontal centre of the tail, relative to the card's left edge.
+ * @param {boolean} props.pointsUp - true when the card sits below the button (tail on top).
+ * @returns {React.ReactNode}
+ *
+ * @example
+ * <ButtonDocBalloonTail x={170} pointsUp={true} />
+ *
+ * @example
+ * <ButtonDocBalloonTail x={32} pointsUp={false} />
+ */
+const ButtonDocBalloonTail = ({ x, pointsUp }) => (
+    <span
+        aria-hidden="true"
+        data-testid="button-doc-tail"
+        className={`absolute h-3.5 w-3.5 rotate-45 border-slate-200 ${pointsUp ? 'bg-slate-50 border-l border-t' : 'bg-white border-r border-b'}`}
+        style={{ left: `${x - 7}px`, ...(pointsUp ? { top: '-7px' } : { bottom: '-7px' }) }}
+    />
+);
+
+/**
+ * Floating rich-text documentation balloon rendered when hovering over any application button.
+ * The card hangs below the button (tail on top) or, near the bottom of the viewport, floats
+ * above it (tail underneath); the header shows the button's full title.
  *
  * @returns {React.ReactNode|null}
  *
@@ -1588,31 +1711,36 @@ const ButtonDocTooltipOverlay = () => {
     const hoverState = useButtonDocHover();
     if (!hoverState || !hoverState.doc) return null;
     const { doc, pos } = hoverState;
+    const pointsUp = pos.placement === 'bottom';
+    const anchor = pointsUp ? { top: `${pos.top}px` } : { bottom: `${pos.bottom}px` };
     return (
         <div
             role="tooltip"
             data-testid="button-doc-popover"
-            className="fixed z-[9999] w-[340px] bg-white/98 backdrop-blur-xl border border-slate-200/90 rounded-2xl shadow-[0_16px_40px_rgba(15,23,42,0.18),0_4px_12px_rgba(15,23,42,0.08)] pointer-events-none overflow-hidden font-sans text-left transition-opacity duration-150"
-            style={{ left: `${pos.left}px`, top: `${pos.top}px` }}
+            data-placement={pos.placement}
+            className="fixed z-[9999] w-[340px] pointer-events-none font-sans text-left transition-opacity duration-150"
+            style={{ left: `${pos.left}px`, ...anchor }}
         >
-            <div className="bg-gradient-to-r from-slate-900 via-indigo-950 to-slate-900 px-3.5 py-2.5 flex items-center justify-between gap-2 border-b border-slate-800">
-                <div className="text-[12.5px] font-bold text-white truncate">{doc.title}</div>
-                <span className="text-[10px] font-semibold uppercase tracking-wider px-2 py-0.5 rounded-full bg-indigo-500/25 text-indigo-200 border border-indigo-400/30 shrink-0">{doc.badge}</span>
+            <div className="bg-white/98 backdrop-blur-xl border border-slate-200 rounded-2xl shadow-[0_16px_40px_rgba(15,23,42,0.18),0_4px_12px_rgba(15,23,42,0.08)] overflow-hidden">
+                <div className="bg-slate-50 px-3.5 py-2.5 border-b border-slate-200">
+                    <div className="text-[13px] font-bold leading-snug text-slate-900 break-words">{doc.title}</div>
+                </div>
+                <div className="p-3.5 space-y-2.5">
+                    <p className="text-[12px] leading-relaxed text-slate-600">{renderRichDocText(doc.summary)}</p>
+                    {doc.examples && doc.examples.length > 0 && (
+                        <div className="space-y-1.5 pt-1 border-t border-slate-100">
+                            <div className="text-[10px] font-bold uppercase tracking-wider text-slate-400">Usage Examples</div>
+                            {doc.examples.map((ex, i) => (
+                                <div key={i} className="bg-slate-50/90 border border-slate-200/70 rounded-lg px-2.5 py-1.5 text-[11.5px] leading-snug text-slate-600">
+                                    <span className="font-semibold text-indigo-700 mr-1">{ex.label}:</span>
+                                    {renderRichDocText(ex.detail)}
+                                </div>
+                            ))}
+                        </div>
+                    )}
+                </div>
             </div>
-            <div className="p-3.5 space-y-2.5">
-                <p className="text-[12px] leading-relaxed text-slate-600">{renderRichDocText(doc.summary)}</p>
-                {doc.examples && doc.examples.length > 0 && (
-                    <div className="space-y-1.5 pt-1 border-t border-slate-100">
-                        <div className="text-[10px] font-bold uppercase tracking-wider text-slate-400">Usage Examples</div>
-                        {doc.examples.map((ex, i) => (
-                            <div key={i} className="bg-slate-50/90 border border-slate-200/70 rounded-lg px-2.5 py-1.5 text-[11.5px] leading-snug text-slate-600">
-                                <span className="font-semibold text-indigo-700 mr-1">{ex.label}:</span>
-                                {renderRichDocText(ex.detail)}
-                            </div>
-                        ))}
-                    </div>
-                )}
-            </div>
+            <ButtonDocBalloonTail x={pos.tail.x} pointsUp={pointsUp} />
         </div>
     );
 };

@@ -1,10 +1,13 @@
 // ============================================================================
-// MODULE 6.14: DEDUCTION SETTINGS PANEL
+// MODULE 6.14: APP SETTINGS PANEL (Appearance + Deduction rules)
 //
-// Lets the user tune the social conventions behind the year deductions — above all
-// the bride's age at first marriage per birth cohort (born 1910s-20s ≈ 15, 1940s
-// ≈ 20-25, 2000s ≈ 25-30). Applying rebuilds the tree from the cached rows (no
-// refetch) and persists the values in a cookie (05_hooks/00_BrowserPreferences.jsx).
+// A tabbed dialog opened from the radial settings FAB. The Appearance tab picks one
+// of the Material 3 colour themes (01_core/08_ColorThemes.jsx) and applies it on the
+// spot. The Deduction tab lets the user tune the social conventions behind the year
+// deductions — above all the bride's age at first marriage per birth cohort (born
+// 1910s-20s ≈ 15, 1940s ≈ 20-25, 2000s ≈ 25-30). Applying rebuilds the tree from the
+// cached rows (no refetch). Both choices persist in cookies
+// (05_hooks/00_BrowserPreferences.jsx).
 // ============================================================================
 
 /** The three scalar knobs shown under the cohort table, with their sanitizer bounds. */
@@ -138,7 +141,7 @@ function useDemographicSettingsDraft(isOpen) {
 const SettingsNumberInput = ({ value, onChange, min, max, ariaLabel, className = '' }) => (
     <input type="number" inputMode="numeric" value={value} min={min} max={max} aria-label={ariaLabel}
         onChange={(e) => onChange(e.target.value)}
-        className={`h-9 w-24 rounded-lg border border-slate-300 bg-white px-2 text-right font-mono text-sm text-slate-800 outline-none focus:border-[#5c7c33] focus:ring-2 focus:ring-[#9cc95f]/50 ${className}`} />
+        className={`h-9 w-24 rounded-lg border border-slate-300 bg-white px-2 text-right font-mono text-sm text-slate-800 outline-none focus:border-primary focus:ring-2 focus:ring-primary/30 ${className}`} />
 );
 
 /**
@@ -172,7 +175,7 @@ const MarriageAgeAnchorsTable = ({ anchors, onCell, onAdd, onRemove }) => (
                 </button>
             </div>
         ))}
-        <button type="button" onClick={onAdd} className="w-full border-t border-slate-100 px-3 py-2 text-left text-xs font-semibold text-[#5c7c33] hover:bg-[#f3f8ea]">
+        <button type="button" onClick={onAdd} className="w-full border-t border-slate-100 px-3 py-2 text-left text-xs font-semibold text-primary hover:bg-primary-container/60">
             + Add a cohort
         </button>
     </div>
@@ -233,7 +236,7 @@ const DemographicScalarFields = ({ draft, onField }) => (
 );
 
 /**
- * Footer actions: reset to shipped defaults, cancel, apply.
+ * Footer actions of the deduction tab: reset to shipped defaults, cancel, apply.
  *
  * @param {object} props
  * @param {Function} props.onReset - Reset draft to defaults
@@ -252,55 +255,276 @@ const SettingsPanelFooter = ({ onReset, onCancel, onApply }) => (
         <button type="button" onClick={onReset} className="text-xs font-semibold text-slate-500 hover:text-slate-700">Reset to defaults</button>
         <span className="flex-1" />
         <button type="button" onClick={onCancel} className="h-9 rounded-lg px-4 text-sm font-medium text-slate-600 hover:bg-slate-100">Cancel</button>
-        <button type="button" onClick={onApply} className="h-9 rounded-lg bg-[#5c7c33] px-4 text-sm font-semibold text-white shadow-sm hover:bg-[#4a6a27]">
+        <button type="button" onClick={onApply} className="h-9 rounded-lg bg-primary px-4 text-sm font-semibold text-on-primary shadow-sm hover:bg-primary-hover">
             Apply &amp; rebuild tree
         </button>
     </div>
 );
 
+/** Tabs of the settings dialog, in display order. */
+const SETTINGS_PANEL_TABS = Object.freeze([
+    { id: 'theme', label: 'Appearance', icon: 'Palette', subtitle: 'Colour theme of the whole app. Saved in a cookie on this device.' },
+    { id: 'deduction', label: 'Deduction rules', icon: 'Sliders', subtitle: 'How missing birth years are guessed. Saved in a cookie on this device; applies to every sheet you open here.' },
+]);
+
 /**
- * Modal panel for the deduction settings. Apply sanitizes the draft, installs it into the
- * live model, persists it, and asks the app to rebuild the tree from cached rows.
+ * Returns the tab definition for an id, falling back to the first tab for unknown ids.
+ *
+ * @param {string} id - 'theme' | 'deduction' | anything else
+ * @returns {{id: string, label: string, icon: string, subtitle: string}}
+ *
+ * @example
+ * resolveSettingsPanelTab('deduction').label; // => 'Deduction rules'
+ *
+ * @example
+ * resolveSettingsPanelTab('nope').id; // => 'theme'
+ */
+function resolveSettingsPanelTab(id) {
+    return SETTINGS_PANEL_TABS.find(tab => tab.id === id) || SETTINGS_PANEL_TABS[0];
+}
+
+/**
+ * Active tab state, re-seeded from `initialTab` every time the dialog opens (so the radial
+ * menu can open the dialog directly on the requested tab).
+ *
+ * @param {boolean} isOpen - Whether the dialog is showing
+ * @param {string} initialTab - Tab requested by the opener
+ * @returns {[string, Function]} [tabId, setTabId]
+ *
+ * @example
+ * const [tab, setTab] = useSettingsPanelTab(isOpen, 'deduction');
+ *
+ * @example
+ * const [tab] = useSettingsPanelTab(true, 'unknown'); // tab === 'theme'
+ */
+function useSettingsPanelTab(isOpen, initialTab) {
+    const [tab, setTab] = useState(() => resolveSettingsPanelTab(initialTab).id);
+    useEffect(() => {
+        if (isOpen) setTab(resolveSettingsPanelTab(initialTab).id);
+    }, [isOpen, initialTab]);
+    return [tab, setTab];
+}
+
+/**
+ * Dialog header: title, the active tab's subtitle, the tab strip and the close button.
  *
  * @param {object} props
- * @param {boolean} props.isOpen - Show the panel
- * @param {Function} props.onClose - Close without applying
- * @param {Function} props.onApply - Receives the raw draft to apply
+ * @param {string} props.tab - Active tab id
+ * @param {Function} props.onTab - Receives the clicked tab id
+ * @param {Function} props.onClose - Close the dialog
+ * @returns {React.ReactNode}
+ *
+ * @example
+ * <SettingsPanelHeader tab="theme" onTab={setTab} onClose={onClose} />
+ *
+ * @example
+ * <SettingsPanelHeader tab="deduction" onTab={() => {}} onClose={() => {}} />
+ */
+const SettingsPanelHeader = ({ tab, onTab, onClose }) => (
+    <div className="border-b border-slate-200 px-5 pt-4">
+        <div className="flex items-start gap-3">
+            <div className="flex-1">
+                <h2 id="app-settings-title" className="text-lg font-bold text-slate-800">Settings</h2>
+                <p className="mt-0.5 text-xs text-slate-500">{resolveSettingsPanelTab(tab).subtitle}</p>
+            </div>
+            <button type="button" onClick={onClose} className="rounded-lg p-1.5 text-slate-400 hover:bg-slate-100 hover:text-slate-700" title="Close"><Icons.Close /></button>
+        </div>
+        <div role="tablist" aria-label="Settings sections" className="mt-3 flex gap-1">
+            {SETTINGS_PANEL_TABS.map(item => {
+                const Icon = Icons[item.icon];
+                const active = item.id === tab;
+                return (
+                    <button key={item.id} type="button" role="tab" aria-selected={active} data-testid={`settings-tab-${item.id}`} onClick={() => onTab(item.id)}
+                        className={`-mb-px flex items-center gap-1.5 border-b-2 px-3 py-2 text-sm font-semibold transition-colors ${active ? 'border-primary text-primary' : 'border-transparent text-slate-500 hover:text-slate-700'}`}>
+                        <Icon />{item.label}
+                    </button>
+                );
+            })}
+        </div>
+    </div>
+);
+
+/**
+ * Miniature rendering of a theme: canvas, a male and a female person card joined by a
+ * connector, a text line and a primary button — enough to judge the palette at a glance.
+ *
+ * @param {object} props
+ * @param {Object} props.swatches - Result of describeThemeSwatches()
+ * @returns {React.ReactNode}
+ *
+ * @example
+ * <ThemePreviewArt swatches={describeThemeSwatches(resolveColorTheme('earthy'))} />
+ *
+ * @example
+ * <ThemePreviewArt swatches={{ canvas: '#fff', male: '#e0f2fe', maleBorder: '#7dd3fc', female: '#ffe4e6', femaleBorder: '#fda4af', line: '#cbd5e1', text: '#1e293b', primary: '#5c7c33', onPrimary: '#fff' }} />
+ */
+const ThemePreviewArt = ({ swatches }) => (
+    <div aria-hidden="true" className="relative h-20 w-full" style={{ backgroundColor: swatches.canvas }}>
+        <div className="absolute left-3 top-3 h-7 w-12 rounded-md border" style={{ backgroundColor: swatches.male, borderColor: swatches.maleBorder }} />
+        <div className="absolute left-[4.75rem] top-3 h-7 w-12 rounded-md border" style={{ backgroundColor: swatches.female, borderColor: swatches.femaleBorder }} />
+        <div className="absolute left-[3.75rem] top-[1.6rem] h-px w-4" style={{ backgroundColor: swatches.line }} />
+        <div className="absolute left-3 top-[3.25rem] h-1.5 w-20 rounded-full opacity-80" style={{ backgroundColor: swatches.text }} />
+        <div className="absolute left-3 top-[4.1rem] h-1 w-12 rounded-full opacity-40" style={{ backgroundColor: swatches.text }} />
+        <div className="absolute bottom-3 right-3 rounded-full px-2 py-0.5 text-[9px] font-bold leading-4" style={{ backgroundColor: swatches.primary, color: swatches.onPrimary }}>Open</div>
+    </div>
+);
+
+/**
+ * One selectable theme card (radio semantics via aria-checked). Documented in the hover help
+ * through its `data-doc-key`.
+ *
+ * @param {object} props
+ * @param {Object} props.theme - Entry of COLOR_THEMES
+ * @param {Object} props.swatches - describeThemeSwatches() of the resolved theme
+ * @param {boolean} props.isActive - Whether this theme is the current one
+ * @param {Function} props.onSelect - Receives the theme id
+ * @returns {React.ReactNode}
+ *
+ * @example
+ * <ColorThemeCard theme={COLOR_THEMES[0]} swatches={describeThemeSwatches(resolveColorTheme('classic'))} isActive={true} onSelect={setTheme} />
+ *
+ * @example
+ * <ColorThemeCard theme={getColorThemeDefinition('midnight')} swatches={describeThemeSwatches(resolveColorTheme('midnight'))} isActive={false} onSelect={() => {}} />
+ */
+const ColorThemeCard = ({ theme, swatches, isActive, onSelect }) => (
+    <button type="button" role="radio" aria-checked={isActive} data-testid={`theme-card-${theme.id}`} data-doc-key={`Colour theme: ${theme.name}`}
+        onClick={() => onSelect(theme.id)}
+        className={`flex flex-col overflow-hidden rounded-xl border-2 text-left transition-shadow focus:outline-none focus-visible:ring-2 focus-visible:ring-primary/40 ${isActive ? 'border-primary shadow-md' : 'border-slate-200 hover:border-slate-400 hover:shadow'}`}>
+        <ThemePreviewArt swatches={swatches} />
+        <div className="flex w-full items-center gap-2 border-t border-slate-200 bg-white px-3 py-2">
+            <span className="flex-1 truncate text-sm font-semibold text-slate-800">{theme.name}</span>
+            <span className={`rounded-full px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wide ${theme.mode === 'dark' ? 'bg-slate-800 text-slate-100' : 'bg-slate-100 text-slate-600'}`}>{theme.mode}</span>
+            {isActive && <span className="rounded-full bg-primary px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wide text-on-primary">Active</span>}
+        </div>
+        <p className="w-full bg-white px-3 pb-2.5 text-[11px] leading-snug text-slate-500">{theme.blurb}</p>
+    </button>
+);
+
+/**
+ * Grid of every theme card; previews are computed once per mount.
+ *
+ * @param {object} props
+ * @param {string} props.themeId - Active theme id
+ * @param {Function} props.onThemeChange - Receives the chosen theme id
+ * @returns {React.ReactNode}
+ *
+ * @example
+ * <ColorThemePicker themeId="classic" onThemeChange={changeTheme} />
+ *
+ * @example
+ * <ColorThemePicker themeId="solarized-dark" onThemeChange={(id) => console.log(id)} />
+ */
+const ColorThemePicker = ({ themeId, onThemeChange }) => {
+    const previews = useMemo(() => COLOR_THEMES.map(theme => ({ theme, swatches: describeThemeSwatches(resolveColorTheme(theme.id)) })), []);
+    return (
+        <div role="radiogroup" aria-label="Colour theme" data-testid="color-theme-picker" className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+            {previews.map(({ theme, swatches }) => (
+                <ColorThemeCard key={theme.id} theme={theme} swatches={swatches} isActive={theme.id === themeId} onSelect={onThemeChange} />
+            ))}
+        </div>
+    );
+};
+
+/**
+ * Appearance tab: the theme picker plus a footer with "Reset to Classic" and "Done".
+ *
+ * @param {object} props
+ * @param {string} props.themeId - Active theme id
+ * @param {Function} props.onThemeChange - Receives the chosen theme id (applied immediately)
+ * @param {Function} props.onClose - Close the dialog
+ * @returns {React.ReactNode}
+ *
+ * @example
+ * <AppearanceSettingsTab themeId={themeId} onThemeChange={changeTheme} onClose={onClose} />
+ *
+ * @example
+ * <AppearanceSettingsTab themeId="pastel" onThemeChange={() => {}} onClose={() => {}} />
+ */
+const AppearanceSettingsTab = ({ themeId, onThemeChange, onClose }) => (
+    <>
+        <div data-testid="appearance-settings-tab" className="custom-scrollbar flex-1 overflow-y-auto px-5 py-4">
+            <h3 className="text-sm font-semibold text-slate-700">Colour theme</h3>
+            <p className="mb-3 text-[11px] text-slate-500">
+                Material 3 tonal palettes generated from a few seed colours. Pick a card to switch instantly; the choice is remembered on this device.
+            </p>
+            <ColorThemePicker themeId={themeId} onThemeChange={onThemeChange} />
+        </div>
+        <div className="flex items-center gap-2 border-t border-slate-200 px-5 py-3">
+            <button type="button" onClick={() => onThemeChange(DEFAULT_COLOR_THEME_ID)} disabled={themeId === DEFAULT_COLOR_THEME_ID}
+                className="text-xs font-semibold text-slate-500 hover:text-slate-700 disabled:opacity-40">Reset to Classic</button>
+            <span className="flex-1" />
+            <button type="button" onClick={onClose} className="h-9 rounded-lg bg-primary px-4 text-sm font-semibold text-on-primary shadow-sm hover:bg-primary-hover">Done</button>
+        </div>
+    </>
+);
+
+/**
+ * Deduction tab: cohort table, preview, scalar fields and the apply footer.
+ *
+ * @param {object} props
+ * @param {Object} props.editor - Result of useDemographicSettingsDraft()
+ * @param {Function} props.onCancel - Close without applying
+ * @param {Function} props.onApply - Receives the raw draft
+ * @returns {React.ReactNode}
+ *
+ * @example
+ * <DeductionSettingsTab editor={useDemographicSettingsDraft(isOpen)} onCancel={onClose} onApply={applyDraft} />
+ *
+ * @example
+ * <DeductionSettingsTab editor={editor} onCancel={() => {}} onApply={(draft) => console.log(draft)} />
+ */
+const DeductionSettingsTab = ({ editor, onCancel, onApply }) => {
+    const { draft, setField, setAnchor, addAnchor, removeAnchor, resetDraft } = editor;
+    return (
+        <>
+            <div data-testid="deduction-settings-tab" className="custom-scrollbar flex-1 space-y-5 overflow-y-auto px-5 py-4">
+                <section>
+                    <h3 className="text-sm font-semibold text-slate-700">Bride's age at first marriage, by birth cohort</h3>
+                    <p className="mb-2 text-[11px] text-slate-500">Ages between cohorts are interpolated; outside the table the nearest cohort applies.</p>
+                    <MarriageAgeAnchorsTable anchors={draft.marriageAgeAnchors} onCell={setAnchor} onAdd={addAnchor} onRemove={removeAnchor} />
+                    <MarriageAgePreview draft={draft} />
+                </section>
+                <section>
+                    <h3 className="mb-2 text-sm font-semibold text-slate-700">Other intervals</h3>
+                    <DemographicScalarFields draft={draft} onField={setField} />
+                </section>
+            </div>
+            <SettingsPanelFooter onReset={resetDraft} onCancel={onCancel} onApply={() => onApply(draft)} />
+        </>
+    );
+};
+
+/**
+ * The tabbed settings dialog opened from the radial FAB. Theme changes apply instantly (and
+ * persist); deduction changes apply on "Apply & rebuild tree".
+ *
+ * @param {object} props
+ * @param {boolean} props.isOpen - Show the dialog
+ * @param {string} props.initialTab - Tab to show when opening ('theme' | 'deduction')
+ * @param {Function} props.onClose - Close the dialog
+ * @param {Function} props.onApplyDeduction - Receives the raw deduction draft
+ * @param {string} props.themeId - Active theme id
+ * @param {Function} props.onThemeChange - Receives the chosen theme id
  * @returns {React.ReactNode|null}
  *
  * @example
- * <DeductionSettingsPanel isOpen={isSettingsOpen} onClose={() => setIsSettingsOpen(false)} onApply={applyDemographicSettings} />
+ * <AppSettingsPanel isOpen={isSettingsOpen} initialTab={settingsTab} onClose={closeSettings} onApplyDeduction={applyDraft} themeId={themeId} onThemeChange={changeTheme} />
  *
  * @example
- * <DeductionSettingsPanel isOpen={true} onClose={close} onApply={(draft) => console.log(draft)} />
+ * <AppSettingsPanel isOpen={true} initialTab="deduction" onClose={close} onApplyDeduction={(draft) => console.log(draft)} themeId="classic" onThemeChange={() => {}} />
  */
-const DeductionSettingsPanel = ({ isOpen, onClose, onApply }) => {
-    const { draft, setField, setAnchor, addAnchor, removeAnchor, resetDraft } = useDemographicSettingsDraft(isOpen);
+const AppSettingsPanel = ({ isOpen, initialTab, onClose, onApplyDeduction, themeId, onThemeChange }) => {
+    const [tab, setTab] = useSettingsPanelTab(isOpen, initialTab);
+    const editor = useDemographicSettingsDraft(isOpen);
     if (!isOpen) return null;
     return (
-        <div data-testid="deduction-settings-panel" className="fixed inset-0 z-[65] flex items-center justify-center bg-slate-900/30 p-4 backdrop-blur-[2px]" onPointerDown={onClose}>
-            <div role="dialog" aria-modal="true" aria-labelledby="deduction-settings-title" onPointerDown={(e) => e.stopPropagation()}
-                className="flex max-h-full w-full max-w-xl flex-col overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-2xl">
-                <div className="flex items-start gap-3 border-b border-slate-200 px-5 py-4">
-                    <div className="flex-1">
-                        <h2 id="deduction-settings-title" className="text-lg font-bold text-slate-800">Deduction settings</h2>
-                        <p className="mt-0.5 text-xs text-slate-500">How missing birth years are guessed. Saved in a cookie on this device; applies to every sheet you open here.</p>
-                    </div>
-                    <button type="button" onClick={onClose} className="rounded-lg p-1.5 text-slate-400 hover:bg-slate-100 hover:text-slate-700" title="Close"><Icons.Close /></button>
-                </div>
-                <div className="custom-scrollbar flex-1 space-y-5 overflow-y-auto px-5 py-4">
-                    <section>
-                        <h3 className="text-sm font-semibold text-slate-700">Bride's age at first marriage, by birth cohort</h3>
-                        <p className="mb-2 text-[11px] text-slate-500">Ages between cohorts are interpolated; outside the table the nearest cohort applies.</p>
-                        <MarriageAgeAnchorsTable anchors={draft.marriageAgeAnchors} onCell={setAnchor} onAdd={addAnchor} onRemove={removeAnchor} />
-                        <MarriageAgePreview draft={draft} />
-                    </section>
-                    <section>
-                        <h3 className="mb-2 text-sm font-semibold text-slate-700">Other intervals</h3>
-                        <DemographicScalarFields draft={draft} onField={setField} />
-                    </section>
-                </div>
-                <SettingsPanelFooter onReset={resetDraft} onCancel={onClose} onApply={() => onApply(draft)} />
+        <div data-testid="app-settings-panel" className="fixed inset-0 z-[85] flex items-center justify-center bg-black/30 p-4 backdrop-blur-[2px]" onPointerDown={onClose}>
+            <div role="dialog" aria-modal="true" aria-labelledby="app-settings-title" onPointerDown={(e) => e.stopPropagation()}
+                className="flex max-h-full w-full max-w-2xl flex-col overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-2xl">
+                <SettingsPanelHeader tab={tab} onTab={setTab} onClose={onClose} />
+                {tab === 'deduction'
+                    ? <DeductionSettingsTab editor={editor} onCancel={onClose} onApply={onApplyDeduction} />
+                    : <AppearanceSettingsTab themeId={themeId} onThemeChange={onThemeChange} onClose={onClose} />}
             </div>
         </div>
     );

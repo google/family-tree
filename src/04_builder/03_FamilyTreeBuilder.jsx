@@ -1302,24 +1302,7 @@ class FamilyTreeBuilder {
      * console.log(cfg.includes('text-gradient'));
      */
     static _getStandaloneTailwindConfig() {
-        return `  <script>
-    tailwind.config = {
-      theme: {
-        extend: {
-          keyframes: {
-            'text-gradient': {
-              '0%': { backgroundPosition: '0% 50%' },
-              '50%': { backgroundPosition: '100% 50%' },
-              '100%': { backgroundPosition: '0% 50%' },
-            }
-          },
-          animation: {
-            'text-gradient': 'text-gradient 3s linear infinite',
-          }
-        }
-      }
-    }
-  </script>`;
+        return `  <script>\n${TAILWIND_THEME_CONFIG_SCRIPT}\n  </script>`;
     }
 
     /**

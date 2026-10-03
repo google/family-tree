@@ -116,7 +116,7 @@ const TimelineLabels = ({ dynamicYears, rootNodeYob, maxYear, camera, ppy }) => 
     const GENERATIONS = HISTORICAL_GENERATION_COHORTS;
 
     return (
-        <div className="absolute top-0 left-0 bottom-0 w-12 pointer-events-none z-20 border-r border-slate-200 bg-[#f8fafc]/90 backdrop-blur-sm shadow-[2px_0_4px_rgba(0,0,0,0.02)] font-sans overflow-hidden">
+        <div className="absolute top-0 left-0 bottom-0 w-12 pointer-events-none z-20 border-r border-slate-200 bg-slate-50/90 backdrop-blur-sm shadow-[2px_0_4px_rgba(0,0,0,0.02)] font-sans overflow-hidden">
             {GENERATIONS.map(gen => {
                 if (maxYear && gen.start > maxYear) return null;
                 const effectiveEnd = maxYear ? Math.min(gen.end, maxYear) : gen.end;
@@ -3231,34 +3231,33 @@ const GlobalAppStyles = React.memo(() => (
             .tf-tree { text-align: center; display: inline-block; white-space: nowrap; transform-origin: top center; }
             .tf-tree ul { padding-top: 24px; position: relative; display: flex; justify-content: center; margin: 0; padding-left: 0; }
             .tf-tree li { float: left; text-align: center; list-style-type: none; position: relative; padding: 0; flex-shrink: 0; margin-right: var(--partner-margin, 0px); margin-left: var(--left-partner-margin, 0px); }
-            .tf-tree li::before { content: ''; position: absolute; top: 0; right: 50%; border-top: 2px solid #cbd5e1; width: calc(50% + var(--left-partner-margin, 0px)); height: 16px; z-index: 0; }
-            .tf-tree li::after { content: ''; position: absolute; top: 0; left: calc(50% - 1px); border-top: 2px solid #cbd5e1; border-left: 2px solid #cbd5e1; width: calc(50% + var(--partner-margin, 0px) + 1px); height: 16px; z-index: 0; }
+            .tf-tree li::before { content: ''; position: absolute; top: 0; right: 50%; border-top: 2px solid rgb(var(--tw-slate-300, 203 213 225)); width: calc(50% + var(--left-partner-margin, 0px)); height: 16px; z-index: 0; }
+            .tf-tree li::after { content: ''; position: absolute; top: 0; left: calc(50% - 1px); border-top: 2px solid rgb(var(--tw-slate-300, 203 213 225)); border-left: 2px solid rgb(var(--tw-slate-300, 203 213 225)); width: calc(50% + var(--partner-margin, 0px) + 1px); height: 16px; z-index: 0; }
             .tf-tree li:first-child::before, .tf-tree li:last-child::after { border: 0 none; }
             .tf-tree li:first-child::after { border-radius: 12px 0 0 0; left: calc(50% - 1px); }
-            .tf-tree li:last-child::before { border-right: 2px solid #cbd5e1; border-radius: 0 12px 0 0; right: calc(50% - 1px); width: calc(50% + var(--left-partner-margin, 0px) + 1px); }
-            .tf-tree li:only-child::after { display: block; border-top: none; border-left: 2px solid #cbd5e1; border-radius: 0; height: 16px; left: calc(50% - 1px); }
+            .tf-tree li:last-child::before { border-right: 2px solid rgb(var(--tw-slate-300, 203 213 225)); border-radius: 0 12px 0 0; right: calc(50% - 1px); width: calc(50% + var(--left-partner-margin, 0px) + 1px); }
+            .tf-tree li:only-child::after { display: block; border-top: none; border-left: 2px solid rgb(var(--tw-slate-300, 203 213 225)); border-radius: 0; height: 16px; left: calc(50% - 1px); }
             .tf-tree li:only-child::before { display: none; }
             .family-unit { display: inline-flex; align-items: stretch; justify-content: center; padding: 0 12px; }
             .disable-transitions, .disable-transitions * { transition: none !important; animation: none !important; }
             .custom-scrollbar::-webkit-scrollbar { width: 6px; }
             .custom-scrollbar::-webkit-scrollbar-track { background: transparent; margin: 4px; }
-            .custom-scrollbar::-webkit-scrollbar-thumb { background-color: #cbd5e1; border-radius: 10px; }
-            .custom-scrollbar::-webkit-scrollbar-thumb:hover { background-color: #94a3b8; }
+            .custom-scrollbar::-webkit-scrollbar-thumb { background-color: rgb(var(--tw-slate-300, 203 213 225)); border-radius: 10px; }
+            .custom-scrollbar::-webkit-scrollbar-thumb:hover { background-color: rgb(var(--tw-slate-400, 148 163 184)); }
+            html[data-theme-mode="dark"] .leaflet-tile { filter: invert(1) hue-rotate(180deg) brightness(0.9); }
             @keyframes text-gradient { 0% { background-position: 0% 50%; } 50% { background-position: 100% 50%; } 100% { background-position: 0% 50%; } }
             .animate-text-gradient { background-size: 200% auto; animation: text-gradient 3s linear infinite; }
             @keyframes ai-pulse {
                 0%, 100% {
                     transform: scale(1.05);
-                    box-shadow: 0 0 0 0 rgba(59, 130, 246, 0.7), 0 10px 15px -3px rgba(0, 0, 0, 0.1);
+                    box-shadow: 0 0 0 0 rgb(var(--tw-blue-500, 59 130 246) / 0.7), 0 10px 15px -3px rgba(0, 0, 0, 0.1);
                 }
                 50% {
                     transform: scale(1.14);
-                    box-shadow: 0 0 0 12px rgba(59, 130, 246, 0), 0 20px 25px -5px rgba(59, 130, 246, 0.35);
+                    box-shadow: 0 0 0 12px rgb(var(--tw-blue-500, 59 130 246) / 0), 0 20px 25px -5px rgb(var(--tw-blue-500, 59 130 246) / 0.35);
                 }
             }
-            .ai-profile-highlight {
-                animation: ai-pulse 1.6s ease-in-out infinite !important;
-            }
+            .ai-profile-highlight { animation: ai-pulse 1.6s ease-in-out infinite !important; }
         `}</style>
     </>
 ));

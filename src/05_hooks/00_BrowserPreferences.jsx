@@ -1,17 +1,20 @@
 // ============================================================================
 // MODULE 5.0: BROWSER PREFERENCES — cookie-backed persistence of the Google Sheet
-// history shown on the home screen and of the user-tuned demographic settings.
+// history shown on the home screen, the user-tuned demographic settings and the
+// chosen colour theme.
 //
 // Everything the user has typed or chosen stays in THIS browser (first-party
 // cookie mirrored into localStorage for file:// standalone exports where
 // document.cookie is inert). Nothing is ever sent to a server; the GDPR note on
-// the home screen describes exactly these two cookies.
+// the home screen describes exactly these three cookies.
 // ============================================================================
 
 /** Cookie holding the ranked list of every Google Sheet the user has opened. */
 const SHEET_HISTORY_COOKIE = 'ft_sheet_history';
 /** Cookie holding the user-tuned demographic deduction settings (JSON). */
 const DEMOGRAPHIC_SETTINGS_COOKIE = 'ft_demographic_settings';
+/** Cookie holding the id of the chosen colour theme (see COLOR_THEMES). */
+const COLOR_THEME_COOKIE = 'ft_color_theme';
 /** Preferences survive one year of inactivity; every write refreshes the clock. */
 const PREFERENCE_COOKIE_MAX_AGE_SECONDS = 365 * 24 * 60 * 60;
 /** Browsers cap a single cookie at 4096 bytes; a dozen compact entries stay well below. */
@@ -608,6 +611,39 @@ function formatSheetHistoryLabel(entry) {
     return `${title} — ${entry.id}`;
 }
 
+/**
+ * Best-known human title for whatever sits in the home-screen textbox: the history entry's
+ * title, else the title learned from a CSV response this session, else the demo title when
+ * the text points at the demo sheet; '' when the text is not a sheet reference or unknown.
+ *
+ * @param {string} text - Raw textbox content (URL or bare ID)
+ * @param {Array<SheetHistoryEntry>} [history=readSheetHistory()] - Persisted history
+ * @param {Map<string, string>} [registry=sheetTitleRegistry] - Session title registry
+ * @returns {string}
+ *
+ * @example
+ * resolveKnownSheetTitle('https://docs.google.com/spreadsheets/d/1BQvyFoA_-u4MG-r1SRDel93F1TwEaN3I6v6p-kOH8z0/edit', [], new Map());
+ * // => 'Ancestry Browser: Demo'
+ *
+ * @example
+ * resolveKnownSheetTitle('1AbCdEfGhIjKlMnOpQrStUvWxYz0123456789abcd', [{ id: '1AbCdEfGhIjKlMnOpQrStUvWxYz0123456789abcd', title: 'Smith family', uses: 1, lastUsed: 1 }], new Map());
+ * // => 'Smith family'
+ *
+ * @example
+ * resolveKnownSheetTitle('not a sheet', [], new Map());
+ * // => ''
+ */
+function resolveKnownSheetTitle(text, history = readSheetHistory(), registry = sheetTitleRegistry) {
+    const ref = normalizeSheetReference(text);
+    if (!ref) return '';
+    const entry = (history || []).find((item) => item && item.id === ref.id);
+    const fromHistory = entry && typeof entry.title === 'string' ? entry.title.trim() : '';
+    if (fromHistory) return fromHistory;
+    const fromRegistry = getRememberedSheetTitle(ref.id, registry).trim();
+    if (fromRegistry) return fromRegistry;
+    return ref.id === DEMO_SHEET_ID ? DEMO_SHEET_TITLE : '';
+}
+
 // ─── Sheet titles learned from the CSV export response ──────────────────────
 
 /** In-memory map sheetId → spreadsheet title, filled while crawling. */
@@ -821,9 +857,79 @@ function applyStoredDemographicSettings() {
     return FamilyTreeBuilder.applyDemographicSettings(stored);
 }
 
+// ─── Colour theme persistence ───────────────────────────────────────────────
+
 /**
- * The "Clear stored data" action of the GDPR notice: deletes both preference cookies and
- * their mirrors, empties the in-memory title registry, and restores the shipped model.
+ * Reads the stored theme id, or null when nothing (or an unknown / retired id) is stored.
+ *
+ * @returns {string|null}
+ *
+ * @example
+ * saveColorThemeId('midnight');
+ * loadStoredColorThemeId(); // => 'midnight'
+ *
+ * @example
+ * writePreference(COLOR_THEME_COOKIE, 'neon-1999');
+ * loadStoredColorThemeId(); // => null (unknown ids are ignored)
+ */
+function loadStoredColorThemeId() {
+    const raw = readPreference(COLOR_THEME_COOKIE);
+    return isKnownColorThemeId(raw) ? raw : null;
+}
+
+/**
+ * Persists the chosen theme id (unknown ids are rejected and nothing is written).
+ *
+ * @param {string} id - One of COLOR_THEMES[].id
+ * @returns {boolean} true when stored
+ *
+ * @example
+ * saveColorThemeId('earthy'); // => true
+ *
+ * @example
+ * saveColorThemeId('not-a-theme'); // => false
+ */
+function saveColorThemeId(id) {
+    if (!isKnownColorThemeId(id)) return false;
+    writePreference(COLOR_THEME_COOKIE, id);
+    return true;
+}
+
+/**
+ * Forgets the stored theme (the page keeps its current colours until re-applied).
+ *
+ * @example
+ * clearStoredColorTheme();
+ * loadStoredColorThemeId(); // => null
+ *
+ * @example
+ * saveColorThemeId('ocean'); clearStoredColorTheme(); readPreference(COLOR_THEME_COOKIE); // => null
+ */
+function clearStoredColorTheme() {
+    removePreference(COLOR_THEME_COOKIE);
+}
+
+/**
+ * Applies the stored theme (or Classic) to the document at startup and returns it.
+ *
+ * @returns {Object} The resolved theme (`{ id, name, mode, roles, … }`)
+ *
+ * @example
+ * saveColorThemeId('midnight');
+ * applyStoredColorTheme().id; // => 'midnight' (<html data-theme="midnight">)
+ *
+ * @example
+ * clearStoredColorTheme();
+ * applyStoredColorTheme().id; // => 'classic'
+ */
+function applyStoredColorTheme() {
+    return applyColorTheme(loadStoredColorThemeId() || DEFAULT_COLOR_THEME_ID);
+}
+
+/**
+ * The "Clear stored data" action of the GDPR notice: deletes all three preference cookies and
+ * their mirrors, empties the in-memory title registry, restores the shipped model and repaints
+ * the Classic theme.
  *
  * @example
  * clearStoredPreferences();
@@ -832,10 +938,13 @@ function applyStoredDemographicSettings() {
  * @example
  * clearStoredPreferences();
  * loadStoredDemographicSettings(); // => null
+ * loadStoredColorThemeId();        // => null
  */
 function clearStoredPreferences() {
     removePreference(SHEET_HISTORY_COOKIE);
     removePreference(DEMOGRAPHIC_SETTINGS_COOKIE);
+    removePreference(COLOR_THEME_COOKIE);
     sheetTitleRegistry.clear();
     FamilyTreeBuilder.resetDemographicSettings();
+    applyColorTheme(DEFAULT_COLOR_THEME_ID);
 }

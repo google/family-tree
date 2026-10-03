@@ -16,6 +16,10 @@ import path from 'path';
 
 const SRC_DIR = 'src';
 const OUTPUT_FILE = 'App.jsx';
+const INDEX_FILE = 'index.html';
+const THEME_MODULE_SUFFIX = '08_ColorThemes.jsx';
+const THEME_CONFIG_BEGIN = '<!-- FT_TAILWIND_THEME_CONFIG:BEGIN -->';
+const THEME_CONFIG_END = '<!-- FT_TAILWIND_THEME_CONFIG:END -->';
 
 // ANSI colors
 const GREEN = '\x1b[32m';
@@ -48,6 +52,60 @@ function discoverSourceFiles(dir) {
         }
     }
     return results;
+}
+
+/**
+ * Evaluates the (JSX-free, side-effect free) colour theme module and returns the generated
+ * `tailwind.config = {…}` script that maps every Tailwind colour onto a CSS variable.
+ *
+ * @param {Array<string>} sourceFiles - Discovered source files.
+ * @returns {string|null} Script body, or null when the module is absent.
+ */
+function buildThemeConfigScript(sourceFiles) {
+    const themeFile = sourceFiles.find((file) => file.endsWith(THEME_MODULE_SUFFIX));
+    if (!themeFile) return null;
+    const source = fs.readFileSync(themeFile, 'utf8');
+    return new Function(`${source}\n;return TAILWIND_THEME_CONFIG_SCRIPT;`)();
+}
+
+/**
+ * Returns the index.html text with the theme config script stamped between the markers
+ * (unchanged when the markers are missing).
+ *
+ * @param {string} html - Current index.html content.
+ * @param {string} script - Script body from buildThemeConfigScript().
+ * @returns {string}
+ */
+export function stampThemeConfigIntoHtml(html, script) {
+    const begin = html.indexOf(THEME_CONFIG_BEGIN);
+    const end = html.indexOf(THEME_CONFIG_END);
+    if (begin < 0 || end < 0 || end < begin) return html;
+    const indented = script.split('\n').map((line) => (line ? `    ${line}` : line)).join('\n');
+    const block = `${THEME_CONFIG_BEGIN}\n  <script>\n${indented}\n  </script>\n  `;
+    return html.slice(0, begin) + block + html.slice(end);
+}
+
+/**
+ * Keeps index.html's embedded Tailwind theme config in sync with the theme module.
+ *
+ * @param {Array<string>} sourceFiles - Discovered source files.
+ * @param {{ silent: boolean, checkOnly: boolean }} options
+ * @returns {{ success: boolean, changed: boolean }}
+ */
+function syncIndexHtmlThemeConfig(sourceFiles, { silent, checkOnly }) {
+    if (!fs.existsSync(INDEX_FILE)) return { success: true, changed: false };
+    const script = buildThemeConfigScript(sourceFiles);
+    if (!script) return { success: true, changed: false };
+    const html = fs.readFileSync(INDEX_FILE, 'utf8');
+    const stamped = stampThemeConfigIntoHtml(html, script);
+    if (stamped === html) return { success: true, changed: false };
+    if (checkOnly) {
+        if (!silent) console.error(`${RED}${BOLD}OUT OF SYNC:${RESET} ${INDEX_FILE} theme config does not match ${THEME_MODULE_SUFFIX}.`);
+        return { success: false, changed: true };
+    }
+    fs.writeFileSync(INDEX_FILE, stamped, 'utf8');
+    if (!silent) console.log(`${GREEN}✓${RESET} Stamped Tailwind theme config into ${BOLD}${INDEX_FILE}${RESET}.`);
+    return { success: true, changed: true };
 }
 
 /**
@@ -88,17 +146,18 @@ export function bundleApp(options = {}) {
     }
 
     const isDifferent = existingCode !== bundledCode;
+    const indexSync = syncIndexHtmlThemeConfig(sourceFiles, { silent, checkOnly });
     const durationMs = Date.now() - startTime;
 
     if (checkOnly) {
-        if (isDifferent) {
+        if (isDifferent || !indexSync.success) {
             if (!silent) {
-                console.error(`${RED}${BOLD}OUT OF SYNC:${RESET} ${OUTPUT_FILE} does not match ${SRC_DIR}/.`);
+                if (isDifferent) console.error(`${RED}${BOLD}OUT OF SYNC:${RESET} ${OUTPUT_FILE} does not match ${SRC_DIR}/.`);
                 console.log(`Run ${CYAN}node scripts/bundle.mjs${RESET} to synchronize.`);
             }
             return { success: false, changed: true, fileCount: sourceFiles.length, lineCount, sizeBytes, durationMs };
         } else {
-            if (!silent) console.log(`${GREEN}✓${RESET} ${OUTPUT_FILE} is in sync with ${SRC_DIR}/ (${sourceFiles.length} files).`);
+            if (!silent) console.log(`${GREEN}✓${RESET} ${OUTPUT_FILE} and ${INDEX_FILE} are in sync with ${SRC_DIR}/ (${sourceFiles.length} files).`);
             return { success: true, changed: false, fileCount: sourceFiles.length, lineCount, sizeBytes, durationMs };
         }
     }
@@ -114,7 +173,7 @@ export function bundleApp(options = {}) {
         }
     }
 
-    return { success: true, changed: isDifferent, fileCount: sourceFiles.length, lineCount, sizeBytes, durationMs };
+    return { success: true, changed: isDifferent || indexSync.changed, fileCount: sourceFiles.length, lineCount, sizeBytes, durationMs };
 }
 
 // ─── CLI Entrypoint ──────────────────────────────────────────────────────────

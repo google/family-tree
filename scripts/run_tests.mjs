@@ -419,33 +419,58 @@ if (shouldRunChrome) {
         const DEMO_ID = '1BQvyFoA_-u4MG-r1SRDel93F1TwEaN3I6v6p-kOH8z0';
         const q = (selector) => `document.querySelector('${selector}')`;
 
-        // 1. The home screen comes first: the demo sheet is prefilled but NOTHING loads until the user asks.
-        const homeState = JSON.parse(await waitFor('home screen with the demo sheet prefilled',
+        // 1. The home screen comes first: the demo sheet is prefilled, its title chip and radial settings FAB are shown, and NOTHING loads until the user asks.
+        const homeState = JSON.parse(await waitFor('home screen with the demo sheet prefilled, title chip, and radial FAB',
             `JSON.stringify({ home: !!${q('[data-testid="sheet-source-home"]')}, privacy: !!${q('[data-testid="home-privacy-notice"]')},
+                fab: !!${q('[data-testid="settings-fab-toggle"]')},
+                titleChip: (${q('[data-testid="sheet-source-title"]')} || {}).innerText || '',
                 value: (document.getElementById('sheet-source-input') || {}).value || '', nodes: document.querySelectorAll('.person-node').length })`,
-            (v) => { const s = v && JSON.parse(v); return s && s.home && s.privacy && s.value.includes(DEMO_ID) && s.nodes === 0; }));
-        console.log(`  ${GREEN}✓${RESET} Home screen rendered first: demo sheet prefilled, privacy notice shown, no tree loaded yet (${homeState.nodes} nodes).`);
+            (v) => { const s = v && JSON.parse(v); return s && s.home && s.privacy && s.fab && s.titleChip.includes('Ancestry Browser: Demo') && s.value.includes(DEMO_ID) && s.nodes === 0; }));
+        console.log(`  ${GREEN}✓${RESET} Home screen rendered first: demo sheet prefilled with title chip "${homeState.titleChip}", radial FAB visible, no tree loaded yet (${homeState.nodes} nodes).`);
 
-        // 2. Press Open → the demo sheet is fetched from Google and the tree renders. The demo's own tab is a flat
+        // 2. Open the radial FAB on the home screen -> pick "Colour theme" -> switch to "midnight" -> close dialog -> reset to "classic".
+        await evaluate(`${q('[data-testid="settings-fab-toggle"]')}.click(); 'clicked'`);
+        await waitFor('radial FAB satellite buttons', `!!${q('[data-testid="settings-fab-theme"]')}`, Boolean, 10, 200);
+        await evaluate(`${q('[data-testid="settings-fab-theme"]')}.click(); 'clicked'`);
+        const themeCount = await waitFor('Appearance tab with 10 M3 themes', `document.querySelectorAll('[data-testid^="theme-card-"]').length`, (n) => n === 10, 10, 200);
+        await evaluate(`${q('[data-testid="theme-card-midnight"]')}.click(); 'clicked'`);
+        const midnightState = JSON.parse(await waitFor('midnight theme applied',
+            `JSON.stringify({ theme: document.documentElement.getAttribute('data-theme'), mode: document.documentElement.getAttribute('data-theme-mode'), cookie: document.cookie })`,
+            (v) => { const s = v && JSON.parse(v); return s && s.theme === 'midnight' && s.mode === 'dark' && s.cookie.includes('ft_color_theme=midnight'); }, 10, 200));
+        await evaluate(`${q('[data-testid="theme-card-classic"]')}.click(); 'clicked'`);
+        await evaluate(`${q('[data-testid="app-settings-panel"] button[title="Close"]')}.click(); 'clicked'`);
+        console.log(`  ${GREEN}✓${RESET} Radial FAB opened Settings (${themeCount} M3 themes); applied "${midnightState.theme}" (${midnightState.mode}) and persisted cookie.`);
+
+        // 3. Press Open → the demo sheet is fetched from Google and the tree renders. The demo's own tab is a flat
         //    roster; its `Links` tab leads to the 14-person "Husband's Family" sheet that actually forms the tree.
         await evaluate(`${q('[data-testid="sheet-source-home"] form button[type="submit"]')}.click(); 'clicked'`);
         const nodeCount = await waitFor('tree render after pressing Open', "document.querySelectorAll('.person-node').length", (n) => n >= 10, 40, 600);
         console.log(`  ${GREEN}✓${RESET} Headless Chrome E2E verification successful: <App /> mounted cleanly with zero runtime exceptions, rendered ${nodeCount} person nodes.`);
 
-        // 3. After a successful load: home screen gone, Home button + watermark mounted, ?id= in the address bar, history cookie written.
+        // 4. After a successful load: home screen gone, Home button + radial FAB + watermark mounted, ?id= in the address bar, history cookie written.
         const shell = JSON.parse(await waitFor('post-load shell state',
             `JSON.stringify({ home: !!${q('[data-testid="sheet-source-home"]')}, homeBtn: !!${q('[data-testid="home-button"]')},
+                fab: !!${q('[data-testid="settings-fab-toggle"]')},
                 watermark: !!${q('[data-testid="brand-watermark"]')}, search: location.search, cookie: document.cookie })`,
-            (v) => { const s = v && JSON.parse(v); return s && !s.home && s.homeBtn && s.watermark && s.search.includes(`id=${DEMO_ID}`) && s.cookie.includes('ft_sheet_history='); }, 10, 300));
-        console.log(`  ${GREEN}✓${RESET} Shell after load: Home button + watermark mounted, address bar "${shell.search}", sheet-history cookie written.`);
+            (v) => { const s = v && JSON.parse(v); return s && !s.home && s.homeBtn && s.fab && s.watermark && s.search.includes(`id=${DEMO_ID}`) && s.cookie.includes('ft_sheet_history='); }, 10, 300));
+        console.log(`  ${GREEN}✓${RESET} Shell after load: Home button + radial FAB + watermark mounted, address bar "${shell.search}", sheet-history cookie written.`);
 
-        // 4. Home button → the chooser returns ("Back to the tree") and the dropdown lists the demo sheet with its learned title.
+        // 5. Hovering a button shows the speech-balloon tooltip with a tail and full title.
+        await evaluate(`${q('[data-testid="home-button"]')}.dispatchEvent(new PointerEvent('pointerover', { bubbles: true })); 'hovered'`);
+        await waitFor('speech-balloon hover tooltip',
+            `JSON.stringify({ popover: !!${q('[data-testid="button-doc-popover"]')}, tail: !!${q('[data-testid="button-doc-tail"]')}, text: (${q('[data-testid="button-doc-popover"]')} || {}).innerText || '' })`,
+            (v) => { const s = v && JSON.parse(v); return s && s.popover && s.tail && s.text.includes('Home: Choose a Google Sheet'); }, 10, 200);
+        console.log(`  ${GREEN}✓${RESET} Hover help balloon rendered with tail pointer and full title.`);
+
+        // 6. Home button → the chooser returns ("Back to the tree"), the prefilled URL chip shows the learned sheet title "Ancestry Browser: Demo", and the dropdown lists it.
         await evaluate(`${q('[data-testid="home-button"]')}.click(); 'clicked'`);
-        await waitFor('home screen after the Home button', `(${q('[data-testid="sheet-source-home"]')} || {}).innerText || ''`, (t) => t.includes('Back to the tree'), 10, 300);
+        await waitFor('home screen after the Home button with learned title chip',
+            `JSON.stringify({ text: (${q('[data-testid="sheet-source-home"]')} || {}).innerText || '', chip: (${q('[data-testid="sheet-source-title"]')} || {}).innerText || '' })`,
+            (v) => { const s = v && JSON.parse(v); return s && s.text.includes('Back to the tree') && s.chip.includes('Ancestry Browser: Demo'); }, 10, 300);
         await evaluate(`${q('button[aria-label="Show sheets you have opened before"]')}.click(); 'clicked'`);
         await waitFor('history dropdown listing "Ancestry Browser: Demo"', `(${q('[data-testid="sheet-history-dropdown"]')} || {}).innerText || ''`,
             (t) => t.includes(DEMO_ID) && t.includes('Ancestry Browser: Demo'), 10, 300);
-        console.log(`  ${GREEN}✓${RESET} Home button reopens the chooser; the history dropdown lists "Ancestry Browser: Demo — ${DEMO_ID}".`);
+        console.log(`  ${GREEN}✓${RESET} Home button reopens the chooser with "Ancestry Browser: Demo" title chip and history dropdown.`);
 
         ws.close();
     } finally {

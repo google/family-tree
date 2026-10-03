@@ -13,12 +13,13 @@ The app reconstructs multi-generational family trees directly from **Google Shee
    - [Shareable View URLs (Google-Maps-style `#hash`)](#shareable-view-urls-google-maps-style-hash)
 3. [Complete Button & Interactive Control Reference (with Examples)](#3-complete-button--interactive-control-reference-with-examples)
    - [3.1 Top Navigation Toolbar](#31-top-navigation-toolbar)
-   - [3.2 Bottom-Left Canvas Camera & Zoom Controls](#32-bottom-left-canvas-camera--zoom-controls)
-   - [3.3 Tree Card Controls & Visual Badges](#33-tree-card-controls--visual-badges)
-   - [3.4 Person Details Sidebar & Attribute Filter Chips](#34-person-details-sidebar--attribute-filter-chips)
-   - [3.5 Quick Directory Browser (`Locations`, `Careers`, `Families`)](#35-quick-directory-browser-locations-careers-families)
-   - [3.6 Family Locations Map Controls](#36-family-locations-map-controls)
-   - [3.7 AI Genealogy Assistant Controls](#37-ai-genealogy-assistant-controls)
+   - [3.2 Bottom-Right Settings Radial FAB (`⚙`) & Material 3 Themes](#32-bottom-right-settings-radial-fab--material-3-themes)
+   - [3.3 Bottom-Left Canvas Camera & Zoom Controls](#33-bottom-left-canvas-camera--zoom-controls)
+   - [3.4 Tree Card Controls & Visual Badges](#34-tree-card-controls--visual-badges)
+   - [3.5 Person Details Sidebar & Attribute Filter Chips](#35-person-details-sidebar--attribute-filter-chips)
+   - [3.6 Quick Directory Browser (`Locations`, `Careers`, `Families`)](#36-quick-directory-browser-locations-careers-families)
+   - [3.7 Family Locations Map Controls](#37-family-locations-map-controls)
+   - [3.8 AI Genealogy Assistant Controls](#38-ai-genealogy-assistant-controls)
 4. [Google Sheets Data Format & Examples](#4-google-sheets-data-format--examples)
    - [4.1 Core Columns & Example Rows](#41-core-columns--example-rows)
    - [4.2 Multi-Sheet Crawling via the `Links` Tab](#42-multi-sheet-crawling-via-the-links-tab)
@@ -30,13 +31,14 @@ The app reconstructs multi-generational family trees directly from **Google Shee
 
 ## 1. Key Features
 
-- **Interactive Rich-Text Button Documentation**: Hovering over any button in the UI pops up a rich-text documentation card with a category badge, formatted explanation, and concrete usage examples.
+- **Speech-Balloon Button Hover Help**: Hovering over any button in the UI pops up a speech-balloon help card with a directional pointer tail aimed at the button, a light full-title header (never truncated), a formatted explanation, and concrete usage examples.
+- **Material 3 Colour Themes & Radial Settings FAB**: Choose from **10 Material 3 tonal colour themes** (6 light: `Classic`, `Soft Pastel`, `Warm Earthy`, `Deep Ocean`, `Twilight Lavender`, `Solarized Light`; 4 dark: `Charcoal Dark`, `Midnight Slate`, `Solarized Dark`, `High Contrast`) via the floating bottom-right **Settings radial button (`⚙`)**, available on both the home screen and the tree/map views and persisted in a browser cookie (`ft_color_theme`).
 - **Multi-Sheet Google Sheets Crawler**: Fetches a root Google Sheet and recursively crawls all linked branch spreadsheets listed in its `Links` tab in parallel, caching datasets locally and live-syncing background updates without jarring camera jumps.
 - **Automated Demographic & Kinship Deduction**: Infers missing birth years (`~YOB`), centenarian and sequential-remarriage death statuses, patrilineal family names, religious vocations (`Fr.` / `Sr.`), and intermediate ghost relatives (`Mary Son 1`, `Joy Son 1 Wife`).
 - **Chronological 2D Contour Layout**: Positions every person vertically by birth year (`PPY` pixels-per-year timeline) and packs subtrees horizontally using 2D `IntervalContour` profiles with zero card overlaps, chronological multi-spouse ordering, and maternal drop-stem connectors.
 - **Hybrid AI Genealogy Assistant**: Combines an instant, 100% deterministic **Genealogy Rule Engine** with optional **Google Gemini LLM** synthesis to answer natural-language questions and highlight mentioned relatives on the canvas.
 - **Multi-Format Exports**:
-  - **Standalone Interactive HTML App (`.html`)**: Bundles the entire app and active lineage into a single offline HTML file.
+  - **Standalone Interactive HTML App (`.html`)**: Bundles the entire app, Material 3 theme engine, and active lineage into a single offline HTML file.
   - **Multi-Page A4 Landscape Print & Family Atlas**: Generates crisp vector SVG pages scaled so every person's name prints at a readable **10pt physical font size**.
   - **Geographic Locations CSV (`.csv`)**: Exports geocoded ancestral villages, districts, and resident counts.
 
@@ -63,9 +65,9 @@ The app does **not** hard-code a spreadsheet. On first visit (and whenever you c
 | Your **most-used** sheet | Whenever this browser has opened at least one sheet before | `https://docs.google.com/spreadsheets/d/<your family's id>/edit` |
 | The public **demo** sheet (`Ancestry Browser: Demo`) | Fresh browser, empty clipboard | `https://docs.google.com/spreadsheets/d/1BQvyFoA_-u4MG-r1SRDel93F1TwEaN3I6v6p-kOH8z0/edit?usp=drive_link` |
 
-Every sheet you successfully open is remembered in a first-party **cookie** (`ft_sheet_history`, mirrored into `localStorage` for `file://` standalone exports) together with its spreadsheet **title**, which the app learns from the CSV export's `Content-Disposition` header. The caret at the right of the textbox opens a dropdown listing them **most-used first** as `<Title> — <spreadsheet ID>` (the rest of the URL is deliberately trimmed), with a use counter and a `×` to forget an entry. Clicking a row opens that sheet immediately. The sheet must be shared as *Anyone with the link can view*; a failed import reopens the home screen with the error message.
+Whenever the prefilled or typed link/ID matches a spreadsheet whose title is known (from your cookie history, the current session's `Content-Disposition` header, or the built-in `Ancestry Browser: Demo` title), a **sheet name chip** appears directly above the input box so you can verify which family register is selected before pressing **Open**. Every sheet you successfully open is remembered in a first-party **cookie** (`ft_sheet_history`, mirrored into `localStorage` for `file://` standalone exports) together with its spreadsheet **title**. The caret at the right of the textbox opens a dropdown listing them **most-used first** as `<Title> — <spreadsheet ID>` (the rest of the URL is deliberately trimmed), with a use counter and a `×` to forget an entry. Clicking a row opens that sheet immediately. The sheet must be shared as *Anyone with the link can view*; a failed import reopens the home screen with the error message.
 
-> **Privacy (GDPR):** the home screen footer states exactly what is stored (the sheet links you open and your deduction settings), where (cookies / local storage on *this device only* — nothing is sent to any server other than Google Sheets), and offers a one-click **clear stored data** link that deletes both cookies and their mirrors.
+> **Privacy (GDPR):** the home screen footer states exactly what is stored (the sheet links you open, your deduction settings, and your colour theme), where (cookies / local storage on *this device only* — nothing is sent to any server other than Google Sheets), and offers a one-click **clear stored data** link (also accessible from the bottom-right Settings radial menu) that deletes all stored cookies and their mirrors.
 
 ### Loading Any Google Sheet via URL Query Parameters
 
@@ -121,15 +123,14 @@ Examples you can paste directly:
 
 ## 3. Complete Button & Interactive Control Reference (with Examples)
 
-Every button in the application displays an interactive rich-text documentation popover when hovered. Below is the complete reference with examples.
+Every button in the application displays a speech-balloon help popover with a pointer tail and concrete usage examples when hovered. Below is the complete reference with examples.
 
 ### 3.1 Top Navigation Toolbar
 
 | Button / Icon | Title & Shortcut | Detailed Behavior | Usage Examples |
 | :--- | :--- | :--- | :--- |
 | **Family Tree Emblem** (top-left corner) | **Family Tree Home – choose a Google Sheet** | Returns to the **home screen** where you paste any Google Sheets link or spreadsheet ID. Every sheet you open is remembered in a browser cookie and offered in a dropdown, most-used first, as `<Title> — <ID>`. Hidden inside standalone `.html` exports, which carry their own embedded dataset. | **1. Switch Family:** Click the emblem, pick `Ancestry Browser: Demo — 1BQvy…` from the dropdown or paste another link, then press **Enter** or **Open**.<br>**2. Shareable Link:** After a sheet loads the address bar carries `?id=<sheetId>`; share it and the recipient skips the home screen entirely. |
-| **Gear Icon** (`⚙`) | **Deduction Settings (marriage age by birth cohort)** | Opens the **Deduction Settings** panel: the bride's age at first marriage per birth cohort (born 1910s–20s ≈ 15, 1940s ≈ 22, 2000s ≈ 27, linearly interpolated between anchor rows), the wedding→first-child interval, the husband–wife age offset and the sibling spacing, with a live preview per cohort. **Apply & rebuild tree** persists the values in a cookie (`ft_demographic_settings`) and rebuilds from the cached rows without refetching. | **1. Later Marriages:** Raise the `1940` cohort from **22** to **25** and every mother born in the 1940s is deduced three years older.<br>**2. Reset:** Click **Reset to defaults** then **Apply & rebuild tree** to return to the shipped curve. |
-| **Download Icon** (`⬇`) | **Download Standalone Interactive App (`.html`)** | Packages the entire interactive React/SVG application and the currently focused lineage dataset into a single self-contained `.html` file that runs 100% offline in any browser. | **1. Full Family Archive:** Focus on the root ancestor (`Kochuvareed`) and click `⬇` to download `Kochuvareed_Interactive_App_2026-09-27.html` containing all 240+ profiles.<br>**2. Scoped Sub-Branch App:** Select a specific grandparent first to export an offline interactive tree scoped only to their ancestors and descendants. |
+| **Download Icon** (`⬇`) | **Download Standalone Interactive App (`.html`)** | Packages the entire interactive React/SVG application, Material 3 theme engine, and the currently focused lineage dataset into a single self-contained `.html` file that runs 100% offline in any browser. | **1. Full Family Archive:** Focus on the root ancestor (`Kochuvareed`) and click `⬇` to download `Kochuvareed_Interactive_App_2026-09-27.html` containing all 240+ profiles.<br>**2. Scoped Sub-Branch App:** Select a specific grandparent first to export an offline interactive tree scoped only to their ancestors and descendants. |
 | **Printer Icon** (`🖨`) | **Print Tree / Export A4 Landscape SVGs (10pt names)** | Generates a multi-page A4 landscape printable document and **Family Atlas** with vector SVG cards calibrated so every person's name renders at a readable **10pt physical font size**. | **1. Multi-Page Wall Poster:** Click `🖨` to open the A4 print preview, save as **PDF**, and tape adjacent tiled pages together using the alignment guides.<br>**2. Branch Atlas Chapters:** Deep sub-branches are automatically organized into numbered **Atlas Chapters** with cross-page reference badges. |
 | **Map Pin Icon** (`📍`) | **View Family Locations Map** / **Switch to Family Tree Diagram** | Toggles the main viewport between the chronological 2D family tree diagram and an interactive **Leaflet World Map** plotting ancestral towns, parishes, and diaspora cities with member count pins. | **1. Explore Regional Clusters:** Click `📍` to view family concentrations across **Kerala** (`Thrissur`, `Palakkad`, `Kottayam`), **Karnataka**, and global diaspora hubs.<br>**2. Pin-to-Tree Spotlight:** Click a town pin on the map (e.g., `Chalissery`), then click `📍` again to see those exact residents highlighted on the tree canvas. |
 | **Sparkles Icon** (`✨`) | **Ask AI** | Opens the **AI Genealogy Assistant** panel to answer natural-language questions about kinship paths, ancestral origins, birth/death cohorts, and tree statistics. | **1. Relationship Tracing:** Ask `"How is Eliamma related to Vareeth?"` or `"Who are the children of Joseph and Thankamma?"`<br>**2. Demographic Superlatives:** Ask `"Who lived the longest?"` or `"Who all lived in Moonilavu?"` to highlight matching cards on the canvas. |
@@ -140,7 +141,20 @@ Every button in the application displays an interactive rich-text documentation 
 
 ---
 
-### 3.2 Bottom-Left Canvas Camera & Zoom Controls
+### 3.2 Bottom-Right Settings Radial FAB (`⚙`) & Material 3 Themes
+
+Pinned to the bottom-right corner on both the **Home Screen** and the **Tree / Map** views (`fixed bottom-6 right-6`), the circular **Settings** button fans out three satellite actions along a quarter-circle arc (`90° → 180°`):
+
+| Button / Satellite | Title | Detailed Behavior | Usage Examples |
+| :--- | :--- | :--- | :--- |
+| **Gear FAB** (`⚙`) | **Settings – themes, deduction rules & privacy** | Toggles the quarter-circle radial menu with three satellite actions (`Colour theme`, `Deduction rules`, `Clear stored data`). Closes automatically on outside click or `Escape`. | **1. Theme Switch from Home Screen:** Click `⚙` on the initial home screen before loading any sheet to pick a dark or pastel palette.<br>**2. Quick Rule Tweak:** Click `⚙` while viewing the tree to adjust cohort marriage ages and rebuild in place. |
+| **Palette Satellite** (`🎨`) | **Colour theme (Material 3 palettes)** | Opens the **Appearance** tab of the Settings dialog with **10 Material 3 tonal colour themes**: `Classic Forest`, `Soft Pastels`, `Earthy & Warm`, `Ocean Breeze`, `Lavender Dusk`, `Solarized Light`, `Dark Forest`, `Midnight Black`, `Solarized Dark`, and `High Contrast`. Persisted in `ft_color_theme`. | **1. Warm Parchment Look:** Select **Earthy & Warm** for terracotta, olive, and ochre cards on a warm parchment canvas.<br>**2. OLED Night Browsing:** Select **Midnight Black** or **Solarized Dark** to invert surfaces, connectors, and cards for low-light reading. |
+| **Sliders Satellite** (`🎚`) | **Deduction Settings (marriage age by birth cohort)** | Opens the **Deduction rules** tab: bride's age at first marriage per birth cohort (`1900–2020`), wedding→first-child interval, husband–wife age offset, and sibling spacing, with a live cohort preview. **Apply & rebuild tree** saves to `ft_demographic_settings` and rebuilds from cached rows without refetching. | **1. Later Marriages:** Raise the `1940` cohort from **22** to **25** and every mother born in the 1940s is deduced three years older.<br>**2. Reset:** Click **Reset to defaults** then **Apply & rebuild tree** to return to the shipped curve. |
+| **Eraser Satellite** (`🧹`) | **Clear stored data (cookies & local storage)** | Deletes the sheet-history cookie (`ft_sheet_history`), deduction-settings cookie (`ft_demographic_settings`), colour-theme cookie (`ft_color_theme`), and their `localStorage` mirrors, resetting the theme to `Classic Forest` and deduction rules to defaults. | **1. Shared Computer Cleanup:** Click `⚙` → `🧹` before leaving a shared browser so your opened sheet links are forgotten.<br>**2. Fresh Start:** Clear all saved preferences in one click from either the radial menu or the home screen privacy notice. |
+
+---
+
+### 3.3 Bottom-Left Canvas Camera & Zoom Controls
 
 | Button | Title | Detailed Behavior | Usage Examples |
 | :--- | :--- | :--- | :--- |
@@ -151,7 +165,7 @@ Every button in the application displays an interactive rich-text documentation 
 
 ---
 
-### 3.3 Tree Card Controls & Visual Badges
+### 3.4 Tree Card Controls & Visual Badges
 
 - **Expand Descendant Branch (`+` pill on card bottom edge)**:
   - **Behavior:** Uncollapses hidden children, spouses, and descendants beneath a person card while keeping the clicked card anchored at the exact same screen coordinates (zero jerky sideways motion).
@@ -165,7 +179,7 @@ Every button in the application displays an interactive rich-text documentation 
 
 ---
 
-### 3.4 Person Details Sidebar & Attribute Filter Chips
+### 3.5 Person Details Sidebar & Attribute Filter Chips
 
 Clicking any person card opens the **Person Details Sidebar** on the right:
 
@@ -182,7 +196,7 @@ Clicking any person card opens the **Person Details Sidebar** on the right:
 
 ---
 
-### 3.5 Quick Directory Browser (`Locations`, `Careers`, `Families`)
+### 3.6 Quick Directory Browser (`Locations`, `Careers`, `Families`)
 
 Accessible via the **Open Directory** button in the sidebar header or from the Map view:
 
@@ -196,7 +210,7 @@ Accessible via the **Open Directory** button in the sidebar header or from the M
 
 ---
 
-### 3.6 Family Locations Map Controls
+### 3.7 Family Locations Map Controls
 
 When viewing the interactive **Family Locations Map**, a floating control bar appears at the bottom:
 
@@ -206,7 +220,7 @@ When viewing the interactive **Family Locations Map**, a floating control bar ap
 
 ---
 
-### 3.7 AI Genealogy Assistant Controls
+### 3.8 AI Genealogy Assistant Controls
 
 - **Engine Mode Toggle (`Rule` vs `AI`)**:
   - **`Rule` Mode (Default when no API key is set):** Uses the built-in deterministic `GenealogyEngine` for instant, zero-latency answers to relationship paths, birth/death queries, location residents, and superlatives (`"Who lived the longest?"`, `"Who had the most children?"`).
@@ -321,12 +335,12 @@ node scripts/bundle.mjs --check
 
 ```bash
 # Run a single test section in <1s during development
-node scripts/run_tests.mjs --skip-ast --section 204
+node scripts/run_tests.mjs --skip-ast --section 213
 
-# Run Stages 1-3 (AST parse + Scope check + 2,873 unit tests in ~3s)
+# Run Stages 1-3 (AST parse + Scope check + 2,959 unit tests in ~3s)
 node scripts/run_tests.mjs --fast
 
-# Run all 4 stages including the Headless Chrome E2E flow (home screen → Open → tree → Home button, ~20s)
+# Run all 4 stages including the Headless Chrome E2E flow (home screen → radial FAB → Open → tree → balloon tooltip → Home button, ~20s)
 node scripts/run_tests.mjs
 
 # Run strict code quality audit (<=40 lines/fn, 100% JSDoc, >=2 @example blocks)

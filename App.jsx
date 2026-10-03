@@ -645,7 +645,11 @@ const Icons = {
     Pdf: () => <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M14.5 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7.5L14.5 2z"/><polyline points="14 2 14 8 20 8"/><path d="M9 13v4"/><path d="M9 13h2a1.5 1.5 0 0 1 0 3H9"/><path d="M14 13v4"/><path d="M14 13h1.5a1.5 1.5 0 0 1 1.5 1.5v1a1.5 1.5 0 0 1-1.5 1.5H14"/></svg>,
     Download: () => <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>,
     Printer: () => <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="6 9 6 2 18 2 18 9"/><path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"/><rect width="12" height="8" x="6" y="14"/></svg>,
-    Settings: () => <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z"/><circle cx="12" cy="12" r="3"/></svg>
+    Settings: () => <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z"/><circle cx="12" cy="12" r="3"/></svg>,
+    Palette: () => <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="13.5" cy="6.5" r=".5" fill="currentColor"/><circle cx="17.5" cy="10.5" r=".5" fill="currentColor"/><circle cx="8.5" cy="7.5" r=".5" fill="currentColor"/><circle cx="6.5" cy="12.5" r=".5" fill="currentColor"/><path d="M12 2C6.5 2 2 6.5 2 12s4.5 10 10 10c.926 0 1.648-.746 1.648-1.688 0-.437-.18-.835-.437-1.125-.29-.289-.438-.652-.438-1.125a1.64 1.64 0 0 1 1.668-1.668h1.996c3.051 0 5.555-2.503 5.555-5.554C21.965 6.012 17.461 2 12 2z"/></svg>,
+    Sliders: () => <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="21" x2="14" y1="4" y2="4"/><line x1="10" x2="3" y1="4" y2="4"/><line x1="21" x2="12" y1="12" y2="12"/><line x1="8" x2="3" y1="12" y2="12"/><line x1="21" x2="16" y1="20" y2="20"/><line x1="12" x2="3" y1="20" y2="20"/><line x1="14" x2="14" y1="2" y2="6"/><line x1="8" x2="8" y1="10" y2="14"/><line x1="16" x2="16" y1="18" y2="22"/></svg>,
+    Eraser: () => <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="m7 21-4.3-4.3c-1-1-1-2.5 0-3.4l9.6-9.6c1-1 2.5-1 3.4 0l5.6 5.6c1 1 1 2.5 0 3.4L13 21"/><path d="M22 21H7"/><path d="m5 11 9 9"/></svg>,
+    Sheet: () => <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect width="18" height="18" x="3" y="3" rx="2"/><path d="M3 9h18"/><path d="M3 15h18"/><path d="M9 3v18"/></svg>
 };
 
 /**
@@ -1360,6 +1364,762 @@ const BrandWatermark = ({ size = 420, opacity = 0.05 }) => (
         <BrandLogo size={size} idPrefix="watermark" />
     </div>
 );
+
+/**
+ * @fileoverview Material 3 inspired colour-theme engine (JSX-free, side-effect free).
+ *
+ * Every Tailwind colour utility used by the app (`bg-slate-50`, `text-rose-950`, `border-blue-200`, …)
+ * is re-pointed by the stamped Tailwind config to a CSS custom property such as
+ * `rgb(var(--tw-slate-50, 248 250 252) / <alpha-value>)`. Themes therefore work in three layers:
+ *
+ *   1. **Seeds** – one mid-tone hex per palette (`primary`, `neutral`, `male`, `female`, …).
+ *   2. **Tonal palettes** – CIELAB lightness ("tone") ramps generated from each seed, mapped onto the
+ *      22 Tailwind families (`slate` → neutral, `sky` → male, `rose` → female, `red` → error, …) and
+ *      onto the Material 3 colour roles (`primary`, `on-primary`, `surface-container-low`, …).
+ *   3. **CSS variables** – `applyColorTheme()` writes `--tw-<family>-<shade>` and
+ *      `--md-sys-color-<role>` triplets onto `<html>`; the Classic theme sets no `--tw-*` variables at
+ *      all, so the fallbacks (Tailwind's stock palette) keep it pixel-identical to the original design.
+ */
+
+/** Tailwind's stock v3 palette – also the fallback values baked into the config script. */
+const TAILWIND_DEFAULT_PALETTE = {
+    slate: { 50: '#f8fafc', 100: '#f1f5f9', 200: '#e2e8f0', 300: '#cbd5e1', 400: '#94a3b8', 500: '#64748b', 600: '#475569', 700: '#334155', 800: '#1e293b', 900: '#0f172a', 950: '#020617' },
+    gray: { 50: '#f9fafb', 100: '#f3f4f6', 200: '#e5e7eb', 300: '#d1d5db', 400: '#9ca3af', 500: '#6b7280', 600: '#4b5563', 700: '#374151', 800: '#1f2937', 900: '#111827', 950: '#030712' },
+    zinc: { 50: '#fafafa', 100: '#f4f4f5', 200: '#e4e4e7', 300: '#d4d4d8', 400: '#a1a1aa', 500: '#71717a', 600: '#52525b', 700: '#3f3f46', 800: '#27272a', 900: '#18181b', 950: '#09090b' },
+    neutral: { 50: '#fafafa', 100: '#f5f5f5', 200: '#e5e5e5', 300: '#d4d4d4', 400: '#a3a3a3', 500: '#737373', 600: '#525252', 700: '#404040', 800: '#262626', 900: '#171717', 950: '#0a0a0a' },
+    stone: { 50: '#fafaf9', 100: '#f5f5f4', 200: '#e7e5e4', 300: '#d6d3d1', 400: '#a8a29e', 500: '#78716c', 600: '#57534e', 700: '#44403c', 800: '#292524', 900: '#1c1917', 950: '#0c0a09' },
+    red: { 50: '#fef2f2', 100: '#fee2e2', 200: '#fecaca', 300: '#fca5a5', 400: '#f87171', 500: '#ef4444', 600: '#dc2626', 700: '#b91c1c', 800: '#991b1b', 900: '#7f1d1d', 950: '#450a0a' },
+    orange: { 50: '#fff7ed', 100: '#ffedd5', 200: '#fed7aa', 300: '#fdba74', 400: '#fb923c', 500: '#f97316', 600: '#ea580c', 700: '#c2410c', 800: '#9a3412', 900: '#7c2d12', 950: '#431407' },
+    amber: { 50: '#fffbeb', 100: '#fef3c7', 200: '#fde68a', 300: '#fcd34d', 400: '#fbbf24', 500: '#f59e0b', 600: '#d97706', 700: '#b45309', 800: '#92400e', 900: '#78350f', 950: '#451a03' },
+    yellow: { 50: '#fefce8', 100: '#fef9c3', 200: '#fef08a', 300: '#fde047', 400: '#facc15', 500: '#eab308', 600: '#ca8a04', 700: '#a16207', 800: '#854d0e', 900: '#713f12', 950: '#422006' },
+    lime: { 50: '#f7fee7', 100: '#ecfccb', 200: '#d9f99d', 300: '#bef264', 400: '#a3e635', 500: '#84cc16', 600: '#65a30d', 700: '#4d7c0f', 800: '#3f6212', 900: '#365314', 950: '#1a2e05' },
+    green: { 50: '#f0fdf4', 100: '#dcfce7', 200: '#bbf7d0', 300: '#86efac', 400: '#4ade80', 500: '#22c55e', 600: '#16a34a', 700: '#15803d', 800: '#166534', 900: '#14532d', 950: '#052e16' },
+    emerald: { 50: '#ecfdf5', 100: '#d1fae5', 200: '#a7f3d0', 300: '#6ee7b7', 400: '#34d399', 500: '#10b981', 600: '#059669', 700: '#047857', 800: '#065f46', 900: '#064e3b', 950: '#022c22' },
+    teal: { 50: '#f0fdfa', 100: '#ccfbf1', 200: '#99f6e4', 300: '#5eead4', 400: '#2dd4bf', 500: '#14b8a6', 600: '#0d9488', 700: '#0f766e', 800: '#115e59', 900: '#134e4a', 950: '#042f2e' },
+    cyan: { 50: '#ecfeff', 100: '#cffafe', 200: '#a5f3fc', 300: '#67e8f9', 400: '#22d3ee', 500: '#06b6d4', 600: '#0891b2', 700: '#0e7490', 800: '#155e75', 900: '#164e63', 950: '#083344' },
+    sky: { 50: '#f0f9ff', 100: '#e0f2fe', 200: '#bae6fd', 300: '#7dd3fc', 400: '#38bdf8', 500: '#0ea5e9', 600: '#0284c7', 700: '#0369a1', 800: '#075985', 900: '#0c4a6e', 950: '#082f49' },
+    blue: { 50: '#eff6ff', 100: '#dbeafe', 200: '#bfdbfe', 300: '#93c5fd', 400: '#60a5fa', 500: '#3b82f6', 600: '#2563eb', 700: '#1d4ed8', 800: '#1e40af', 900: '#1e3a8a', 950: '#172554' },
+    indigo: { 50: '#eef2ff', 100: '#e0e7ff', 200: '#c7d2fe', 300: '#a5b4fc', 400: '#818cf8', 500: '#6366f1', 600: '#4f46e5', 700: '#4338ca', 800: '#3730a3', 900: '#312e81', 950: '#1e1b4b' },
+    violet: { 50: '#f5f3ff', 100: '#ede9fe', 200: '#ddd6fe', 300: '#c4b5fd', 400: '#a78bfa', 500: '#8b5cf6', 600: '#7c3aed', 700: '#6d28d9', 800: '#5b21b6', 900: '#4c1d95', 950: '#2e1065' },
+    purple: { 50: '#faf5ff', 100: '#f3e8ff', 200: '#e9d5ff', 300: '#d8b4fe', 400: '#c084fc', 500: '#a855f7', 600: '#9333ea', 700: '#7e22ce', 800: '#6b21a8', 900: '#581c87', 950: '#3b0764' },
+    fuchsia: { 50: '#fdf4ff', 100: '#fae8ff', 200: '#f5d0fe', 300: '#f0abfc', 400: '#e879f9', 500: '#d946ef', 600: '#c026d3', 700: '#a21caf', 800: '#86198f', 900: '#701a75', 950: '#4a044e' },
+    pink: { 50: '#fdf2f8', 100: '#fce7f3', 200: '#fbcfe8', 300: '#f9a8d4', 400: '#f472b6', 500: '#ec4899', 600: '#db2777', 700: '#be185d', 800: '#9d174d', 900: '#831843', 950: '#500724' },
+    rose: { 50: '#fff1f2', 100: '#ffe4e6', 200: '#fecdd3', 300: '#fda4af', 400: '#fb7185', 500: '#f43f5e', 600: '#e11d48', 700: '#be123c', 800: '#9f1239', 900: '#881337', 950: '#4c0519' },
+    white: '#ffffff'
+};
+
+/** The 22 Tailwind colour families that get re-pointed to CSS variables. */
+const TAILWIND_THEME_FAMILIES = ['slate', 'gray', 'zinc', 'neutral', 'stone', 'red', 'orange', 'amber', 'yellow', 'lime', 'green', 'emerald', 'teal', 'cyan', 'sky', 'blue', 'indigo', 'violet', 'purple', 'fuchsia', 'pink', 'rose'];
+const TAILWIND_SHADES = [50, 100, 200, 300, 400, 500, 600, 700, 800, 900, 950];
+
+/** Which theme seed paints each Tailwind family (sky = male cards, rose/pink = female cards, …). */
+const TAILWIND_FAMILY_SEEDS = {
+    slate: 'neutral', gray: 'neutral', zinc: 'neutral', neutral: 'neutral', stone: 'neutral',
+    red: 'error', orange: 'warning', amber: 'warning', yellow: 'warning',
+    lime: 'success', green: 'success', emerald: 'success', teal: 'success',
+    cyan: 'secondary', sky: 'male', blue: 'accent', indigo: 'accent',
+    violet: 'tertiary', purple: 'tertiary', fuchsia: 'tertiary', pink: 'female', rose: 'female'
+};
+
+/** CIELAB lightness ("tone") per Tailwind shade – `light` mirrors Tailwind's own ramp, `dark` inverts it. */
+const TAILWIND_SHADE_TONES = {
+    light: { 50: 98, 100: 96, 200: 92, 300: 85, 400: 67, 500: 49, 600: 37, 700: 28, 800: 17, 900: 10, 950: 4, white: 100 },
+    dark: { 50: 12, 100: 17, 200: 24, 300: 34, 400: 48, 500: 60, 600: 72, 700: 80, 800: 87, 900: 93, 950: 97, white: 6 }
+};
+
+/** Material 3 colour-role tones (https://m3.material.io/styles/color/static/baseline). */
+const M3_ROLE_TONES = {
+    light: {
+        primary: 40, onPrimary: 100, primaryContainer: 90, onPrimaryContainer: 10, inversePrimary: 80,
+        secondary: 40, onSecondary: 100, secondaryContainer: 90, onSecondaryContainer: 10,
+        tertiary: 40, onTertiary: 100, tertiaryContainer: 90, onTertiaryContainer: 10,
+        error: 40, onError: 100, errorContainer: 90, onErrorContainer: 10,
+        surface: 98, surfaceDim: 87, surfaceBright: 98, surfaceContainerLowest: 100, surfaceContainerLow: 96,
+        surfaceContainer: 94, surfaceContainerHigh: 92, surfaceContainerHighest: 90, surfaceVariant: 90,
+        onSurface: 10, onSurfaceVariant: 30, outline: 50, outlineVariant: 80, inverseSurface: 20, inverseOnSurface: 95
+    },
+    dark: {
+        primary: 80, onPrimary: 20, primaryContainer: 30, onPrimaryContainer: 90, inversePrimary: 40,
+        secondary: 80, onSecondary: 20, secondaryContainer: 30, onSecondaryContainer: 90,
+        tertiary: 80, onTertiary: 20, tertiaryContainer: 30, onTertiaryContainer: 90,
+        error: 80, onError: 20, errorContainer: 30, onErrorContainer: 90,
+        surface: 6, surfaceDim: 6, surfaceBright: 24, surfaceContainerLowest: 4, surfaceContainerLow: 10,
+        surfaceContainer: 12, surfaceContainerHigh: 17, surfaceContainerHighest: 22, surfaceVariant: 30,
+        onSurface: 90, onSurfaceVariant: 80, outline: 60, outlineVariant: 30, inverseSurface: 90, inverseOnSurface: 20
+    }
+};
+
+const DEFAULT_COLOR_THEME_ID = 'classic';
+const COLOR_THEME_PREVIEW_SHADES = { cardFill: 100, cardBorder: 300, cardText: 950 };
+
+// ─── Colour maths (sRGB ⇄ CIELAB ⇄ LCh) ────────────────────────────────────────
+
+/**
+ * Parses a 3- or 6-digit hex colour into an `[r, g, b]` triplet (0–255), or `null` when malformed.
+ *
+ * @example hexToRgb('#5c7c33') // → [92, 124, 51]
+ * @example hexToRgb('fff')     // → [255, 255, 255]
+ * @example hexToRgb('nope')    // → null
+ * @param {string} hex
+ * @returns {number[]|null}
+ */
+function hexToRgb(hex) {
+    const clean = String(hex || '').trim().replace(/^#/, '');
+    const full = clean.length === 3 ? clean.split('').map((ch) => ch + ch).join('') : clean;
+    if (!/^[0-9a-fA-F]{6}$/.test(full)) return null;
+    const value = parseInt(full, 16);
+    return [(value >> 16) & 255, (value >> 8) & 255, value & 255];
+}
+
+/**
+ * Formats an `[r, g, b]` triplet (fractional / out-of-range values are rounded and clamped) as `#rrggbb`.
+ *
+ * @example rgbToHex([92, 124, 51])      // → '#5c7c33'
+ * @example rgbToHex([255.4, -3, 300])   // → '#ff00ff'
+ * @param {number[]} rgb
+ * @returns {string}
+ */
+function rgbToHex(rgb) {
+    const clamp = (v) => Math.max(0, Math.min(255, Math.round(v)));
+    return '#' + rgb.map((v) => clamp(v).toString(16).padStart(2, '0')).join('');
+}
+
+/**
+ * Returns the space-separated `r g b` triplet Tailwind expects inside `rgb(var(--x) / <alpha>)`.
+ *
+ * @example rgbTriplet('#5c7c33') // → '92 124 51'
+ * @example rgbTriplet('#fff')    // → '255 255 255'
+ * @param {string} hex
+ * @returns {string}
+ */
+function rgbTriplet(hex) {
+    const rgb = hexToRgb(hex);
+    return rgb ? rgb.join(' ') : '0 0 0';
+}
+
+/**
+ * Converts one 0–255 sRGB channel to linear light (0–1).
+ *
+ * @example srgbToLinear(255) // → 1
+ * @example srgbToLinear(0)   // → 0
+ * @param {number} channel
+ * @returns {number}
+ */
+function srgbToLinear(channel) {
+    const c = channel / 255;
+    return c <= 0.04045 ? c / 12.92 : Math.pow((c + 0.055) / 1.055, 2.4);
+}
+
+/**
+ * Converts linear light back to a 0–255 sRGB channel; negative inputs stay negative so gamut checks work.
+ *
+ * @example linearToSrgb(1)    // → 255
+ * @example linearToSrgb(-0.1) // → a negative number (out of gamut)
+ * @param {number} linear
+ * @returns {number}
+ */
+function linearToSrgb(linear) {
+    const sign = linear < 0 ? -1 : 1;
+    const abs = Math.abs(linear);
+    const c = abs <= 0.0031308 ? abs * 12.92 : 1.055 * Math.pow(abs, 1 / 2.4) - 0.055;
+    return sign * c * 255;
+}
+
+/**
+ * sRGB → CIELAB (D65 white point). `L*` ranges 0 (black) … 100 (white).
+ *
+ * @example rgbToLab([255, 255, 255])[0] // → 100 (±0.01)
+ * @example rgbToLab([0, 0, 0])[0]       // → 0
+ * @param {number[]} rgb
+ * @returns {number[]} `[L, a, b]`
+ */
+function rgbToLab(rgb) {
+    const [r, g, b] = rgb.map(srgbToLinear);
+    const x = (0.4124564 * r + 0.3575761 * g + 0.1804375 * b) / 0.95047;
+    const y = 0.2126729 * r + 0.7151522 * g + 0.0721750 * b;
+    const z = (0.0193339 * r + 0.1191920 * g + 0.9503041 * b) / 1.08883;
+    const f = (t) => (t > 0.008856 ? Math.cbrt(t) : 7.787 * t + 16 / 116);
+    const [fx, fy, fz] = [f(x), f(y), f(z)];
+    return [116 * fy - 16, 500 * (fx - fy), 200 * (fy - fz)];
+}
+
+/**
+ * CIELAB → sRGB (unclamped so callers can detect out-of-gamut colours).
+ *
+ * @example rgbToHex(labToRgb([100, 0, 0])) // → '#ffffff'
+ * @example rgbToHex(labToRgb(rgbToLab([92, 124, 51]))) // → '#5c7c33'
+ * @param {number[]} lab `[L, a, b]`
+ * @returns {number[]} `[r, g, b]`, possibly outside 0–255
+ */
+function labToRgb(lab) {
+    const [L, a, b] = lab;
+    const fy = (L + 16) / 116;
+    const fx = fy + a / 500;
+    const fz = fy - b / 200;
+    const finv = (t) => (t * t * t > 0.008856 ? t * t * t : (t - 16 / 116) / 7.787);
+    const x = finv(fx) * 0.95047;
+    const y = finv(fy);
+    const z = finv(fz) * 1.08883;
+    const rl = 3.2404542 * x - 1.5371385 * y - 0.4985314 * z;
+    const gl = -0.9692660 * x + 1.8760108 * y + 0.0415560 * z;
+    const bl = 0.0556434 * x - 0.2040259 * y + 1.0572252 * z;
+    return [rl, gl, bl].map(linearToSrgb);
+}
+
+/**
+ * True when every channel lies within 0–255 (± a small rounding tolerance).
+ *
+ * @example isRgbInGamut([10, 20, 30])  // → true
+ * @example isRgbInGamut([-5, 20, 30])  // → false
+ * @param {number[]} rgb
+ * @param {number} [tolerance=0.5]
+ * @returns {boolean}
+ */
+function isRgbInGamut(rgb, tolerance = 0.5) {
+    return rgb.every((v) => v >= -tolerance && v <= 255 + tolerance);
+}
+
+/**
+ * Hex → cylindrical LCh (`l` 0–100, `c` chroma ≥ 0, `h` hue degrees 0–360).
+ *
+ * @example hexToLch('#808080').c // → ≈0 (grey has no chroma)
+ * @example hexToLch('#ff0000').h // → ≈40 (CIELAB red hue angle)
+ * @param {string} hex
+ * @returns {{l: number, c: number, h: number}}
+ */
+function hexToLch(hex) {
+    const lab = rgbToLab(hexToRgb(hex) || [0, 0, 0]);
+    const chroma = Math.hypot(lab[1], lab[2]);
+    const hue = (Math.atan2(lab[2], lab[1]) * 180 / Math.PI + 360) % 360;
+    return { l: lab[0], c: chroma, h: hue };
+}
+
+/**
+ * LCh → CIELAB `[L, a, b]`.
+ *
+ * @example lchToLab(50, 0, 120)   // → [50, 0, 0]
+ * @example lchToLab(50, 10, 0)    // → [50, 10, 0]
+ * @param {number} l
+ * @param {number} c
+ * @param {number} h degrees
+ * @returns {number[]}
+ */
+function lchToLab(l, c, h) {
+    const rad = h * Math.PI / 180;
+    return [l, c * Math.cos(rad), c * Math.sin(rad)];
+}
+
+/**
+ * LCh → hex, reducing chroma (binary search, 16 steps) until the colour fits the sRGB gamut so
+ * lightness is always honoured exactly.
+ *
+ * @example lchToHex(100, 0, 0)      // → '#ffffff'
+ * @example lchToHex(50, 500, 120)   // → the most saturated in-gamut green at L*=50
+ * @param {number} l
+ * @param {number} c
+ * @param {number} h
+ * @returns {string}
+ */
+function lchToHex(l, c, h) {
+    const safeL = Math.max(0, Math.min(100, l));
+    if (safeL <= 0) return '#000000';
+    if (safeL >= 100) return '#ffffff';
+    if (isRgbInGamut(labToRgb(lchToLab(safeL, c, h)))) return rgbToHex(labToRgb(lchToLab(safeL, c, h)));
+    let lo = 0;
+    let hi = c;
+    for (let i = 0; i < 16; i++) {
+        const mid = (lo + hi) / 2;
+        if (isRgbInGamut(labToRgb(lchToLab(safeL, mid, h)))) lo = mid; else hi = mid;
+    }
+    return rgbToHex(labToRgb(lchToLab(safeL, lo, h)));
+}
+
+/**
+ * Chroma multiplier per tone: full chroma at mid tones, gently desaturated towards black and white
+ * (Material tonal palettes behave the same way).
+ *
+ * @example chromaScaleForTone(50)  // → 1
+ * @example chromaScaleForTone(100) // → 0.25
+ * @param {number} tone 0–100
+ * @returns {number}
+ */
+function chromaScaleForTone(tone) {
+    const offset = (tone - 50) / 50;
+    return 1 - 0.75 * offset * offset;
+}
+
+/**
+ * Picks the colour of a seed's tonal palette at a given tone (CIELAB L*).
+ *
+ * @example toneHex('#5c7c33', 100) // → '#ffffff'
+ * @example hexToLch(toneHex('#2563eb', 40)).l // → ≈40
+ * @param {string} seedHex
+ * @param {number} tone 0–100
+ * @param {number} [chromaScale] defaults to `chromaScaleForTone(tone)`
+ * @returns {string}
+ */
+function toneHex(seedHex, tone, chromaScale) {
+    const seed = hexToLch(seedHex);
+    const scale = chromaScale === undefined ? chromaScaleForTone(tone) : chromaScale;
+    return lchToHex(tone, seed.c * scale, seed.h);
+}
+
+/**
+ * WCAG relative luminance (0 black … 1 white).
+ *
+ * @example relativeLuminance('#ffffff') // → 1
+ * @example relativeLuminance('#000000') // → 0
+ * @param {string} hex
+ * @returns {number}
+ */
+function relativeLuminance(hex) {
+    const [r, g, b] = (hexToRgb(hex) || [0, 0, 0]).map(srgbToLinear);
+    return 0.2126 * r + 0.7152 * g + 0.0722 * b;
+}
+
+/**
+ * WCAG contrast ratio between two colours (1 … 21).
+ *
+ * @example contrastRatio('#000000', '#ffffff') // → 21
+ * @example contrastRatio('#777777', '#777777') // → 1
+ * @param {string} hexA
+ * @param {string} hexB
+ * @returns {number}
+ */
+function contrastRatio(hexA, hexB) {
+    const la = relativeLuminance(hexA);
+    const lb = relativeLuminance(hexB);
+    return (Math.max(la, lb) + 0.05) / (Math.min(la, lb) + 0.05);
+}
+
+/**
+ * Linear sRGB-space mix of two colours (`weight` 0 → all `hexA`, 1 → all `hexB`).
+ *
+ * @example mixHex('#000000', '#ffffff', 0.5) // → '#808080'
+ * @example mixHex('#5c7c33', '#ffffff', 0)   // → '#5c7c33'
+ * @param {string} hexA
+ * @param {string} hexB
+ * @param {number} weight
+ * @returns {string}
+ */
+function mixHex(hexA, hexB, weight) {
+    const a = hexToRgb(hexA) || [0, 0, 0];
+    const b = hexToRgb(hexB) || [0, 0, 0];
+    const w = Math.max(0, Math.min(1, weight));
+    return rgbToHex(a.map((v, i) => v + (b[i] - v) * w));
+}
+
+// ─── Theme catalogue ───────────────────────────────────────────────────────────
+
+/**
+ * Builds the Solarized neutral ramp (base03 … base3) for either mode so `slate`/`gray`/… utilities
+ * render Ethan Schoonover's exact base colours instead of generated greys.
+ *
+ * @example solarizedNeutralScale('light').white // → '#fdf6e3' (base3)
+ * @example solarizedNeutralScale('dark').white  // → '#002b36' (base03)
+ * @param {'light'|'dark'} mode
+ * @returns {Object<string,string>} shade → hex, including `white`
+ */
+function solarizedNeutralScale(mode) {
+    const [base03, base02, base01, base00, base0, base1, base2, base3] = ['#002b36', '#073642', '#586e75', '#657b83', '#839496', '#93a1a1', '#eee8d5', '#fdf6e3'];
+    if (mode === 'dark') {
+        return {
+            white: base03, 50: base02, 100: mixHex(base02, base01, 0.25), 200: mixHex(base02, base01, 0.6), 300: base01,
+            400: base00, 500: base0, 600: base1, 700: mixHex(base1, base2, 0.5), 800: base2, 900: base3, 950: '#fffbf0'
+        };
+    }
+    return {
+        white: base3, 50: mixHex(base3, base2, 0.5), 100: base2, 200: mixHex(base2, base1, 0.35), 300: mixHex(base2, base1, 0.7),
+        400: base1, 500: base00, 600: base01, 700: mixHex(base01, base02, 0.5), 800: base02, 900: base03, 950: '#00212b'
+    };
+}
+
+/**
+ * Maps every neutral Tailwind family (slate, gray, zinc, neutral, stone) to one explicit ramp.
+ *
+ * @example neutralFamilyOverrides(solarizedNeutralScale('light')).slate[500] // → '#839496'
+ * @example Object.keys(neutralFamilyOverrides({ 50: '#fff' })) // → ['slate','gray','zinc','neutral','stone','white']
+ * @param {Object<string,string>} scale shade → hex (may include `white`)
+ * @returns {Object}
+ */
+function neutralFamilyOverrides(scale) {
+    const { white, ...shades } = scale;
+    return { slate: shades, gray: shades, zinc: shades, neutral: shades, stone: shades, white };
+}
+
+const CLASSIC_FOREST_SEEDS = {
+    primary: '#5c7c33', secondary: '#2563eb', tertiary: '#7c3aed', neutral: '#64748b', error: '#dc2626',
+    accent: '#2563eb', male: '#0ea5e9', female: '#f43f5e', success: '#10b981', warning: '#f59e0b'
+};
+
+const SOLARIZED_SEEDS = {
+    primary: '#268bd2', secondary: '#2aa198', tertiary: '#6c71c4', neutral: '#839496', error: '#dc322f',
+    accent: '#268bd2', male: '#2aa198', female: '#d33682', success: '#859900', warning: '#b58900'
+};
+
+/**
+ * All selectable themes. `families: null` = keep Tailwind's stock palette (Classic only); `roles`
+ * override generated Material roles with the hand-picked brand colours of the original design.
+ */
+const COLOR_THEMES = [
+    {
+        id: 'classic', name: 'Classic Forest', mode: 'light', seeds: CLASSIC_FOREST_SEEDS, families: null,
+        blurb: 'The original look: crisp white canvas, slate text and the forest-green brand accents.',
+        roles: {
+            primary: '#5c7c33', onPrimary: '#ffffff', primaryContainer: '#e9f2da', onPrimaryContainer: '#2d4a1e', inversePrimary: '#9cc95f', primaryHover: '#4a6a27',
+            secondary: '#2563eb', onSecondary: '#ffffff', secondaryContainer: '#dbeafe', onSecondaryContainer: '#1e3a8a',
+            tertiary: '#7c3aed', onTertiary: '#ffffff', tertiaryContainer: '#ede9fe', onTertiaryContainer: '#4c1d95',
+            error: '#dc2626', onError: '#ffffff', errorContainer: '#fef2f2', onErrorContainer: '#991b1b',
+            surface: '#ffffff', surfaceDim: '#e2e8f0', surfaceBright: '#ffffff', surfaceContainerLowest: '#ffffff', surfaceContainerLow: '#f8fafc',
+            surfaceContainer: '#f1f5f9', surfaceContainerHigh: '#e2e8f0', surfaceContainerHighest: '#cbd5e1', surfaceVariant: '#f1f5f9',
+            onSurface: '#1e293b', onSurfaceVariant: '#64748b', outline: '#cbd5e1', outlineVariant: '#e2e8f0', inverseSurface: '#0f172a', inverseOnSurface: '#f8fafc'
+        }
+    },
+    {
+        id: 'pastel', name: 'Soft Pastels', mode: 'light',
+        blurb: 'Powdery mint, blush and lavender on a milky canvas – gentle on the eyes for long sessions.',
+        seeds: { primary: '#5d9b8f', secondary: '#c98aa0', tertiary: '#9a8fc4', neutral: '#8f8a93', error: '#c86a6a', accent: '#7b93c9', male: '#7aa7cf', female: '#d49ab0', success: '#7ca982', warning: '#d4a85a' },
+        shadeTones: { 50: 98, 100: 96, 200: 93, 300: 87, 400: 68, 500: 50, 600: 40, 700: 30, 800: 19, 900: 11 }
+    },
+    {
+        id: 'earthy', name: 'Earthy & Warm', mode: 'light',
+        blurb: 'Terracotta, olive and ochre over warm parchment – like an old family album.',
+        seeds: { primary: '#9a5b2e', secondary: '#6f7b47', tertiary: '#b8603f', neutral: '#8a7d70', neutralVariant: '#8c7f6e', error: '#b23a3a', accent: '#8c6d3f', male: '#5f7f8c', female: '#c27a68', success: '#6f8f4e', warning: '#c2862b' },
+        families: { white: '#fdfaf4' }
+    },
+    {
+        id: 'ocean', name: 'Ocean Breeze', mode: 'light',
+        blurb: 'Cool teal and sea-blue accents on airy, slightly bluish surfaces.',
+        seeds: { primary: '#1f7a8c', secondary: '#3b6ea5', tertiary: '#2a9d8f', neutral: '#76808a', error: '#c0392b', accent: '#2f6fd6', male: '#3a86b8', female: '#d0677d', success: '#2e9e6b', warning: '#d9a441' }
+    },
+    {
+        id: 'lavender', name: 'Lavender Dusk', mode: 'light',
+        blurb: 'Violet and orchid accents with soft grey-lilac surfaces.',
+        seeds: { primary: '#6d5bb5', secondary: '#9b6aa8', tertiary: '#c26f9a', neutral: '#837c90', error: '#c24b5a', accent: '#5f6fd1', male: '#6b8bd6', female: '#c97aa6', success: '#6a9a6a', warning: '#c99a4a' }
+    },
+    {
+        id: 'solarized-light', name: 'Solarized Light', mode: 'light',
+        blurb: 'Ethan Schoonover\u2019s precision palette: cream base3 canvas with the classic blue, cyan and magenta accents.',
+        seeds: SOLARIZED_SEEDS, families: neutralFamilyOverrides(solarizedNeutralScale('light'))
+    },
+    {
+        id: 'dark', name: 'Dark Forest', mode: 'dark',
+        blurb: 'The Classic palette inverted: charcoal slate surfaces with luminous green accents.',
+        seeds: CLASSIC_FOREST_SEEDS
+    },
+    {
+        id: 'midnight', name: 'Midnight Black', mode: 'dark',
+        blurb: 'True-black surfaces for OLED screens with muted, high-legibility accents.',
+        seeds: { ...CLASSIC_FOREST_SEEDS, neutral: '#6b7280' },
+        shadeTones: { white: 0, 50: 4, 100: 9, 200: 18 },
+        roleTones: { surface: 0, surfaceDim: 0, surfaceContainerLowest: 0, surfaceContainerLow: 4, surfaceContainer: 8, surfaceContainerHigh: 12, surfaceContainerHighest: 17, surfaceBright: 22 }
+    },
+    {
+        id: 'solarized-dark', name: 'Solarized Dark', mode: 'dark',
+        blurb: 'The night-time Solarized: deep teal base03 canvas with the same accent hues.',
+        seeds: SOLARIZED_SEEDS, families: neutralFamilyOverrides(solarizedNeutralScale('dark'))
+    },
+    {
+        id: 'contrast', name: 'High Contrast', mode: 'light',
+        blurb: 'Pure white, near-black text and saturated accents – maximum legibility.',
+        seeds: { primary: '#2448a8', secondary: '#006d5b', tertiary: '#7a1fa2', neutral: '#777777', error: '#b00020', accent: '#1d4ed8', male: '#0b57a4', female: '#b0215f', success: '#087443', warning: '#9a5b00' },
+        shadeTones: { 50: 99, 100: 97, 200: 93, 300: 85, 400: 60, 500: 42, 600: 30, 700: 20, 800: 10, 900: 4, 950: 0 },
+        roleTones: { primary: 30, primaryContainer: 92, onPrimaryContainer: 5, onSurface: 0, onSurfaceVariant: 20, outline: 35, outlineVariant: 70, surface: 100, surfaceContainerLow: 98 }
+    }
+];
+
+/**
+ * Looks a theme definition up by id, falling back to Classic for unknown / missing ids.
+ *
+ * @example getColorThemeDefinition('midnight').mode // → 'dark'
+ * @example getColorThemeDefinition('does-not-exist').id // → 'classic'
+ * @param {string} id
+ * @returns {Object}
+ */
+function getColorThemeDefinition(id) {
+    return COLOR_THEMES.find((theme) => theme.id === id) || COLOR_THEMES[0];
+}
+
+/**
+ * True when `id` names one of the selectable themes.
+ *
+ * @example isKnownColorThemeId('earthy') // → true
+ * @example isKnownColorThemeId('')       // → false
+ * @param {*} id
+ * @returns {boolean}
+ */
+function isKnownColorThemeId(id) {
+    return typeof id === 'string' && COLOR_THEMES.some((theme) => theme.id === id);
+}
+
+/**
+ * Which seed palette paints a Material role (`onPrimaryContainer` → primary, `outline` → neutralVariant…).
+ *
+ * @example paletteKeyForRole('onSecondaryContainer') // → 'secondary'
+ * @example paletteKeyForRole('surfaceContainerLow')  // → 'neutral'
+ * @param {string} role camelCase Material role name
+ * @returns {string}
+ */
+function paletteKeyForRole(role) {
+    const base = role.replace(/^inverse/, '').replace(/^on/, '');
+    const normalized = base.charAt(0).toLowerCase() + base.slice(1);
+    for (const key of ['primary', 'secondary', 'tertiary', 'error']) {
+        if (normalized.startsWith(key)) return key;
+    }
+    if (/^(surfaceVariant|outline)/.test(normalized)) return 'neutralVariant';
+    return 'neutral';
+}
+
+/**
+ * camelCase role → kebab-case CSS token (`surfaceContainerLow` → `surface-container-low`).
+ *
+ * @example kebabCaseRole('onPrimary')       // → 'on-primary'
+ * @example kebabCaseRole('inversePrimary')  // → 'inverse-primary'
+ * @param {string} role
+ * @returns {string}
+ */
+function kebabCaseRole(role) {
+    return role.replace(/[A-Z]/g, (ch) => '-' + ch.toLowerCase());
+}
+
+/**
+ * Generates every Material role from the seeds (plus the derived `primaryHover` = primary mixed 12 %
+ * towards on-primary, i.e. Material's hover state layer).
+ *
+ * @example buildThemeRoles(CLASSIC_FOREST_SEEDS, M3_ROLE_TONES.light).onPrimary // → '#ffffff'
+ * @example hexToLch(buildThemeRoles(CLASSIC_FOREST_SEEDS, M3_ROLE_TONES.dark).surface).l // → ≈6
+ * @param {Object<string,string>} seeds
+ * @param {Object<string,number>} roleTones role → tone
+ * @returns {Object<string,string>} role → hex
+ */
+function buildThemeRoles(seeds, roleTones) {
+    const roles = {};
+    for (const role of Object.keys(roleTones)) {
+        const seedKey = paletteKeyForRole(role);
+        const seed = seeds[seedKey] || seeds.neutral;
+        roles[role] = toneHex(seed, roleTones[role]);
+    }
+    roles.primaryHover = mixHex(roles.primary, roles.onPrimary, 0.12);
+    return roles;
+}
+
+/**
+ * Generates the 22 Tailwind family ramps (+ `white`) from the seeds, honouring explicit overrides.
+ *
+ * @example buildThemeFamilies(CLASSIC_FOREST_SEEDS, TAILWIND_SHADE_TONES.light).sky[100] // → a very light blue
+ * @example buildThemeFamilies(CLASSIC_FOREST_SEEDS, TAILWIND_SHADE_TONES.dark, { white: '#000000' }).white // → '#000000'
+ * @param {Object<string,string>} seeds
+ * @param {Object<string,number>} tones shade → tone (must include `white`)
+ * @param {Object} [overrides] family → shade map, or `white` → hex
+ * @returns {Object}
+ */
+function buildThemeFamilies(seeds, tones, overrides) {
+    const families = {};
+    for (const family of TAILWIND_THEME_FAMILIES) {
+        if (overrides && overrides[family]) {
+            families[family] = { ...overrides[family] };
+            continue;
+        }
+        const seed = seeds[TAILWIND_FAMILY_SEEDS[family]] || seeds.neutral;
+        families[family] = {};
+        for (const shade of TAILWIND_SHADES) families[family][shade] = toneHex(seed, tones[shade]);
+    }
+    families.white = (overrides && overrides.white) || toneHex(seeds.neutral, tones.white, 0.15);
+    return families;
+}
+
+/**
+ * Resolves a theme id (or inline definition) into concrete colours.
+ *
+ * @example resolveColorTheme('classic').families // → null (stock Tailwind palette)
+ * @example resolveColorTheme('earthy').roles.primary // → a terracotta hex at tone 40
+ * @param {string|Object} idOrDefinition
+ * @returns {{id: string, name: string, blurb: string, mode: string, seeds: Object, roles: Object, families: (Object|null)}}
+ */
+function resolveColorTheme(idOrDefinition) {
+    const def = typeof idOrDefinition === 'string' ? getColorThemeDefinition(idOrDefinition) : idOrDefinition;
+    const mode = def.mode === 'dark' ? 'dark' : 'light';
+    const tones = { ...TAILWIND_SHADE_TONES[mode], ...(def.shadeTones || {}) };
+    const roleTones = { ...M3_ROLE_TONES[mode], ...(def.roleTones || {}) };
+    const roles = { ...buildThemeRoles(def.seeds, roleTones), ...(def.roles || {}) };
+    const families = def.families === null ? null : buildThemeFamilies(def.seeds, tones, def.families);
+    return { id: def.id, name: def.name, blurb: def.blurb || '', mode, seeds: def.seeds, roles, families };
+}
+
+/**
+ * Reads a Tailwind family colour for a resolved theme (Classic falls back to the stock palette).
+ *
+ * @example themeFamilyHex(resolveColorTheme('classic'), 'sky', 100) // → '#e0f2fe'
+ * @example themeFamilyHex(resolveColorTheme('midnight'), 'white')   // → '#000000'
+ * @param {Object} resolved
+ * @param {string} family e.g. 'slate' or 'white'
+ * @param {number} [shade]
+ * @returns {string}
+ */
+function themeFamilyHex(resolved, family, shade) {
+    const palette = resolved.families || TAILWIND_DEFAULT_PALETTE;
+    const entry = palette[family];
+    return typeof entry === 'string' ? entry : entry[shade];
+}
+
+/**
+ * Builds the CSS custom properties (`r g b` triplets) that `applyColorTheme()` writes onto `<html>`.
+ *
+ * @example buildThemeCssVariables(resolveColorTheme('classic'))['--md-sys-color-primary'] // → '92 124 51'
+ * @example '--tw-slate-500' in buildThemeCssVariables(resolveColorTheme('classic')) // → false (stock palette)
+ * @param {Object} resolved
+ * @returns {Object<string,string>}
+ */
+function buildThemeCssVariables(resolved) {
+    const vars = {};
+    for (const role of Object.keys(resolved.roles)) {
+        vars['--md-sys-color-' + kebabCaseRole(role)] = rgbTriplet(resolved.roles[role]);
+    }
+    if (!resolved.families) return vars;
+    for (const family of TAILWIND_THEME_FAMILIES) {
+        for (const shade of TAILWIND_SHADES) {
+            vars['--tw-' + family + '-' + shade] = rgbTriplet(resolved.families[family][shade]);
+        }
+    }
+    vars['--tw-white'] = rgbTriplet(resolved.families.white);
+    return vars;
+}
+
+/**
+ * Removes every previously applied theme variable from an element's inline style.
+ *
+ * @example removeThemeCssVariables(document.documentElement) // clears --tw-* / --md-sys-color-*
+ * @example removeThemeCssVariables({ style: { length: 0 } })  // no-op on an empty style
+ * @param {Object} root element with a CSSStyleDeclaration-like `style`
+ * @returns {number} how many properties were removed
+ */
+function removeThemeCssVariables(root) {
+    const stale = [];
+    for (let i = 0; i < root.style.length; i++) {
+        const name = root.style[i];
+        if (name && (name.startsWith('--tw-') || name.startsWith('--md-sys-color-'))) stale.push(name);
+    }
+    stale.forEach((name) => root.style.removeProperty(name));
+    return stale.length;
+}
+
+/**
+ * Applies a theme to the document: swaps the CSS variables, sets `color-scheme` and the
+ * `data-theme` / `data-theme-mode` attributes used by the global stylesheet.
+ *
+ * @example applyColorTheme('midnight').mode // → 'dark' (and <html data-theme="midnight">)
+ * @example applyColorTheme('classic', null).id // → 'classic' (no DOM touched)
+ * @param {string} id
+ * @param {Object} [root=document.documentElement]
+ * @returns {Object} the resolved theme
+ */
+function applyColorTheme(id, root = typeof document === 'undefined' ? null : document.documentElement) {
+    const resolved = resolveColorTheme(isKnownColorThemeId(id) ? id : DEFAULT_COLOR_THEME_ID);
+    if (!root || !root.style) return resolved;
+    removeThemeCssVariables(root);
+    const vars = buildThemeCssVariables(resolved);
+    Object.keys(vars).forEach((name) => root.style.setProperty(name, vars[name]));
+    root.style.colorScheme = resolved.mode;
+    root.setAttribute('data-theme', resolved.id);
+    root.setAttribute('data-theme-mode', resolved.mode);
+    return resolved;
+}
+
+/**
+ * Representative colours for a theme preview card (canvas, a male and a female person card, a
+ * primary button and body text).
+ *
+ * @example describeThemeSwatches(resolveColorTheme('classic')).male // → '#e0f2fe' (sky-100)
+ * @example describeThemeSwatches(resolveColorTheme('midnight')).canvas // → '#000000'
+ * @param {Object} resolved
+ * @returns {{canvas: string, panel: string, text: string, primary: string, onPrimary: string, male: string, maleBorder: string, female: string, femaleBorder: string, line: string}}
+ */
+function describeThemeSwatches(resolved) {
+    const { cardFill, cardBorder } = COLOR_THEME_PREVIEW_SHADES;
+    return {
+        canvas: themeFamilyHex(resolved, 'white'),
+        panel: themeFamilyHex(resolved, 'slate', 100),
+        text: themeFamilyHex(resolved, 'slate', 800),
+        primary: resolved.roles.primary,
+        onPrimary: resolved.roles.onPrimary,
+        male: themeFamilyHex(resolved, 'sky', cardFill),
+        maleBorder: themeFamilyHex(resolved, 'sky', cardBorder),
+        female: themeFamilyHex(resolved, 'rose', cardFill),
+        femaleBorder: themeFamilyHex(resolved, 'rose', cardBorder),
+        line: themeFamilyHex(resolved, 'slate', 300)
+    };
+}
+
+// ─── Tailwind config script (stamped into index.html and the standalone export) ────
+
+/**
+ * Formats one Tailwind colour value that reads a CSS variable with a hard-coded fallback.
+ *
+ * @example tailwindVarColor('--tw-slate-500', '#64748b') // → "'rgb(var(--tw-slate-500, 100 116 139) / <alpha-value>)'"
+ * @example tailwindVarColor('--tw-white', '#fff')         // → "'rgb(var(--tw-white, 255 255 255) / <alpha-value>)'"
+ * @param {string} variable
+ * @param {string} fallbackHex
+ * @returns {string} a single-quoted JS string literal
+ */
+function tailwindVarColor(variable, fallbackHex) {
+    return "'rgb(var(" + variable + ', ' + rgbTriplet(fallbackHex) + ') / <alpha-value>)' + "'";
+}
+
+/**
+ * Serialises the `colors` section of the stamped Tailwind config: every family/shade plus `white`
+ * and every Material role, each pointing at its CSS variable with the Classic colour as fallback.
+ *
+ * @example buildTailwindColorConfigLines()[0] // → "        slate: { 50: 'rgb(var(--tw-slate-50, 248 250 252) / <alpha-value>)', … },"
+ * @example buildTailwindColorConfigLines().some((line) => line.includes("'on-primary':")) // → true
+ * @returns {string[]} indented source lines
+ */
+function buildTailwindColorConfigLines() {
+    const classicRoles = resolveColorTheme(DEFAULT_COLOR_THEME_ID).roles;
+    const lines = TAILWIND_THEME_FAMILIES.map((family) => {
+        const shades = TAILWIND_SHADES.map((shade) => shade + ': ' + tailwindVarColor('--tw-' + family + '-' + shade, TAILWIND_DEFAULT_PALETTE[family][shade]));
+        return '        ' + family + ': { ' + shades.join(', ') + ' },';
+    });
+    lines.push('        white: ' + tailwindVarColor('--tw-white', TAILWIND_DEFAULT_PALETTE.white) + ',');
+    for (const role of Object.keys(classicRoles)) {
+        const token = kebabCaseRole(role);
+        lines.push("        '" + token + "': " + tailwindVarColor('--md-sys-color-' + token, classicRoles[role]) + ',');
+    }
+    return lines;
+}
+
+/**
+ * Builds the complete `tailwind.config = {…}` script body (no `<script>` tags) shared by
+ * `index.html` and the standalone HTML export.
+ *
+ * @example buildTailwindThemeConfigScript().startsWith('tailwind.config = {') // → true
+ * @example buildTailwindThemeConfigScript().includes("'text-gradient'") // → true (keyframes preserved)
+ * @returns {string}
+ */
+function buildTailwindThemeConfigScript() {
+    return [
+        'tailwind.config = {',
+        '  theme: {',
+        '    extend: {',
+        '      colors: {',
+        ...buildTailwindColorConfigLines(),
+        '      },',
+        '      keyframes: {',
+        "        'text-gradient': {",
+        "          '0%': { backgroundPosition: '0% 50%' },",
+        "          '50%': { backgroundPosition: '100% 50%' },",
+        "          '100%': { backgroundPosition: '0% 50%' },",
+        '        }',
+        '      },',
+        '      animation: {',
+        "        'text-gradient': 'text-gradient 3s linear infinite',",
+        '      }',
+        '    }',
+        '  }',
+        '};'
+    ].join('\n');
+}
+
+const TAILWIND_THEME_CONFIG_SCRIPT = buildTailwindThemeConfigScript();
 
 // ============================================================================
 // MODULE 2: UTILITY CLASSES (Data Loading & Parsing)
@@ -7980,24 +8740,7 @@ class FamilyTreeBuilder {
      * console.log(cfg.includes('text-gradient'));
      */
     static _getStandaloneTailwindConfig() {
-        return `  <script>
-    tailwind.config = {
-      theme: {
-        extend: {
-          keyframes: {
-            'text-gradient': {
-              '0%': { backgroundPosition: '0% 50%' },
-              '50%': { backgroundPosition: '100% 50%' },
-              '100%': { backgroundPosition: '0% 50%' },
-            }
-          },
-          animation: {
-            'text-gradient': 'text-gradient 3s linear infinite',
-          }
-        }
-      }
-    }
-  </script>`;
+        return `  <script>\n${TAILWIND_THEME_CONFIG_SCRIPT}\n  </script>`;
     }
 
     /**
@@ -24155,18 +24898,21 @@ ${bodyHtml}
 
 // ============================================================================
 // MODULE 5.0: BROWSER PREFERENCES — cookie-backed persistence of the Google Sheet
-// history shown on the home screen and of the user-tuned demographic settings.
+// history shown on the home screen, the user-tuned demographic settings and the
+// chosen colour theme.
 //
 // Everything the user has typed or chosen stays in THIS browser (first-party
 // cookie mirrored into localStorage for file:// standalone exports where
 // document.cookie is inert). Nothing is ever sent to a server; the GDPR note on
-// the home screen describes exactly these two cookies.
+// the home screen describes exactly these three cookies.
 // ============================================================================
 
 /** Cookie holding the ranked list of every Google Sheet the user has opened. */
 const SHEET_HISTORY_COOKIE = 'ft_sheet_history';
 /** Cookie holding the user-tuned demographic deduction settings (JSON). */
 const DEMOGRAPHIC_SETTINGS_COOKIE = 'ft_demographic_settings';
+/** Cookie holding the id of the chosen colour theme (see COLOR_THEMES). */
+const COLOR_THEME_COOKIE = 'ft_color_theme';
 /** Preferences survive one year of inactivity; every write refreshes the clock. */
 const PREFERENCE_COOKIE_MAX_AGE_SECONDS = 365 * 24 * 60 * 60;
 /** Browsers cap a single cookie at 4096 bytes; a dozen compact entries stay well below. */
@@ -24763,6 +25509,39 @@ function formatSheetHistoryLabel(entry) {
     return `${title} — ${entry.id}`;
 }
 
+/**
+ * Best-known human title for whatever sits in the home-screen textbox: the history entry's
+ * title, else the title learned from a CSV response this session, else the demo title when
+ * the text points at the demo sheet; '' when the text is not a sheet reference or unknown.
+ *
+ * @param {string} text - Raw textbox content (URL or bare ID)
+ * @param {Array<SheetHistoryEntry>} [history=readSheetHistory()] - Persisted history
+ * @param {Map<string, string>} [registry=sheetTitleRegistry] - Session title registry
+ * @returns {string}
+ *
+ * @example
+ * resolveKnownSheetTitle('https://docs.google.com/spreadsheets/d/1BQvyFoA_-u4MG-r1SRDel93F1TwEaN3I6v6p-kOH8z0/edit', [], new Map());
+ * // => 'Ancestry Browser: Demo'
+ *
+ * @example
+ * resolveKnownSheetTitle('1AbCdEfGhIjKlMnOpQrStUvWxYz0123456789abcd', [{ id: '1AbCdEfGhIjKlMnOpQrStUvWxYz0123456789abcd', title: 'Smith family', uses: 1, lastUsed: 1 }], new Map());
+ * // => 'Smith family'
+ *
+ * @example
+ * resolveKnownSheetTitle('not a sheet', [], new Map());
+ * // => ''
+ */
+function resolveKnownSheetTitle(text, history = readSheetHistory(), registry = sheetTitleRegistry) {
+    const ref = normalizeSheetReference(text);
+    if (!ref) return '';
+    const entry = (history || []).find((item) => item && item.id === ref.id);
+    const fromHistory = entry && typeof entry.title === 'string' ? entry.title.trim() : '';
+    if (fromHistory) return fromHistory;
+    const fromRegistry = getRememberedSheetTitle(ref.id, registry).trim();
+    if (fromRegistry) return fromRegistry;
+    return ref.id === DEMO_SHEET_ID ? DEMO_SHEET_TITLE : '';
+}
+
 // ─── Sheet titles learned from the CSV export response ──────────────────────
 
 /** In-memory map sheetId → spreadsheet title, filled while crawling. */
@@ -24976,9 +25755,79 @@ function applyStoredDemographicSettings() {
     return FamilyTreeBuilder.applyDemographicSettings(stored);
 }
 
+// ─── Colour theme persistence ───────────────────────────────────────────────
+
 /**
- * The "Clear stored data" action of the GDPR notice: deletes both preference cookies and
- * their mirrors, empties the in-memory title registry, and restores the shipped model.
+ * Reads the stored theme id, or null when nothing (or an unknown / retired id) is stored.
+ *
+ * @returns {string|null}
+ *
+ * @example
+ * saveColorThemeId('midnight');
+ * loadStoredColorThemeId(); // => 'midnight'
+ *
+ * @example
+ * writePreference(COLOR_THEME_COOKIE, 'neon-1999');
+ * loadStoredColorThemeId(); // => null (unknown ids are ignored)
+ */
+function loadStoredColorThemeId() {
+    const raw = readPreference(COLOR_THEME_COOKIE);
+    return isKnownColorThemeId(raw) ? raw : null;
+}
+
+/**
+ * Persists the chosen theme id (unknown ids are rejected and nothing is written).
+ *
+ * @param {string} id - One of COLOR_THEMES[].id
+ * @returns {boolean} true when stored
+ *
+ * @example
+ * saveColorThemeId('earthy'); // => true
+ *
+ * @example
+ * saveColorThemeId('not-a-theme'); // => false
+ */
+function saveColorThemeId(id) {
+    if (!isKnownColorThemeId(id)) return false;
+    writePreference(COLOR_THEME_COOKIE, id);
+    return true;
+}
+
+/**
+ * Forgets the stored theme (the page keeps its current colours until re-applied).
+ *
+ * @example
+ * clearStoredColorTheme();
+ * loadStoredColorThemeId(); // => null
+ *
+ * @example
+ * saveColorThemeId('ocean'); clearStoredColorTheme(); readPreference(COLOR_THEME_COOKIE); // => null
+ */
+function clearStoredColorTheme() {
+    removePreference(COLOR_THEME_COOKIE);
+}
+
+/**
+ * Applies the stored theme (or Classic) to the document at startup and returns it.
+ *
+ * @returns {Object} The resolved theme (`{ id, name, mode, roles, … }`)
+ *
+ * @example
+ * saveColorThemeId('midnight');
+ * applyStoredColorTheme().id; // => 'midnight' (<html data-theme="midnight">)
+ *
+ * @example
+ * clearStoredColorTheme();
+ * applyStoredColorTheme().id; // => 'classic'
+ */
+function applyStoredColorTheme() {
+    return applyColorTheme(loadStoredColorThemeId() || DEFAULT_COLOR_THEME_ID);
+}
+
+/**
+ * The "Clear stored data" action of the GDPR notice: deletes all three preference cookies and
+ * their mirrors, empties the in-memory title registry, restores the shipped model and repaints
+ * the Classic theme.
  *
  * @example
  * clearStoredPreferences();
@@ -24987,12 +25836,15 @@ function applyStoredDemographicSettings() {
  * @example
  * clearStoredPreferences();
  * loadStoredDemographicSettings(); // => null
+ * loadStoredColorThemeId();        // => null
  */
 function clearStoredPreferences() {
     removePreference(SHEET_HISTORY_COOKIE);
     removePreference(DEMOGRAPHIC_SETTINGS_COOKIE);
+    removePreference(COLOR_THEME_COOKIE);
     sheetTitleRegistry.clear();
     FamilyTreeBuilder.resetDemographicSettings();
+    applyColorTheme(DEFAULT_COLOR_THEME_ID);
 }
 
 
@@ -29908,7 +30760,8 @@ const CompactTreeConnectorSvg = React.memo(({ paths, padX, padY, totalW, totalH 
                 <path 
                     key={`path-${idx}`} 
                     d={p.d} 
-                    stroke="#cbd5e1" 
+                    stroke="currentColor" 
+                    className="text-slate-300"
                     strokeWidth="2" 
                     fill="none" 
                     strokeLinecap="round"
@@ -41554,11 +42407,12 @@ const TopNavIconButton = ({ onClick, title, isActive = false, disabled = false, 
 };
 
 /**
- * Renders toolbar action buttons for deduction settings, standalone HTML export, and A4 print export.
+ * Renders toolbar action buttons for standalone HTML export and A4 print export.
+ * (Settings moved to the radial FAB in 06_ui/15_SettingsFab.jsx so they are reachable
+ * from the home screen too.)
  *
  * @param {object} props
  * @param {boolean} props.isStandalone - Whether running in embedded standalone mode
- * @param {Function} props.onOpenSettings - Opens the deduction settings panel
  * @param {boolean} props.isLoading - Whether tree data is actively loading
  * @param {Function} props.handleExportStandaloneApp - Standalone app export handler
  * @param {boolean} props.isExportingApp - Standalone app export in progress
@@ -41568,20 +42422,17 @@ const TopNavIconButton = ({ onClick, title, isActive = false, disabled = false, 
  * @returns {React.ReactNode}
  *
  * @example
- * <TopNavImportExportButtons isStandalone={false} onOpenSettings={() => {}} isLoading={false} handleExportStandaloneApp={() => {}} isExportingApp={false} handleExportA4Print={() => {}} isExportingA4={false} tree={tree} />
+ * <TopNavImportExportButtons isStandalone={false} isLoading={false} handleExportStandaloneApp={() => {}} isExportingApp={false} handleExportA4Print={() => {}} isExportingA4={false} tree={tree} />
  *
  * @example
- * <TopNavImportExportButtons isStandalone={true} onOpenSettings={() => {}} isLoading={false} handleExportStandaloneApp={() => {}} isExportingApp={false} handleExportA4Print={() => {}} isExportingA4={false} tree={tree} />
+ * <TopNavImportExportButtons isStandalone={true} isLoading={false} handleExportStandaloneApp={() => {}} isExportingApp={false} handleExportA4Print={() => {}} isExportingA4={false} tree={tree} />
  */
 const TopNavImportExportButtons = ({
-    isStandalone, onOpenSettings, isLoading,
+    isStandalone, isLoading,
     handleExportStandaloneApp, isExportingApp,
     handleExportA4Print, isExportingA4, tree
 }) => (
     <>
-        <TopNavIconButton onClick={onOpenSettings} disabled={isLoading} title="Deduction Settings (marriage age by birth cohort)">
-            <Icons.Settings />
-        </TopNavIconButton>
         {!isStandalone && (
             <TopNavIconButton onClick={handleExportStandaloneApp} disabled={isExportingApp || isLoading} title="Download Standalone Interactive App (.html)">
                 {isExportingApp ? <Icons.Loader /> : <Icons.Download />}
@@ -41643,11 +42494,10 @@ const TopNavViewToggleButtons = ({
 };
 
 /**
- * Top floating toolbar actions (Settings, Export, Map, AI, Logs, Search).
+ * Top floating toolbar actions (Export, Map, AI, Logs, Search).
  *
  * @param {object} props
  * @param {boolean} props.isStandalone - Embedded standalone flag
- * @param {Function} props.onOpenSettings - Opens the deduction settings panel
  * @param {boolean} props.isLoading - Loading state
  * @param {Function} props.handleExportStandaloneApp - Export standalone app handler
  * @param {boolean} props.isExportingApp - Export standalone loading state
@@ -41669,7 +42519,6 @@ const TopNavViewToggleButtons = ({
  * @example
  *   <TopNavigationActions
  *     isStandalone={false}
- *     onOpenSettings={() => {}}
  *     isLoading={false}
  *     handleExportStandaloneApp={() => {}}
  *     isExportingApp={false}
@@ -41691,7 +42540,6 @@ const TopNavViewToggleButtons = ({
  * @example
  *   <TopNavigationActions
  *     isStandalone={true}
- *     onOpenSettings={fn}
  *     isLoading={true}
  *     handleExportStandaloneApp={fn}
  *     isExportingApp={false}
@@ -41714,7 +42562,6 @@ const TopNavigationActions = (props) => (
     <>
         <TopNavImportExportButtons
             isStandalone={props.isStandalone}
-            onOpenSettings={props.onOpenSettings}
             isLoading={props.isLoading}
             handleExportStandaloneApp={props.handleExportStandaloneApp}
             isExportingApp={props.isExportingApp}
@@ -41773,7 +42620,6 @@ const TopNavigationErrorBanner = ({ errorMsg, onClear }) => {
  * @param {boolean} [props.isResizing=false] - Whether sidebar resize drag is active
  * @param {string} props.sheetUrl - Google sheet data source URL
  * @param {Function} props.setSheetUrl - Setter for sheet URL
- * @param {Function} props.onOpenSettings - Opens the deduction settings panel
  * @param {boolean} props.isLoading - Whether import or tree build is in progress
  * @param {string} props.searchQuery - Current omni search text
  * @param {Function} props.setSearchQuery - Setter for search text
@@ -41812,7 +42658,6 @@ const TopNavigationErrorBanner = ({ errorMsg, onClear }) => {
  *     isResizing={false}
  *     sheetUrl=""
  *     setSheetUrl={() => {}}
- *     onOpenSettings={() => {}}
  *     isLoading={false}
  *     searchQuery=""
  *     setSearchQuery={() => {}}
@@ -42097,7 +42942,6 @@ const TopNavigationAiTitle = () => (
  * @param {Object} props
  * @param {boolean} props.showAI - Whether AI assistant panel is open.
  * @param {boolean} props.isStandalone - Whether running in embedded standalone mode.
- * @param {Function} props.onOpenSettings - Opens the deduction settings panel.
  * @param {boolean} props.isLoading - Whether tree data is loading.
  * @param {Function} props.handleExportStandaloneApp - Standalone app export handler.
  * @param {boolean} props.isExportingApp - Standalone app export status.
@@ -42125,7 +42969,6 @@ const TopNavigationAiTitle = () => (
  * <TopNavigationInactiveToolbar
  *   showAI={false}
  *   isStandalone={false}
- *   onOpenSettings={() => {}}
  *   isLoading={false}
  *   handleExportStandaloneApp={() => {}}
  *   isExportingApp={false}
@@ -42153,7 +42996,6 @@ const TopNavigationAiTitle = () => (
  * <TopNavigationInactiveToolbar
  *   showAI={true}
  *   isStandalone={true}
- *   onOpenSettings={() => {}}
  *   isLoading={false}
  *   handleExportStandaloneApp={() => {}}
  *   isExportingApp={false}
@@ -42178,14 +43020,14 @@ const TopNavigationAiTitle = () => (
  * />
  */
 const TopNavigationInactiveToolbar = ({
-    showAI, isStandalone, onOpenSettings, isLoading, handleExportStandaloneApp,
+    showAI, isStandalone, isLoading, handleExportStandaloneApp,
     isExportingApp, handleExportA4Print, isExportingA4, tree, showMap,
     handleToggleMap, isAILoading, handleToggleAI, showLogs, setShowLogs,
     setShowAI, searchQuery, handleOpenSearch, isSidebarVisible, canGoBack,
     canGoForward, onGoBack, onGoForward, setFocusId
 }) => {
     const actionsProps = {
-        isStandalone, onOpenSettings, isLoading, handleExportStandaloneApp, isExportingApp,
+        isStandalone, isLoading, handleExportStandaloneApp, isExportingApp,
         handleExportA4Print, isExportingA4, tree, showMap, onToggleMap: handleToggleMap,
         showAI, isAILoading, onToggleAI: handleToggleAI, showLogs, setShowLogs,
         setShowAI, searchQuery, handleOpenSearch
@@ -42220,9 +43062,9 @@ const TopNavigationInactiveToolbar = ({
  */
 const TreeLoadingBrandSplash = () => (
     <div data-testid="tree-loading-brand-splash" className="w-full h-full flex flex-col items-center justify-center gap-5 select-none pointer-events-none relative z-10 px-6">
-        <div className="flex items-center justify-center gap-5 bg-white/85 backdrop-blur-xl px-8 py-6 rounded-3xl shadow-[0_0_40px_rgba(92,124,51,0.16),0_0_12px_rgba(0,0,0,0.08)] border border-lime-900/10">
+        <div className="flex items-center justify-center gap-5 bg-white/85 backdrop-blur-xl px-8 py-6 rounded-3xl shadow-[0_0_40px_rgba(92,124,51,0.16),0_0_12px_rgba(0,0,0,0.08)] border border-outline-variant/60">
             <BrandLogo size={96} idPrefix="splash" className="w-[96px] h-[96px] shrink-0 drop-shadow-md" />
-            <h1 className="text-[44px] leading-none tracking-wide font-bold bg-clip-text text-transparent bg-gradient-to-r from-slate-700 via-[#5c7c33] to-[#9cc95f] opacity-90" style={{ fontFamily: "'Uncial Antiqua', serif" }}>Family Tree</h1>
+            <h1 className="text-[44px] leading-none tracking-wide font-bold bg-clip-text text-transparent bg-gradient-to-r from-slate-700 via-primary to-inverse-primary opacity-90" style={{ fontFamily: "'Uncial Antiqua', serif" }}>Family Tree</h1>
         </div>
         <div className="text-sm text-slate-400 font-sans tracking-wide animate-pulse">Fetching and building tree...</div>
     </div>
@@ -42342,7 +43184,6 @@ const TopNavigationMainBar = ({
  * @param {boolean} [props.isResizing=false] - Whether sidebar is actively being dragged/resized.
  * @param {string} props.sheetUrl - Google Sheets data source URL.
  * @param {Function} props.setSheetUrl - Sheet URL state setter.
- * @param {Function} props.onOpenSettings - Opens the deduction settings panel.
  * @param {boolean} props.isLoading - Whether tree data is actively loading.
  * @param {string} props.searchQuery - Current omni-search input query.
  * @param {Function} props.setSearchQuery - Search query state setter.
@@ -42380,7 +43221,6 @@ const TopNavigationMainBar = ({
  *   tree={{ people: {} }}
  *   isSidebarVisible={false}
  *   sidebarWidth={360}
- *   onOpenSettings={() => {}}
  *   isLoading={false}
  *   searchQuery=""
  *   setSearchQuery={() => {}}
@@ -42419,7 +43259,7 @@ const TopNavigationMainBar = ({
  */
 const TopNavigation = (props) => {
     const {
-        tree, isSidebarVisible, sidebarWidth = 360, isResizing = false, sheetUrl, setSheetUrl, onOpenSettings, isLoading, searchQuery, setSearchQuery, 
+        tree, isSidebarVisible, sidebarWidth = 360, isResizing = false, sheetUrl, setSheetUrl, isLoading, searchQuery, setSearchQuery, 
         handleSetFocusId, onFilterBy, activeFilter, showLogs, setShowLogs, errorMsg, setErrorMsg,
         showAI, setShowAI, canGoBack, canGoForward, onGoBack, onGoForward, isAILoading, handleExportImage, isExporting,
         handleExportStandaloneApp, isExportingApp, handleExportA4Print, isExportingA4,
@@ -42434,7 +43274,7 @@ const TopNavigation = (props) => {
         useTopNavigationHandlers({ showMap, setShowMap, setIsSidebarVisible, setActiveFilter, setFocusId, showAI, setShowAI, setShowLogs });
 
     const activeProps = { searchContainerRef, handleSearchContainerBlur, tree, searchQuery, setSearchQuery, onFilterBy, activeFilter, handleSetFocusId, setShowMap, setShowAI, setShowLogs, onAiSubmitQuery, omniSelectedIndex, setOmniSelectedIndex, setIsSearchActive, canGoBack, canGoForward, onGoBack, onGoForward, isSidebarVisible, setFocusId };
-    const inactiveProps = { showAI, isStandalone, onOpenSettings, isLoading, handleExportStandaloneApp, isExportingApp, handleExportA4Print, isExportingA4, tree, showMap, handleToggleMap, isAILoading, handleToggleAI, showLogs, setShowLogs, setShowAI, searchQuery, handleOpenSearch, isSidebarVisible, canGoBack, canGoForward, onGoBack, onGoForward, setFocusId };
+    const inactiveProps = { showAI, isStandalone, isLoading, handleExportStandaloneApp, isExportingApp, handleExportA4Print, isExportingA4, tree, showMap, handleToggleMap, isAILoading, handleToggleAI, showLogs, setShowLogs, setShowAI, searchQuery, handleOpenSearch, isSidebarVisible, canGoBack, canGoForward, onGoBack, onGoForward, setFocusId };
 
     return (
         <div className="absolute top-4 left-0 right-0 z-50 flex flex-col gap-3 pointer-events-none">
@@ -42465,6 +43305,78 @@ const BUTTON_DOCUMENTATION_CATALOG = {
         examples: [
             { label: 'Later Marriages', detail: 'Raise the `1940` cohort from **22** to **25** and every mother born in the 1940s is deduced three years older than before.' },
             { label: 'Reset', detail: 'Click **Reset to defaults** and then **Apply & rebuild tree** to return to the shipped curve; the cookie is overwritten with the defaults.' }
+        ]
+    },
+    'Settings: theme, deduction rules, stored data': {
+        title: 'Settings',
+        badge: 'Radial Menu • Always Available',
+        summary: 'Fans out the three settings actions in a quarter circle: **Colour theme**, **Deduction rules** and **Clear stored data**. The button floats at the bottom-right of **every** screen, so you can change the look before any sheet is loaded. **Esc** or a click elsewhere closes the fan.',
+        examples: [
+            { label: 'Dark Mode', detail: 'Click the gear, choose **Colour theme**, then pick `Midnight Black` — the home screen and the tree repaint immediately.' },
+            { label: 'Keyboard', detail: 'Tab to the gear, press **Enter** to open the fan, then Tab through the three actions.' }
+        ]
+    },
+    'Colour theme (Material 3 palettes)': {
+        title: 'Colour theme',
+        badge: 'Appearance • Material 3',
+        summary: 'Opens the **Appearance** tab of Settings: ten **Material 3 tonal palettes** — `Classic Forest`, `Soft Pastels`, `Earthy & Warm`, `Ocean Breeze`, `Lavender Dusk`, `Solarized Light`, `Dark Forest`, `Midnight Black`, `Solarized Dark` and `High Contrast`. Picking a card applies it **instantly** and stores it in the `ft_color_theme` cookie.',
+        examples: [
+            { label: 'Solarized', detail: 'Choose **Solarized Light** for the cream base3 canvas by day and **Solarized Dark** for the teal base03 canvas at night.' },
+            { label: 'Back to Default', detail: 'Click **Reset to Classic** in the footer; the cookie keeps `classic` so the next visit starts there.' }
+        ]
+    },
+    'Clear stored data (cookies & local storage)': {
+        title: 'Clear stored data',
+        badge: 'Privacy • GDPR',
+        summary: 'Deletes everything this app remembers in **your browser**: the `ft_sheet_history` cookie (sheets you opened), `ft_demographic_settings` (deduction rules) and `ft_color_theme`, plus their **localStorage mirrors**. The model returns to its shipped defaults and the Classic theme. Nothing is ever sent to a server, so there is nothing to delete elsewhere.',
+        examples: [
+            { label: 'Shared Computer', detail: 'Before handing over a shared laptop, click here and confirm; the home screen dropdown of previously opened sheets is empty afterwards.' },
+            { label: 'Fresh Start', detail: 'After clearing, the home screen prefills the public **Ancestry Browser: Demo** sheet again.' }
+        ]
+    },
+    'Open the Google Sheet': {
+        title: 'Open',
+        badge: 'Home Screen • Load Sheet',
+        summary: 'Loads the spreadsheet named in the textbox (a **Google Sheets link or bare ID**, shared as *Anyone with the link can view*). The sheet is remembered in the **history cookie** and its title appears as a chip above the textbox on later visits. **Enter** does the same.',
+        examples: [
+            { label: 'Demo Data', detail: 'Leave the prefilled `Ancestry Browser: Demo` link and press **Open** to explore the sample lineage.' },
+            { label: 'Your Own Sheet', detail: 'Paste `https://docs.google.com/spreadsheets/d/<id>/edit`, press **Open**; a red note explains the fix if the sheet is not shared publicly.' }
+        ]
+    },
+    'Sheets you have opened before': {
+        title: 'Sheets you have opened before',
+        badge: 'Home Screen • History',
+        summary: 'Drops down the sheets remembered in the **`ft_sheet_history` cookie**, most-used first, each with its **title** and ID. Picking a row fills the textbox; the **×** on a row forgets that sheet.',
+        examples: [
+            { label: 'Switch Family', detail: 'Open the list and click `Smith family — 1AbC…` to prefill it, then press **Open**.' },
+            { label: 'Tidy Up', detail: 'Click **×** next to an old test sheet; it disappears from the list and from the cookie at once.' }
+        ]
+    },
+    'Forget this sheet': {
+        title: 'Forget this sheet',
+        badge: 'Home Screen • History',
+        summary: 'Removes one entry from the remembered-sheets list (and from the **history cookie**). The spreadsheet itself is untouched; you can paste its link again any time.',
+        examples: [
+            { label: 'Remove a Typo', detail: 'Forget a sheet you opened by mistake so it no longer competes for the **most-used** prefill.' },
+            { label: 'Everything', detail: 'To wipe the whole list use **clear stored data** in the privacy note instead.' }
+        ]
+    },
+    '← Back to the tree': {
+        title: 'Back to the tree',
+        badge: 'Home Screen • Navigation',
+        summary: 'Closes the home screen and returns to the **tree that is already loaded**, keeping the focused person, zoom and sidebar exactly as you left them.',
+        examples: [
+            { label: 'Changed Your Mind', detail: 'Opened the home screen via the emblem but want to keep exploring? Click here — nothing is reloaded.' },
+            { label: 'Shortcut', detail: 'Pressing **Esc** on the home screen does the same when a tree is loaded.' }
+        ]
+    },
+    'clear stored data': {
+        title: 'clear stored data',
+        badge: 'Privacy • GDPR',
+        summary: 'Same action as the radial menu\'s **Clear stored data**: deletes the **three first-party cookies** (sheet history, deduction settings, colour theme) and their localStorage mirrors after a confirmation.',
+        examples: [
+            { label: 'Verify', detail: 'After clearing, open the **Sheets you have opened before** dropdown — it is empty.' },
+            { label: 'Theme Reset', detail: 'Clearing also returns the app to the **Classic Forest** theme.' }
         ]
     },
     'Download Standalone Interactive App (.html)': {
@@ -42744,6 +43656,31 @@ function resolveDynamicFilterButtonDoc(key) {
 }
 
 /**
+ * Documentation card for one theme card of the Appearance tab (`data-doc-key="Colour theme: <name>"`).
+ *
+ * @param {string} name - Theme display name, e.g. 'Midnight Black'.
+ * @returns {object|null} Documentation entry, or null when no theme has that name.
+ *
+ * @example
+ * resolveThemeCardDoc('Classic Forest').title; // => 'Colour theme: Classic Forest'
+ *
+ * @example
+ * resolveThemeCardDoc('Neon 1999'); // => null
+ */
+function resolveThemeCardDoc(name) {
+    const theme = COLOR_THEMES.find((entry) => entry.name === name);
+    if (!theme) return null;
+    return {
+        title: `Colour theme: ${theme.name}`, badge: `Appearance • ${theme.mode === 'dark' ? 'Dark' : 'Light'} palette`,
+        summary: `${theme.blurb} Clicking applies the **${theme.name}** palette **instantly** to every screen and remembers it in the \`ft_color_theme\` cookie on this device.`,
+        examples: [
+            { label: 'Try It', detail: `Click the card; the canvas, person cards and buttons repaint at once. Pick **Classic Forest** (or **Reset to Classic**) to go back.` },
+            { label: 'Material 3', detail: 'Every theme is a tonal palette generated from a few seed colours, so text keeps its contrast on the new surfaces.' }
+        ]
+    };
+}
+
+/**
  * Resolves rich documentation for contextual buttons based on visible button label text.
  *
  * @param {string} text - Normalized visible text inside the button.
@@ -42754,9 +43691,14 @@ function resolveDynamicFilterButtonDoc(key) {
  *
  * @example
  * const aiToggleDoc = resolveContextualButtonDoc('Rule');
+ *
+ * @example
+ * resolveContextualButtonDoc('Mathayi Parathottiyil').title; // => 'Mathayi Parathottiyil' (full name, no prefix)
  */
 function resolveContextualButtonDoc(text) {
     if (/^(Show|Hide)\s+Directory$/i.test(text)) return BUTTON_DOCUMENTATION_CATALOG['Toggle Directory'];
+    const themeDoc = /^Colour theme: /.test(text) ? resolveThemeCardDoc(text.replace(/^Colour theme: /, '')) : null;
+    if (themeDoc) return themeDoc;
     if (/^Locations\s*\(/i.test(text) || /^Careers\s*\(/i.test(text) || /^Families\s*\(/i.test(text)) {
         const tabName = text.split('(')[0].trim();
         return {
@@ -42778,9 +43720,9 @@ function resolveContextualButtonDoc(text) {
             ]
         };
     }
-    const clean = text ? text.slice(0, 48) : 'Interactive Control';
+    const clean = text ? text.slice(0, 120) : 'Interactive Control';
     return {
-        title: `Select / Toggle: ${clean}`, badge: 'Interactive Control • Action',
+        title: clean, badge: 'Interactive Control • Action',
         summary: `Activates **\`${clean}\`**, updating the **focused profile or filter** in the sidebar and synchronizing the **canvas camera** or **directory tree**.`,
         examples: [
             { label: 'Focus & Synchronize View', detail: `Click **"${clean}"** to navigate directly to the selected person, relative, region, or query.` },
@@ -42839,29 +43781,37 @@ function renderRichDocText(text) {
 }
 
 /**
- * Calculates clamped viewport coordinates (`left`, `top`, `placement`) for the button documentation popover.
+ * Calculates clamped viewport coordinates for the button documentation balloon: `left`/`top`
+ * for a card placed below the button, `left`/`bottom` (distance from the viewport bottom) for a
+ * card placed above it, plus the `tail.x` abscissa (relative to the card) where the speech-bubble
+ * tail should point at the button's centre.
  *
  * @param {{ left: number, top: number, right: number, bottom: number, width: number, height: number }} rect - Button bounding rect.
  * @param {number} [viewportW=1280] - Current viewport width in pixels.
  * @param {number} [viewportH=800] - Current viewport height in pixels.
- * @returns {{ left: number, top: number, placement: string }} Clamped popover coordinates.
+ * @returns {{ left: number, top: number, bottom: number, placement: string, tail: { x: number } }} Clamped balloon coordinates.
  *
  * @example
  * const pos = computeButtonDocPosition({ left: 100, top: 20, right: 144, bottom: 64, width: 44, height: 44 }, 1280, 800);
+ * // pos.placement === 'bottom', pos.tail.x === 170 (card centred on the button)
  *
  * @example
  * const bottomPos = computeButtonDocPosition({ left: 24, top: 720, right: 64, bottom: 760, width: 40, height: 40 }, 1280, 800);
+ * // bottomPos.placement === 'top', bottomPos.tail.x === 32 (card clamped to the left margin, tail slides towards the button)
  */
 function computeButtonDocPosition(rect, viewportW = 1280, viewportH = 800) {
-    const cardW = 340, cardH = 248, gap = 10, margin = 12;
+    const cardW = 340, cardH = 248, gap = 10, margin = 12, tailInset = 18;
     const r = rect || { left: 0, top: 0, right: 0, bottom: 0, width: 0, height: 0 };
-    const idealLeft = r.left + (r.width / 2) - (cardW / 2);
+    const centerX = r.left + (r.width / 2);
+    const idealLeft = centerX - (cardW / 2);
     const left = Math.max(margin, Math.min(idealLeft, Math.max(margin, viewportW - cardW - margin)));
     const placeBelow = (r.bottom + gap + cardH <= viewportH - margin) || (r.top < cardH + gap);
     const top = placeBelow
         ? Math.min(Math.max(margin, viewportH - cardH - margin), r.bottom + gap)
         : Math.max(margin, r.top - cardH - gap);
-    return { left: Math.round(left), top: Math.round(top), placement: placeBelow ? 'bottom' : 'top' };
+    const bottom = Math.max(margin, viewportH - r.top + gap);
+    const tailX = Math.max(tailInset, Math.min(cardW - tailInset, centerX - left));
+    return { left: Math.round(left), top: Math.round(top), bottom: Math.round(bottom), placement: placeBelow ? 'bottom' : 'top', tail: { x: Math.round(tailX) } };
 }
 
 /**
@@ -42955,7 +43905,33 @@ function useButtonDocHover() {
 }
 
 /**
- * Floating rich-text documentation popover card rendered when hovering over any application button.
+ * The speech-bubble tail of the documentation balloon: a rotated square whose two outer edges
+ * carry the card border. Painted after the card so its inner half hides the card's own edge.
+ *
+ * @param {object} props
+ * @param {number} props.x - Horizontal centre of the tail, relative to the card's left edge.
+ * @param {boolean} props.pointsUp - true when the card sits below the button (tail on top).
+ * @returns {React.ReactNode}
+ *
+ * @example
+ * <ButtonDocBalloonTail x={170} pointsUp={true} />
+ *
+ * @example
+ * <ButtonDocBalloonTail x={32} pointsUp={false} />
+ */
+const ButtonDocBalloonTail = ({ x, pointsUp }) => (
+    <span
+        aria-hidden="true"
+        data-testid="button-doc-tail"
+        className={`absolute h-3.5 w-3.5 rotate-45 border-slate-200 ${pointsUp ? 'bg-slate-50 border-l border-t' : 'bg-white border-r border-b'}`}
+        style={{ left: `${x - 7}px`, ...(pointsUp ? { top: '-7px' } : { bottom: '-7px' }) }}
+    />
+);
+
+/**
+ * Floating rich-text documentation balloon rendered when hovering over any application button.
+ * The card hangs below the button (tail on top) or, near the bottom of the viewport, floats
+ * above it (tail underneath); the header shows the button's full title.
  *
  * @returns {React.ReactNode|null}
  *
@@ -42969,31 +43945,36 @@ const ButtonDocTooltipOverlay = () => {
     const hoverState = useButtonDocHover();
     if (!hoverState || !hoverState.doc) return null;
     const { doc, pos } = hoverState;
+    const pointsUp = pos.placement === 'bottom';
+    const anchor = pointsUp ? { top: `${pos.top}px` } : { bottom: `${pos.bottom}px` };
     return (
         <div
             role="tooltip"
             data-testid="button-doc-popover"
-            className="fixed z-[9999] w-[340px] bg-white/98 backdrop-blur-xl border border-slate-200/90 rounded-2xl shadow-[0_16px_40px_rgba(15,23,42,0.18),0_4px_12px_rgba(15,23,42,0.08)] pointer-events-none overflow-hidden font-sans text-left transition-opacity duration-150"
-            style={{ left: `${pos.left}px`, top: `${pos.top}px` }}
+            data-placement={pos.placement}
+            className="fixed z-[9999] w-[340px] pointer-events-none font-sans text-left transition-opacity duration-150"
+            style={{ left: `${pos.left}px`, ...anchor }}
         >
-            <div className="bg-gradient-to-r from-slate-900 via-indigo-950 to-slate-900 px-3.5 py-2.5 flex items-center justify-between gap-2 border-b border-slate-800">
-                <div className="text-[12.5px] font-bold text-white truncate">{doc.title}</div>
-                <span className="text-[10px] font-semibold uppercase tracking-wider px-2 py-0.5 rounded-full bg-indigo-500/25 text-indigo-200 border border-indigo-400/30 shrink-0">{doc.badge}</span>
+            <div className="bg-white/98 backdrop-blur-xl border border-slate-200 rounded-2xl shadow-[0_16px_40px_rgba(15,23,42,0.18),0_4px_12px_rgba(15,23,42,0.08)] overflow-hidden">
+                <div className="bg-slate-50 px-3.5 py-2.5 border-b border-slate-200">
+                    <div className="text-[13px] font-bold leading-snug text-slate-900 break-words">{doc.title}</div>
+                </div>
+                <div className="p-3.5 space-y-2.5">
+                    <p className="text-[12px] leading-relaxed text-slate-600">{renderRichDocText(doc.summary)}</p>
+                    {doc.examples && doc.examples.length > 0 && (
+                        <div className="space-y-1.5 pt-1 border-t border-slate-100">
+                            <div className="text-[10px] font-bold uppercase tracking-wider text-slate-400">Usage Examples</div>
+                            {doc.examples.map((ex, i) => (
+                                <div key={i} className="bg-slate-50/90 border border-slate-200/70 rounded-lg px-2.5 py-1.5 text-[11.5px] leading-snug text-slate-600">
+                                    <span className="font-semibold text-indigo-700 mr-1">{ex.label}:</span>
+                                    {renderRichDocText(ex.detail)}
+                                </div>
+                            ))}
+                        </div>
+                    )}
+                </div>
             </div>
-            <div className="p-3.5 space-y-2.5">
-                <p className="text-[12px] leading-relaxed text-slate-600">{renderRichDocText(doc.summary)}</p>
-                {doc.examples && doc.examples.length > 0 && (
-                    <div className="space-y-1.5 pt-1 border-t border-slate-100">
-                        <div className="text-[10px] font-bold uppercase tracking-wider text-slate-400">Usage Examples</div>
-                        {doc.examples.map((ex, i) => (
-                            <div key={i} className="bg-slate-50/90 border border-slate-200/70 rounded-lg px-2.5 py-1.5 text-[11.5px] leading-snug text-slate-600">
-                                <span className="font-semibold text-indigo-700 mr-1">{ex.label}:</span>
-                                {renderRichDocText(ex.detail)}
-                            </div>
-                        ))}
-                    </div>
-                )}
-            </div>
+            <ButtonDocBalloonTail x={pos.tail.x} pointsUp={pointsUp} />
         </div>
     );
 };
@@ -43115,7 +44096,7 @@ const TimelineLabels = ({ dynamicYears, rootNodeYob, maxYear, camera, ppy }) => 
     const GENERATIONS = HISTORICAL_GENERATION_COHORTS;
 
     return (
-        <div className="absolute top-0 left-0 bottom-0 w-12 pointer-events-none z-20 border-r border-slate-200 bg-[#f8fafc]/90 backdrop-blur-sm shadow-[2px_0_4px_rgba(0,0,0,0.02)] font-sans overflow-hidden">
+        <div className="absolute top-0 left-0 bottom-0 w-12 pointer-events-none z-20 border-r border-slate-200 bg-slate-50/90 backdrop-blur-sm shadow-[2px_0_4px_rgba(0,0,0,0.02)] font-sans overflow-hidden">
             {GENERATIONS.map(gen => {
                 if (maxYear && gen.start > maxYear) return null;
                 const effectiveEnd = maxYear ? Math.min(gen.end, maxYear) : gen.end;
@@ -46230,34 +47211,33 @@ const GlobalAppStyles = React.memo(() => (
             .tf-tree { text-align: center; display: inline-block; white-space: nowrap; transform-origin: top center; }
             .tf-tree ul { padding-top: 24px; position: relative; display: flex; justify-content: center; margin: 0; padding-left: 0; }
             .tf-tree li { float: left; text-align: center; list-style-type: none; position: relative; padding: 0; flex-shrink: 0; margin-right: var(--partner-margin, 0px); margin-left: var(--left-partner-margin, 0px); }
-            .tf-tree li::before { content: ''; position: absolute; top: 0; right: 50%; border-top: 2px solid #cbd5e1; width: calc(50% + var(--left-partner-margin, 0px)); height: 16px; z-index: 0; }
-            .tf-tree li::after { content: ''; position: absolute; top: 0; left: calc(50% - 1px); border-top: 2px solid #cbd5e1; border-left: 2px solid #cbd5e1; width: calc(50% + var(--partner-margin, 0px) + 1px); height: 16px; z-index: 0; }
+            .tf-tree li::before { content: ''; position: absolute; top: 0; right: 50%; border-top: 2px solid rgb(var(--tw-slate-300, 203 213 225)); width: calc(50% + var(--left-partner-margin, 0px)); height: 16px; z-index: 0; }
+            .tf-tree li::after { content: ''; position: absolute; top: 0; left: calc(50% - 1px); border-top: 2px solid rgb(var(--tw-slate-300, 203 213 225)); border-left: 2px solid rgb(var(--tw-slate-300, 203 213 225)); width: calc(50% + var(--partner-margin, 0px) + 1px); height: 16px; z-index: 0; }
             .tf-tree li:first-child::before, .tf-tree li:last-child::after { border: 0 none; }
             .tf-tree li:first-child::after { border-radius: 12px 0 0 0; left: calc(50% - 1px); }
-            .tf-tree li:last-child::before { border-right: 2px solid #cbd5e1; border-radius: 0 12px 0 0; right: calc(50% - 1px); width: calc(50% + var(--left-partner-margin, 0px) + 1px); }
-            .tf-tree li:only-child::after { display: block; border-top: none; border-left: 2px solid #cbd5e1; border-radius: 0; height: 16px; left: calc(50% - 1px); }
+            .tf-tree li:last-child::before { border-right: 2px solid rgb(var(--tw-slate-300, 203 213 225)); border-radius: 0 12px 0 0; right: calc(50% - 1px); width: calc(50% + var(--left-partner-margin, 0px) + 1px); }
+            .tf-tree li:only-child::after { display: block; border-top: none; border-left: 2px solid rgb(var(--tw-slate-300, 203 213 225)); border-radius: 0; height: 16px; left: calc(50% - 1px); }
             .tf-tree li:only-child::before { display: none; }
             .family-unit { display: inline-flex; align-items: stretch; justify-content: center; padding: 0 12px; }
             .disable-transitions, .disable-transitions * { transition: none !important; animation: none !important; }
             .custom-scrollbar::-webkit-scrollbar { width: 6px; }
             .custom-scrollbar::-webkit-scrollbar-track { background: transparent; margin: 4px; }
-            .custom-scrollbar::-webkit-scrollbar-thumb { background-color: #cbd5e1; border-radius: 10px; }
-            .custom-scrollbar::-webkit-scrollbar-thumb:hover { background-color: #94a3b8; }
+            .custom-scrollbar::-webkit-scrollbar-thumb { background-color: rgb(var(--tw-slate-300, 203 213 225)); border-radius: 10px; }
+            .custom-scrollbar::-webkit-scrollbar-thumb:hover { background-color: rgb(var(--tw-slate-400, 148 163 184)); }
+            html[data-theme-mode="dark"] .leaflet-tile { filter: invert(1) hue-rotate(180deg) brightness(0.9); }
             @keyframes text-gradient { 0% { background-position: 0% 50%; } 50% { background-position: 100% 50%; } 100% { background-position: 0% 50%; } }
             .animate-text-gradient { background-size: 200% auto; animation: text-gradient 3s linear infinite; }
             @keyframes ai-pulse {
                 0%, 100% {
                     transform: scale(1.05);
-                    box-shadow: 0 0 0 0 rgba(59, 130, 246, 0.7), 0 10px 15px -3px rgba(0, 0, 0, 0.1);
+                    box-shadow: 0 0 0 0 rgb(var(--tw-blue-500, 59 130 246) / 0.7), 0 10px 15px -3px rgba(0, 0, 0, 0.1);
                 }
                 50% {
                     transform: scale(1.14);
-                    box-shadow: 0 0 0 12px rgba(59, 130, 246, 0), 0 20px 25px -5px rgba(59, 130, 246, 0.35);
+                    box-shadow: 0 0 0 12px rgb(var(--tw-blue-500, 59 130 246) / 0), 0 20px 25px -5px rgb(var(--tw-blue-500, 59 130 246) / 0.35);
                 }
             }
-            .ai-profile-highlight {
-                animation: ai-pulse 1.6s ease-in-out infinite !important;
-            }
+            .ai-profile-highlight { animation: ai-pulse 1.6s ease-in-out infinite !important; }
         `}</style>
     </>
 ));
@@ -48811,7 +49791,7 @@ function useSheetSourceForm(isOpen) {
  * <SheetHistoryRow entry={{ id: '1BQvy…', title: '', uses: 1 }} onPick={open} onForget={forget} />
  */
 const SheetHistoryRow = ({ entry, onPick, onForget }) => (
-    <li className="group flex items-center gap-3 px-3 py-2 hover:bg-[#f3f8ea] cursor-pointer" onClick={() => onPick(entry)}
+    <li className="group flex items-center gap-3 px-3 py-2 hover:bg-primary-container/60 cursor-pointer" onClick={() => onPick(entry)}
         title={formatSheetHistoryLabel(entry)} data-sheet-id={entry.id}>
         <div className="min-w-0 flex-1">
             <div className={`truncate text-sm ${entry.title ? 'font-semibold text-slate-800' : 'italic text-slate-500'}`}>
@@ -48894,7 +49874,7 @@ const SheetSourceInput = ({ form, onSubmit }) => {
                 onKeyDown={(e) => { if (e.key === 'Escape') form.setIsListOpen(false); if (e.key === 'ArrowDown') form.setIsListOpen(true); }}
                 onFocus={(e) => e.target.select()}
                 placeholder="https://docs.google.com/spreadsheets/d/…  or a spreadsheet ID"
-                className="h-12 w-full rounded-xl border border-slate-300 bg-white pl-4 pr-11 font-mono text-[13px] text-slate-800 shadow-sm outline-none transition focus:border-[#5c7c33] focus:ring-2 focus:ring-[#9cc95f]/50" />
+                className="h-12 w-full rounded-xl border border-slate-300 bg-white pl-4 pr-11 font-mono text-[13px] text-slate-800 shadow-sm outline-none transition focus:border-primary focus:ring-2 focus:ring-primary/30" />
             {form.history.length > 0 && (
                 <button type="button" onClick={() => form.setIsListOpen(!form.isListOpen)} aria-label="Show sheets you have opened before"
                     title="Sheets you have opened before" aria-expanded={form.isListOpen}
@@ -48908,8 +49888,8 @@ const SheetSourceInput = ({ form, onSubmit }) => {
 };
 
 /**
- * The whole form: label, textbox row with the Open button, prefill hint, and any error
- * (local validation or the import error passed down from the app).
+ * The whole form: label + known-sheet-name chip, textbox row with the Open button, prefill
+ * hint, and any error (local validation or the import error passed down from the app).
  *
  * @param {object} props
  * @param {object} props.form - Result of useSheetSourceForm()
@@ -48924,28 +49904,39 @@ const SheetSourceInput = ({ form, onSubmit }) => {
  * @example
  * <SheetSourceForm form={form} isLoading={true} errorMsg="Invalid Google Sheets URL." onSubmit={handleSubmit} />
  */
-const SheetSourceForm = ({ form, isLoading, errorMsg, onSubmit }) => (
-    <form className="relative z-10 w-full max-w-2xl px-6" onSubmit={(e) => { e.preventDefault(); onSubmit(form.value); }}>
-        <label htmlFor="sheet-source-input" className="mb-2 block text-sm font-semibold text-slate-600">
-            Google Sheets link or spreadsheet ID
-        </label>
-        <div className="flex gap-2">
-            <SheetSourceInput form={form} onSubmit={onSubmit} />
-            <button type="submit" disabled={isLoading}
-                className="h-12 shrink-0 rounded-xl bg-[#5c7c33] px-6 text-sm font-semibold text-white shadow-md transition hover:bg-[#4a6a27] disabled:opacity-60">
-                {isLoading ? 'Loading…' : 'Open'}
-            </button>
-        </div>
-        <div className="mt-2 text-xs text-slate-500" data-prefill-source={form.prefillSource}>
-            {HOME_PREFILL_HINTS[form.prefillSource] || HOME_PREFILL_HINTS.demo}
-        </div>
-        {(form.error || errorMsg) && (
-            <div role="alert" className="mt-3 rounded-xl border border-red-200 bg-red-50 px-4 py-2.5 text-sm text-red-700">
-                {form.error || errorMsg}
+const SheetSourceForm = ({ form, isLoading, errorMsg, onSubmit }) => {
+    const sheetTitle = resolveKnownSheetTitle(form.value, form.history);
+    return (
+        <form className="relative z-10 w-full max-w-2xl px-6" onSubmit={(e) => { e.preventDefault(); onSubmit(form.value); }}>
+            <div className="mb-2 flex items-center justify-between gap-2">
+                <label htmlFor="sheet-source-input" className="text-sm font-semibold text-slate-600">
+                    Google Sheets link or spreadsheet ID
+                </label>
+                {sheetTitle && (
+                    <span data-testid="sheet-source-title" title={`Spreadsheet name: ${sheetTitle}`}
+                        className="inline-flex max-w-[60%] items-center gap-1.5 truncate rounded-full border border-slate-200 bg-white/90 px-2.5 py-0.5 text-xs font-semibold text-primary shadow-sm">
+                        <Icons.Sheet /><span className="truncate">{sheetTitle}</span>
+                    </span>
+                )}
             </div>
-        )}
-    </form>
-);
+            <div className="flex gap-2">
+                <SheetSourceInput form={form} onSubmit={onSubmit} />
+                <button type="submit" disabled={isLoading} data-doc-key="Open the Google Sheet"
+                    className="h-12 shrink-0 rounded-xl bg-primary px-6 text-sm font-semibold text-on-primary shadow-md transition hover:bg-primary-hover disabled:opacity-60">
+                    {isLoading ? 'Loading…' : 'Open'}
+                </button>
+            </div>
+            <div className="mt-2 text-xs text-slate-500" data-prefill-source={form.prefillSource}>
+                {HOME_PREFILL_HINTS[form.prefillSource] || HOME_PREFILL_HINTS.demo}
+            </div>
+            {(form.error || errorMsg) && (
+                <div role="alert" className="mt-3 rounded-xl border border-red-200 bg-red-50 px-4 py-2.5 text-sm text-red-700">
+                    {form.error || errorMsg}
+                </div>
+            )}
+        </form>
+    );
+};
 
 /**
  * Emblem, title and tagline at the top of the home screen.
@@ -48961,7 +49952,7 @@ const SheetSourceForm = ({ form, isLoading, errorMsg, onSubmit }) => (
 const HomeScreenHeader = () => (
     <div className="relative z-10 mb-8 flex flex-col items-center text-center select-none">
         <BrandLogo size={128} idPrefix="home" className="h-[128px] w-[128px] drop-shadow-md" />
-        <h1 className="mt-5 bg-gradient-to-r from-slate-700 via-[#5c7c33] to-[#9cc95f] bg-clip-text text-[48px] font-bold leading-none tracking-wide text-transparent"
+        <h1 className="mt-5 bg-gradient-to-r from-slate-700 via-primary to-inverse-primary bg-clip-text text-[48px] font-bold leading-none tracking-wide text-transparent"
             style={{ fontFamily: "'Uncial Antiqua', serif" }}>Family Tree</h1>
         <p className="mt-3 max-w-xl text-sm text-slate-500">
             Turn a family register kept in a Google Sheet into an interactive, deduced family tree.
@@ -48971,7 +49962,7 @@ const HomeScreenHeader = () => (
 
 /**
  * GDPR / privacy notice pinned to the bottom of the home screen, with a one-click
- * "Clear stored data" that deletes both preference cookies and their mirrors.
+ * "Clear stored data" that deletes all three preference cookies and their mirrors.
  *
  * @param {object} props
  * @param {Function} props.onClearStoredData - Handler for the clear button
@@ -48984,11 +49975,11 @@ const HomeScreenHeader = () => (
  * <HomePrivacyNotice onClearStoredData={handleClearStoredData} />
  */
 const HomePrivacyNotice = ({ onClearStoredData }) => (
-    <footer data-testid="home-privacy-notice" className="relative z-10 mt-auto w-full max-w-3xl px-6 pb-5 pt-8 text-center text-[11px] leading-relaxed text-slate-500">
-        <strong className="text-slate-600">Privacy.</strong> For your convenience this app stores the spreadsheet links you open and your
-        deduction settings in cookies / local storage on <em>this device only</em>. Nothing is sent to any server other than
+    <footer data-testid="home-privacy-notice" className="relative z-10 mt-auto w-full max-w-3xl px-6 pb-5 pt-8 text-center text-[11px] leading-relaxed text-slate-500 sm:px-20">
+        <strong className="text-slate-600">Privacy.</strong> For your convenience this app stores the spreadsheet links you open, your
+        deduction settings and your colour theme in cookies / local storage on <em>this device only</em>. Nothing is sent to any server other than
         Google Sheets, which serves the spreadsheet you request. You can withdraw this at any time:{' '}
-        <button type="button" onClick={onClearStoredData} className="font-semibold text-[#5c7c33] underline underline-offset-2 hover:text-[#4a6a27]">
+        <button type="button" onClick={onClearStoredData} className="font-semibold text-primary underline underline-offset-2 hover:text-primary-hover">
             clear stored data
         </button>.
     </footer>
@@ -49026,13 +50017,13 @@ const SheetSourceHomeScreen = ({ isOpen, hasTree, isLoading, errorMsg, onSubmit,
         form.resetHistory();
     };
     return (
-        <div data-testid="sheet-source-home" className="fixed inset-0 z-[70] flex flex-col items-center overflow-y-auto bg-gradient-to-b from-white via-[#f7faf1] to-[#e9f2da] pt-[9vh]"
+        <div data-testid="sheet-source-home" className="fixed inset-0 z-[70] flex flex-col items-center overflow-y-auto bg-white bg-gradient-to-b from-white via-primary-container/30 to-primary-container pt-[9vh]"
             style={{ fontFamily: '"Google Sans", system-ui, -apple-system, sans-serif' }}>
             <BrandWatermark size={640} opacity={0.06} />
             <HomeScreenHeader />
             <SheetSourceForm form={form} isLoading={isLoading} errorMsg={errorMsg} onSubmit={handleSubmit} />
             {hasTree && (
-                <button type="button" onClick={onClose} className="relative z-10 mt-6 text-sm font-medium text-[#5c7c33] hover:underline">
+                <button type="button" onClick={onClose} className="relative z-10 mt-6 text-sm font-medium text-primary hover:underline">
                     ← Back to the tree
                 </button>
             )}
@@ -49060,19 +50051,22 @@ const HomeButton = ({ onClick }) => {
     if (isStandaloneExportMode()) return null;
     return (
         <button type="button" onClick={onClick} data-testid="home-button" title="Family Tree Home – choose a Google Sheet"
-            className="fixed left-4 top-4 z-[60] flex h-[44px] w-[44px] items-center justify-center rounded-xl border border-slate-200 bg-white/95 shadow-sm backdrop-blur-md transition-colors hover:bg-[#f3f8ea]">
+            className="fixed left-4 top-4 z-[60] flex h-[44px] w-[44px] items-center justify-center rounded-xl border border-slate-200 bg-white/95 shadow-sm backdrop-blur-md transition-colors hover:bg-primary-container/60">
             <BrandLogo size={30} idPrefix="homebtn" className="h-[30px] w-[30px]" />
         </button>
     );
 };
 
 // ============================================================================
-// MODULE 6.14: DEDUCTION SETTINGS PANEL
+// MODULE 6.14: APP SETTINGS PANEL (Appearance + Deduction rules)
 //
-// Lets the user tune the social conventions behind the year deductions — above all
-// the bride's age at first marriage per birth cohort (born 1910s-20s ≈ 15, 1940s
-// ≈ 20-25, 2000s ≈ 25-30). Applying rebuilds the tree from the cached rows (no
-// refetch) and persists the values in a cookie (05_hooks/00_BrowserPreferences.jsx).
+// A tabbed dialog opened from the radial settings FAB. The Appearance tab picks one
+// of the Material 3 colour themes (01_core/08_ColorThemes.jsx) and applies it on the
+// spot. The Deduction tab lets the user tune the social conventions behind the year
+// deductions — above all the bride's age at first marriage per birth cohort (born
+// 1910s-20s ≈ 15, 1940s ≈ 20-25, 2000s ≈ 25-30). Applying rebuilds the tree from the
+// cached rows (no refetch). Both choices persist in cookies
+// (05_hooks/00_BrowserPreferences.jsx).
 // ============================================================================
 
 /** The three scalar knobs shown under the cohort table, with their sanitizer bounds. */
@@ -49206,7 +50200,7 @@ function useDemographicSettingsDraft(isOpen) {
 const SettingsNumberInput = ({ value, onChange, min, max, ariaLabel, className = '' }) => (
     <input type="number" inputMode="numeric" value={value} min={min} max={max} aria-label={ariaLabel}
         onChange={(e) => onChange(e.target.value)}
-        className={`h-9 w-24 rounded-lg border border-slate-300 bg-white px-2 text-right font-mono text-sm text-slate-800 outline-none focus:border-[#5c7c33] focus:ring-2 focus:ring-[#9cc95f]/50 ${className}`} />
+        className={`h-9 w-24 rounded-lg border border-slate-300 bg-white px-2 text-right font-mono text-sm text-slate-800 outline-none focus:border-primary focus:ring-2 focus:ring-primary/30 ${className}`} />
 );
 
 /**
@@ -49240,7 +50234,7 @@ const MarriageAgeAnchorsTable = ({ anchors, onCell, onAdd, onRemove }) => (
                 </button>
             </div>
         ))}
-        <button type="button" onClick={onAdd} className="w-full border-t border-slate-100 px-3 py-2 text-left text-xs font-semibold text-[#5c7c33] hover:bg-[#f3f8ea]">
+        <button type="button" onClick={onAdd} className="w-full border-t border-slate-100 px-3 py-2 text-left text-xs font-semibold text-primary hover:bg-primary-container/60">
             + Add a cohort
         </button>
     </div>
@@ -49301,7 +50295,7 @@ const DemographicScalarFields = ({ draft, onField }) => (
 );
 
 /**
- * Footer actions: reset to shipped defaults, cancel, apply.
+ * Footer actions of the deduction tab: reset to shipped defaults, cancel, apply.
  *
  * @param {object} props
  * @param {Function} props.onReset - Reset draft to defaults
@@ -49320,55 +50314,276 @@ const SettingsPanelFooter = ({ onReset, onCancel, onApply }) => (
         <button type="button" onClick={onReset} className="text-xs font-semibold text-slate-500 hover:text-slate-700">Reset to defaults</button>
         <span className="flex-1" />
         <button type="button" onClick={onCancel} className="h-9 rounded-lg px-4 text-sm font-medium text-slate-600 hover:bg-slate-100">Cancel</button>
-        <button type="button" onClick={onApply} className="h-9 rounded-lg bg-[#5c7c33] px-4 text-sm font-semibold text-white shadow-sm hover:bg-[#4a6a27]">
+        <button type="button" onClick={onApply} className="h-9 rounded-lg bg-primary px-4 text-sm font-semibold text-on-primary shadow-sm hover:bg-primary-hover">
             Apply &amp; rebuild tree
         </button>
     </div>
 );
 
+/** Tabs of the settings dialog, in display order. */
+const SETTINGS_PANEL_TABS = Object.freeze([
+    { id: 'theme', label: 'Appearance', icon: 'Palette', subtitle: 'Colour theme of the whole app. Saved in a cookie on this device.' },
+    { id: 'deduction', label: 'Deduction rules', icon: 'Sliders', subtitle: 'How missing birth years are guessed. Saved in a cookie on this device; applies to every sheet you open here.' },
+]);
+
 /**
- * Modal panel for the deduction settings. Apply sanitizes the draft, installs it into the
- * live model, persists it, and asks the app to rebuild the tree from cached rows.
+ * Returns the tab definition for an id, falling back to the first tab for unknown ids.
+ *
+ * @param {string} id - 'theme' | 'deduction' | anything else
+ * @returns {{id: string, label: string, icon: string, subtitle: string}}
+ *
+ * @example
+ * resolveSettingsPanelTab('deduction').label; // => 'Deduction rules'
+ *
+ * @example
+ * resolveSettingsPanelTab('nope').id; // => 'theme'
+ */
+function resolveSettingsPanelTab(id) {
+    return SETTINGS_PANEL_TABS.find(tab => tab.id === id) || SETTINGS_PANEL_TABS[0];
+}
+
+/**
+ * Active tab state, re-seeded from `initialTab` every time the dialog opens (so the radial
+ * menu can open the dialog directly on the requested tab).
+ *
+ * @param {boolean} isOpen - Whether the dialog is showing
+ * @param {string} initialTab - Tab requested by the opener
+ * @returns {[string, Function]} [tabId, setTabId]
+ *
+ * @example
+ * const [tab, setTab] = useSettingsPanelTab(isOpen, 'deduction');
+ *
+ * @example
+ * const [tab] = useSettingsPanelTab(true, 'unknown'); // tab === 'theme'
+ */
+function useSettingsPanelTab(isOpen, initialTab) {
+    const [tab, setTab] = useState(() => resolveSettingsPanelTab(initialTab).id);
+    useEffect(() => {
+        if (isOpen) setTab(resolveSettingsPanelTab(initialTab).id);
+    }, [isOpen, initialTab]);
+    return [tab, setTab];
+}
+
+/**
+ * Dialog header: title, the active tab's subtitle, the tab strip and the close button.
  *
  * @param {object} props
- * @param {boolean} props.isOpen - Show the panel
- * @param {Function} props.onClose - Close without applying
- * @param {Function} props.onApply - Receives the raw draft to apply
+ * @param {string} props.tab - Active tab id
+ * @param {Function} props.onTab - Receives the clicked tab id
+ * @param {Function} props.onClose - Close the dialog
+ * @returns {React.ReactNode}
+ *
+ * @example
+ * <SettingsPanelHeader tab="theme" onTab={setTab} onClose={onClose} />
+ *
+ * @example
+ * <SettingsPanelHeader tab="deduction" onTab={() => {}} onClose={() => {}} />
+ */
+const SettingsPanelHeader = ({ tab, onTab, onClose }) => (
+    <div className="border-b border-slate-200 px-5 pt-4">
+        <div className="flex items-start gap-3">
+            <div className="flex-1">
+                <h2 id="app-settings-title" className="text-lg font-bold text-slate-800">Settings</h2>
+                <p className="mt-0.5 text-xs text-slate-500">{resolveSettingsPanelTab(tab).subtitle}</p>
+            </div>
+            <button type="button" onClick={onClose} className="rounded-lg p-1.5 text-slate-400 hover:bg-slate-100 hover:text-slate-700" title="Close"><Icons.Close /></button>
+        </div>
+        <div role="tablist" aria-label="Settings sections" className="mt-3 flex gap-1">
+            {SETTINGS_PANEL_TABS.map(item => {
+                const Icon = Icons[item.icon];
+                const active = item.id === tab;
+                return (
+                    <button key={item.id} type="button" role="tab" aria-selected={active} data-testid={`settings-tab-${item.id}`} onClick={() => onTab(item.id)}
+                        className={`-mb-px flex items-center gap-1.5 border-b-2 px-3 py-2 text-sm font-semibold transition-colors ${active ? 'border-primary text-primary' : 'border-transparent text-slate-500 hover:text-slate-700'}`}>
+                        <Icon />{item.label}
+                    </button>
+                );
+            })}
+        </div>
+    </div>
+);
+
+/**
+ * Miniature rendering of a theme: canvas, a male and a female person card joined by a
+ * connector, a text line and a primary button — enough to judge the palette at a glance.
+ *
+ * @param {object} props
+ * @param {Object} props.swatches - Result of describeThemeSwatches()
+ * @returns {React.ReactNode}
+ *
+ * @example
+ * <ThemePreviewArt swatches={describeThemeSwatches(resolveColorTheme('earthy'))} />
+ *
+ * @example
+ * <ThemePreviewArt swatches={{ canvas: '#fff', male: '#e0f2fe', maleBorder: '#7dd3fc', female: '#ffe4e6', femaleBorder: '#fda4af', line: '#cbd5e1', text: '#1e293b', primary: '#5c7c33', onPrimary: '#fff' }} />
+ */
+const ThemePreviewArt = ({ swatches }) => (
+    <div aria-hidden="true" className="relative h-20 w-full" style={{ backgroundColor: swatches.canvas }}>
+        <div className="absolute left-3 top-3 h-7 w-12 rounded-md border" style={{ backgroundColor: swatches.male, borderColor: swatches.maleBorder }} />
+        <div className="absolute left-[4.75rem] top-3 h-7 w-12 rounded-md border" style={{ backgroundColor: swatches.female, borderColor: swatches.femaleBorder }} />
+        <div className="absolute left-[3.75rem] top-[1.6rem] h-px w-4" style={{ backgroundColor: swatches.line }} />
+        <div className="absolute left-3 top-[3.25rem] h-1.5 w-20 rounded-full opacity-80" style={{ backgroundColor: swatches.text }} />
+        <div className="absolute left-3 top-[4.1rem] h-1 w-12 rounded-full opacity-40" style={{ backgroundColor: swatches.text }} />
+        <div className="absolute bottom-3 right-3 rounded-full px-2 py-0.5 text-[9px] font-bold leading-4" style={{ backgroundColor: swatches.primary, color: swatches.onPrimary }}>Open</div>
+    </div>
+);
+
+/**
+ * One selectable theme card (radio semantics via aria-checked). Documented in the hover help
+ * through its `data-doc-key`.
+ *
+ * @param {object} props
+ * @param {Object} props.theme - Entry of COLOR_THEMES
+ * @param {Object} props.swatches - describeThemeSwatches() of the resolved theme
+ * @param {boolean} props.isActive - Whether this theme is the current one
+ * @param {Function} props.onSelect - Receives the theme id
+ * @returns {React.ReactNode}
+ *
+ * @example
+ * <ColorThemeCard theme={COLOR_THEMES[0]} swatches={describeThemeSwatches(resolveColorTheme('classic'))} isActive={true} onSelect={setTheme} />
+ *
+ * @example
+ * <ColorThemeCard theme={getColorThemeDefinition('midnight')} swatches={describeThemeSwatches(resolveColorTheme('midnight'))} isActive={false} onSelect={() => {}} />
+ */
+const ColorThemeCard = ({ theme, swatches, isActive, onSelect }) => (
+    <button type="button" role="radio" aria-checked={isActive} data-testid={`theme-card-${theme.id}`} data-doc-key={`Colour theme: ${theme.name}`}
+        onClick={() => onSelect(theme.id)}
+        className={`flex flex-col overflow-hidden rounded-xl border-2 text-left transition-shadow focus:outline-none focus-visible:ring-2 focus-visible:ring-primary/40 ${isActive ? 'border-primary shadow-md' : 'border-slate-200 hover:border-slate-400 hover:shadow'}`}>
+        <ThemePreviewArt swatches={swatches} />
+        <div className="flex w-full items-center gap-2 border-t border-slate-200 bg-white px-3 py-2">
+            <span className="flex-1 truncate text-sm font-semibold text-slate-800">{theme.name}</span>
+            <span className={`rounded-full px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wide ${theme.mode === 'dark' ? 'bg-slate-800 text-slate-100' : 'bg-slate-100 text-slate-600'}`}>{theme.mode}</span>
+            {isActive && <span className="rounded-full bg-primary px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wide text-on-primary">Active</span>}
+        </div>
+        <p className="w-full bg-white px-3 pb-2.5 text-[11px] leading-snug text-slate-500">{theme.blurb}</p>
+    </button>
+);
+
+/**
+ * Grid of every theme card; previews are computed once per mount.
+ *
+ * @param {object} props
+ * @param {string} props.themeId - Active theme id
+ * @param {Function} props.onThemeChange - Receives the chosen theme id
+ * @returns {React.ReactNode}
+ *
+ * @example
+ * <ColorThemePicker themeId="classic" onThemeChange={changeTheme} />
+ *
+ * @example
+ * <ColorThemePicker themeId="solarized-dark" onThemeChange={(id) => console.log(id)} />
+ */
+const ColorThemePicker = ({ themeId, onThemeChange }) => {
+    const previews = useMemo(() => COLOR_THEMES.map(theme => ({ theme, swatches: describeThemeSwatches(resolveColorTheme(theme.id)) })), []);
+    return (
+        <div role="radiogroup" aria-label="Colour theme" data-testid="color-theme-picker" className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+            {previews.map(({ theme, swatches }) => (
+                <ColorThemeCard key={theme.id} theme={theme} swatches={swatches} isActive={theme.id === themeId} onSelect={onThemeChange} />
+            ))}
+        </div>
+    );
+};
+
+/**
+ * Appearance tab: the theme picker plus a footer with "Reset to Classic" and "Done".
+ *
+ * @param {object} props
+ * @param {string} props.themeId - Active theme id
+ * @param {Function} props.onThemeChange - Receives the chosen theme id (applied immediately)
+ * @param {Function} props.onClose - Close the dialog
+ * @returns {React.ReactNode}
+ *
+ * @example
+ * <AppearanceSettingsTab themeId={themeId} onThemeChange={changeTheme} onClose={onClose} />
+ *
+ * @example
+ * <AppearanceSettingsTab themeId="pastel" onThemeChange={() => {}} onClose={() => {}} />
+ */
+const AppearanceSettingsTab = ({ themeId, onThemeChange, onClose }) => (
+    <>
+        <div data-testid="appearance-settings-tab" className="custom-scrollbar flex-1 overflow-y-auto px-5 py-4">
+            <h3 className="text-sm font-semibold text-slate-700">Colour theme</h3>
+            <p className="mb-3 text-[11px] text-slate-500">
+                Material 3 tonal palettes generated from a few seed colours. Pick a card to switch instantly; the choice is remembered on this device.
+            </p>
+            <ColorThemePicker themeId={themeId} onThemeChange={onThemeChange} />
+        </div>
+        <div className="flex items-center gap-2 border-t border-slate-200 px-5 py-3">
+            <button type="button" onClick={() => onThemeChange(DEFAULT_COLOR_THEME_ID)} disabled={themeId === DEFAULT_COLOR_THEME_ID}
+                className="text-xs font-semibold text-slate-500 hover:text-slate-700 disabled:opacity-40">Reset to Classic</button>
+            <span className="flex-1" />
+            <button type="button" onClick={onClose} className="h-9 rounded-lg bg-primary px-4 text-sm font-semibold text-on-primary shadow-sm hover:bg-primary-hover">Done</button>
+        </div>
+    </>
+);
+
+/**
+ * Deduction tab: cohort table, preview, scalar fields and the apply footer.
+ *
+ * @param {object} props
+ * @param {Object} props.editor - Result of useDemographicSettingsDraft()
+ * @param {Function} props.onCancel - Close without applying
+ * @param {Function} props.onApply - Receives the raw draft
+ * @returns {React.ReactNode}
+ *
+ * @example
+ * <DeductionSettingsTab editor={useDemographicSettingsDraft(isOpen)} onCancel={onClose} onApply={applyDraft} />
+ *
+ * @example
+ * <DeductionSettingsTab editor={editor} onCancel={() => {}} onApply={(draft) => console.log(draft)} />
+ */
+const DeductionSettingsTab = ({ editor, onCancel, onApply }) => {
+    const { draft, setField, setAnchor, addAnchor, removeAnchor, resetDraft } = editor;
+    return (
+        <>
+            <div data-testid="deduction-settings-tab" className="custom-scrollbar flex-1 space-y-5 overflow-y-auto px-5 py-4">
+                <section>
+                    <h3 className="text-sm font-semibold text-slate-700">Bride's age at first marriage, by birth cohort</h3>
+                    <p className="mb-2 text-[11px] text-slate-500">Ages between cohorts are interpolated; outside the table the nearest cohort applies.</p>
+                    <MarriageAgeAnchorsTable anchors={draft.marriageAgeAnchors} onCell={setAnchor} onAdd={addAnchor} onRemove={removeAnchor} />
+                    <MarriageAgePreview draft={draft} />
+                </section>
+                <section>
+                    <h3 className="mb-2 text-sm font-semibold text-slate-700">Other intervals</h3>
+                    <DemographicScalarFields draft={draft} onField={setField} />
+                </section>
+            </div>
+            <SettingsPanelFooter onReset={resetDraft} onCancel={onCancel} onApply={() => onApply(draft)} />
+        </>
+    );
+};
+
+/**
+ * The tabbed settings dialog opened from the radial FAB. Theme changes apply instantly (and
+ * persist); deduction changes apply on "Apply & rebuild tree".
+ *
+ * @param {object} props
+ * @param {boolean} props.isOpen - Show the dialog
+ * @param {string} props.initialTab - Tab to show when opening ('theme' | 'deduction')
+ * @param {Function} props.onClose - Close the dialog
+ * @param {Function} props.onApplyDeduction - Receives the raw deduction draft
+ * @param {string} props.themeId - Active theme id
+ * @param {Function} props.onThemeChange - Receives the chosen theme id
  * @returns {React.ReactNode|null}
  *
  * @example
- * <DeductionSettingsPanel isOpen={isSettingsOpen} onClose={() => setIsSettingsOpen(false)} onApply={applyDemographicSettings} />
+ * <AppSettingsPanel isOpen={isSettingsOpen} initialTab={settingsTab} onClose={closeSettings} onApplyDeduction={applyDraft} themeId={themeId} onThemeChange={changeTheme} />
  *
  * @example
- * <DeductionSettingsPanel isOpen={true} onClose={close} onApply={(draft) => console.log(draft)} />
+ * <AppSettingsPanel isOpen={true} initialTab="deduction" onClose={close} onApplyDeduction={(draft) => console.log(draft)} themeId="classic" onThemeChange={() => {}} />
  */
-const DeductionSettingsPanel = ({ isOpen, onClose, onApply }) => {
-    const { draft, setField, setAnchor, addAnchor, removeAnchor, resetDraft } = useDemographicSettingsDraft(isOpen);
+const AppSettingsPanel = ({ isOpen, initialTab, onClose, onApplyDeduction, themeId, onThemeChange }) => {
+    const [tab, setTab] = useSettingsPanelTab(isOpen, initialTab);
+    const editor = useDemographicSettingsDraft(isOpen);
     if (!isOpen) return null;
     return (
-        <div data-testid="deduction-settings-panel" className="fixed inset-0 z-[65] flex items-center justify-center bg-slate-900/30 p-4 backdrop-blur-[2px]" onPointerDown={onClose}>
-            <div role="dialog" aria-modal="true" aria-labelledby="deduction-settings-title" onPointerDown={(e) => e.stopPropagation()}
-                className="flex max-h-full w-full max-w-xl flex-col overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-2xl">
-                <div className="flex items-start gap-3 border-b border-slate-200 px-5 py-4">
-                    <div className="flex-1">
-                        <h2 id="deduction-settings-title" className="text-lg font-bold text-slate-800">Deduction settings</h2>
-                        <p className="mt-0.5 text-xs text-slate-500">How missing birth years are guessed. Saved in a cookie on this device; applies to every sheet you open here.</p>
-                    </div>
-                    <button type="button" onClick={onClose} className="rounded-lg p-1.5 text-slate-400 hover:bg-slate-100 hover:text-slate-700" title="Close"><Icons.Close /></button>
-                </div>
-                <div className="custom-scrollbar flex-1 space-y-5 overflow-y-auto px-5 py-4">
-                    <section>
-                        <h3 className="text-sm font-semibold text-slate-700">Bride's age at first marriage, by birth cohort</h3>
-                        <p className="mb-2 text-[11px] text-slate-500">Ages between cohorts are interpolated; outside the table the nearest cohort applies.</p>
-                        <MarriageAgeAnchorsTable anchors={draft.marriageAgeAnchors} onCell={setAnchor} onAdd={addAnchor} onRemove={removeAnchor} />
-                        <MarriageAgePreview draft={draft} />
-                    </section>
-                    <section>
-                        <h3 className="mb-2 text-sm font-semibold text-slate-700">Other intervals</h3>
-                        <DemographicScalarFields draft={draft} onField={setField} />
-                    </section>
-                </div>
-                <SettingsPanelFooter onReset={resetDraft} onCancel={onClose} onApply={() => onApply(draft)} />
+        <div data-testid="app-settings-panel" className="fixed inset-0 z-[85] flex items-center justify-center bg-black/30 p-4 backdrop-blur-[2px]" onPointerDown={onClose}>
+            <div role="dialog" aria-modal="true" aria-labelledby="app-settings-title" onPointerDown={(e) => e.stopPropagation()}
+                className="flex max-h-full w-full max-w-2xl flex-col overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-2xl">
+                <SettingsPanelHeader tab={tab} onTab={setTab} onClose={onClose} />
+                {tab === 'deduction'
+                    ? <DeductionSettingsTab editor={editor} onCancel={onClose} onApply={onApplyDeduction} />
+                    : <AppearanceSettingsTab themeId={themeId} onThemeChange={onThemeChange} onClose={onClose} />}
             </div>
         </div>
     );
@@ -49440,6 +50655,163 @@ function useDemographicSettingsApply({ sheetUrl, setTree, appendLog, fetchFromUr
 }
 
 // ============================================================================
+// MODULE 6.15: SETTINGS RADIAL FAB
+//
+// A floating action button pinned to the bottom-right corner (visible on the home
+// screen AND over the tree) that fans out three actions in a quarter circle:
+// colour theme, deduction rules and "clear stored data". It replaces the toolbar
+// gear so settings are reachable before any sheet is loaded.
+// ============================================================================
+
+/** The actions of the radial menu, in fan order (first = straight up, last = straight left). */
+const SETTINGS_FAB_ACTIONS = Object.freeze([
+    { id: 'theme', label: 'Colour theme', title: 'Colour theme (Material 3 palettes)', icon: 'Palette' },
+    { id: 'deduction', label: 'Deduction rules', title: 'Deduction Settings (marriage age by birth cohort)', icon: 'Sliders' },
+    { id: 'privacy', label: 'Clear stored data', title: 'Clear stored data (cookies & local storage)', icon: 'Eraser' },
+]);
+
+/** Tooltip of the main FAB button (also the key of its documentation card). */
+const SETTINGS_FAB_TITLE = 'Settings: theme, deduction rules, stored data';
+
+/** Distance (px) from the FAB centre to each action centre. */
+const SETTINGS_FAB_RADIUS = 84;
+
+/**
+ * Evenly spreads `count` items along an arc and returns their pixel offsets from the hub.
+ * Angles follow the maths convention (0° = right, 90° = up) so the default 90°→180° arc fans
+ * towards the top-left — right for a hub pinned to the bottom-right corner. Screen `y` grows
+ * downwards, hence the negated sine.
+ *
+ * @param {number} count - Number of items
+ * @param {number} [radius=SETTINGS_FAB_RADIUS] - Arc radius in px
+ * @param {number} [startDeg=90] - Angle of the first item
+ * @param {number} [endDeg=180] - Angle of the last item
+ * @returns {Array<{x: number, y: number}>} Offsets, rounded to whole pixels
+ *
+ * @example
+ * computeRadialMenuOffsets(3, 100);
+ * // => [{ x: 0, y: -100 }, { x: -71, y: -71 }, { x: -100, y: 0 }]
+ *
+ * @example
+ * computeRadialMenuOffsets(1, 100);
+ * // => [{ x: -71, y: -71 }] (a single item sits in the middle of the arc)
+ *
+ * @example
+ * computeRadialMenuOffsets(0);
+ * // => []
+ */
+function computeRadialMenuOffsets(count, radius = SETTINGS_FAB_RADIUS, startDeg = 90, endDeg = 180) {
+    const n = Math.max(0, Math.floor(count));
+    if (n === 0) return [];
+    const offsets = [];
+    for (let i = 0; i < n; i++) {
+        const t = n === 1 ? 0.5 : i / (n - 1);
+        const angle = (startDeg + (endDeg - startDeg) * t) * Math.PI / 180;
+        offsets.push({ x: Math.round(Math.cos(angle) * radius), y: Math.round(-Math.sin(angle) * radius) });
+    }
+    return offsets;
+}
+
+/**
+ * Open/close state of the radial menu: toggled by the hub button, closed by Escape, by the
+ * invisible backdrop, or after an action is chosen.
+ *
+ * @returns {{isOpen: boolean, toggle: Function, close: Function}}
+ *
+ * @example
+ * const { isOpen, toggle, close } = useRadialFabState();
+ * <button onClick={toggle} aria-expanded={isOpen} />
+ *
+ * @example
+ * const fab = useRadialFabState();
+ * fab.toggle(); fab.isOpen; // => true (after re-render)
+ */
+function useRadialFabState() {
+    const [isOpen, setIsOpen] = useState(false);
+    const toggle = useCallback(() => setIsOpen(open => !open), []);
+    const close = useCallback(() => setIsOpen(false), []);
+    useEffect(() => {
+        if (!isOpen) return undefined;
+        const onKeyDown = (e) => { if (e.key === 'Escape') setIsOpen(false); };
+        window.addEventListener('keydown', onKeyDown);
+        return () => window.removeEventListener('keydown', onKeyDown);
+    }, [isOpen]);
+    return { isOpen, toggle, close };
+}
+
+/**
+ * One satellite button of the radial menu with its label chip. Collapsed into the hub when the
+ * menu is closed; slides out along its offset (staggered) when open.
+ *
+ * @param {object} props
+ * @param {{id: string, label: string, title: string, icon: string}} props.action - Action definition
+ * @param {{x: number, y: number}} props.offset - Position relative to the hub centre
+ * @param {number} props.index - Position in the fan (drives the stagger delay)
+ * @param {boolean} props.isOpen - Whether the menu is expanded
+ * @param {Function} props.onSelect - Called with the action id
+ * @returns {React.ReactNode}
+ *
+ * @example
+ * <RadialFabAction action={SETTINGS_FAB_ACTIONS[0]} offset={{ x: 0, y: -84 }} index={0} isOpen={true} onSelect={openSettings} />
+ *
+ * @example
+ * <RadialFabAction action={SETTINGS_FAB_ACTIONS[2]} offset={{ x: -84, y: 0 }} index={2} isOpen={false} onSelect={() => {}} />
+ */
+const RadialFabAction = ({ action, offset, index, isOpen, onSelect }) => {
+    const Icon = Icons[action.icon] || Icons.Settings;
+    const style = {
+        transform: isOpen ? `translate(${offset.x}px, ${offset.y}px) scale(1)` : 'translate(0px, 0px) scale(0.4)',
+        transitionDelay: `${isOpen ? index * 40 : (2 - index) * 30}ms`,
+    };
+    return (
+        <div className={`absolute left-1/2 top-1/2 -ml-6 -mt-6 transition-all duration-200 ease-out ${isOpen ? 'opacity-100' : 'pointer-events-none opacity-0'}`} style={style}>
+            <button type="button" role="menuitem" tabIndex={isOpen ? 0 : -1} title={action.title} data-testid={`settings-fab-${action.id}`}
+                onClick={() => onSelect(action.id)}
+                className="flex h-12 w-12 items-center justify-center rounded-full border border-outline-variant bg-surface-container-lowest text-primary shadow-lg transition-colors hover:bg-primary-container">
+                <Icon />
+            </button>
+            <span aria-hidden="true" className={`pointer-events-none absolute right-full mr-2 whitespace-nowrap rounded-full bg-inverse-surface px-2.5 py-1 text-xs font-semibold text-inverse-on-surface shadow ${index === 0 ? 'top-0 -translate-y-1.5' : 'top-1/2 -translate-y-1/2'}`}>
+                {action.label}
+            </span>
+        </div>
+    );
+};
+
+/**
+ * The settings hub: a round primary button whose gear rotates when the quarter-circle menu
+ * opens. Always mounted (home screen and tree view alike).
+ *
+ * @param {object} props
+ * @param {Function} props.onSelect - Receives 'theme' | 'deduction' | 'privacy'
+ * @returns {React.ReactNode}
+ *
+ * @example
+ * <SettingsRadialFab onSelect={(id) => id === 'privacy' ? clearData() : openSettings(id)} />
+ *
+ * @example
+ * <SettingsRadialFab onSelect={console.log} />
+ */
+const SettingsRadialFab = ({ onSelect }) => {
+    const { isOpen, toggle, close } = useRadialFabState();
+    const offsets = computeRadialMenuOffsets(SETTINGS_FAB_ACTIONS.length);
+    const select = (id) => { close(); onSelect(id); };
+    return (
+        <>
+            {isOpen && <div className="fixed inset-0 z-[79]" onPointerDown={close} aria-hidden="true" />}
+            <div data-testid="settings-fab" className="fixed bottom-6 right-6 z-[80] h-14 w-14" role="menu" aria-label="Settings">
+                {SETTINGS_FAB_ACTIONS.map((action, index) => (
+                    <RadialFabAction key={action.id} action={action} offset={offsets[index]} index={index} isOpen={isOpen} onSelect={select} />
+                ))}
+                <button type="button" onClick={toggle} title={SETTINGS_FAB_TITLE} aria-expanded={isOpen} aria-haspopup="menu" data-testid="settings-fab-toggle"
+                    className="relative flex h-14 w-14 items-center justify-center rounded-full bg-primary text-on-primary shadow-xl ring-4 ring-primary/15 transition-colors hover:bg-primary-hover focus:outline-none focus-visible:ring-primary/40">
+                    <span className={`block transition-transform duration-300 ${isOpen ? 'rotate-90' : 'rotate-0'}`}><Icons.Settings /></span>
+                </button>
+            </div>
+        </>
+    );
+};
+
+// ============================================================================
 // MODULE 7: MAIN APP COMPONENT
 /**
  * Main application component for the interactive Family Tree visualizer.
@@ -49456,16 +50828,40 @@ function useDemographicSettingsApply({ sheetUrl, setTree, appendLog, fetchFromUr
  *   root.render(<App />);
  */
 /**
- * Visibility of the two app-shell overlays: the home screen (sheet chooser) and the
- * deduction-settings panel. The home screen opens on startup unless the page URL already
- * names a sheet (`?id=`) or the app runs as a standalone export with embedded data.
+ * Manages the active Material 3 colour theme and applies its CSS custom properties
+ * to the document root on mount and whenever changed.
  *
- * @param {boolean} isStandalone - Whether running inside an exported standalone file
- * @returns {{isHomeOpen: boolean, setIsHomeOpen: Function, isSettingsOpen: boolean, setIsSettingsOpen: Function}}
+ * @returns {{themeId: string, setThemeId: Function, changeTheme: Function}}
  *
  * @example
- * const { isHomeOpen, setIsHomeOpen } = useAppShellPanels(false);
- * // on https://google.github.io/family-tree/  => isHomeOpen === true
+ * const { themeId, changeTheme } = useColorTheme();
+ * changeTheme('midnight');
+ *
+ * @example
+ * const theme = useColorTheme();
+ * console.log(theme.themeId); // => 'classic'
+ */
+function useColorTheme() {
+    const [themeId, setThemeId] = useState(() => applyStoredColorTheme().id);
+    const changeTheme = useCallback((nextId) => {
+        const resolved = applyColorTheme(nextId);
+        saveColorThemeId(resolved.id);
+        setThemeId(resolved.id);
+    }, []);
+    return { themeId, setThemeId, changeTheme };
+}
+
+/**
+ * Visibility of the two app-shell overlays: the home screen (sheet chooser) and the
+ * settings panel (Appearance + Deduction rules). The home screen opens on startup unless
+ * the page URL already names a sheet (`?id=`) or the app runs as a standalone export.
+ *
+ * @param {boolean} isStandalone - Whether running inside an exported standalone file
+ * @returns {{isHomeOpen: boolean, setIsHomeOpen: Function, isSettingsOpen: boolean, setIsSettingsOpen: Function, settingsTab: string, setSettingsTab: Function, openSettings: Function}}
+ *
+ * @example
+ * const { isHomeOpen, openSettings } = useAppShellPanels(false);
+ * openSettings('theme');
  *
  * @example
  * const shell = useAppShellPanels(true); // standalone export
@@ -49474,12 +50870,17 @@ function useDemographicSettingsApply({ sheetUrl, setTree, appendLog, fetchFromUr
 function useAppShellPanels(isStandalone) {
     const [isHomeOpen, setIsHomeOpen] = useState(() => !isStandalone && !hasExplicitSheetQueryParam());
     const [isSettingsOpen, setIsSettingsOpen] = useState(false);
-    return { isHomeOpen, setIsHomeOpen, isSettingsOpen, setIsSettingsOpen };
+    const [settingsTab, setSettingsTab] = useState('theme');
+    const openSettings = useCallback((tab = 'theme') => {
+        setSettingsTab(tab);
+        setIsSettingsOpen(true);
+    }, []);
+    return { isHomeOpen, setIsHomeOpen, isSettingsOpen, setIsSettingsOpen, settingsTab, setSettingsTab, openSettings };
 }
 
 /**
  * Bundles top-level application state including dataset records, navigation history,
- * panel visibility, shell overlays (home screen, settings), and sidebar sizing.
+ * panel visibility, shell overlays (home screen, settings, theme), and sidebar sizing.
  *
  * @returns {object} Core application state and updater functions.
  *
@@ -49494,6 +50895,7 @@ function useAppCoreState() {
     const isStandalone = isStandaloneExportMode();
     // Install the user's cookie-stored deduction settings BEFORE any tree is built.
     useState(() => applyStoredDemographicSettings());
+    const theme = useColorTheme();
     const data = useAncestryData();
     const nav = useTreeNavigationHistory(data.focusId);
     const panels = useAppPanels(data.isLoading);
@@ -49501,7 +50903,7 @@ function useAppCoreState() {
     const shell = useAppShellPanels(isStandalone);
     const treeStats = useMemo(() => data.tree.getStats(), [data.tree]);
     const [sheetUrl, setSheetUrl] = useState(() => (hasExplicitSheetQueryParam() ? resolveInitialSheetUrl() : ''));
-    return { isStandalone, ...data, ...nav, ...panels, ...sidebar, ...shell, treeStats, sheetUrl, setSheetUrl };
+    return { isStandalone, ...theme, ...data, ...nav, ...panels, ...sidebar, ...shell, treeStats, sheetUrl, setSheetUrl };
 }
 
 /**
@@ -49684,7 +51086,7 @@ function buildTopNavProps(core, viewport, focusNav, layoutExp) {
     return {
         tree: core.tree, isSidebarVisible: core.isAnySidebarOpen, sidebarWidth: core.sidebarWidth,
         isResizing: core.isResizingSidebar, sheetUrl: core.sheetUrl, setSheetUrl: core.setSheetUrl,
-        onOpenSettings: () => core.setIsSettingsOpen(true), isLoading: core.isLoading, searchQuery: viewport.searchQuery,
+        isLoading: core.isLoading, searchQuery: viewport.searchQuery,
         setSearchQuery: viewport.setSearchQuery, handleSetFocusId: focusNav.handleSetFocusId,
         onFilterBy: focusNav.handleFilterBy, activeFilter: core.activeFilter, showLogs: core.showLogs,
         setShowLogs: core.setShowLogs, errorMsg: core.errorMsg, setErrorMsg: core.setErrorMsg,
@@ -49780,7 +51182,7 @@ function buildZoomProps(core, viewport) {
 
 /**
  * Formats properties for the app-shell overlays: the Home emblem button, the sheet-chooser
- * home screen and the deduction-settings panel.
+ * home screen, the radial settings FAB, and the tabbed settings panel.
  *
  * @param {object} core - Core state slice
  * @param {object} focusNav - Focus and navigation handlers (provides handleImport)
@@ -49792,12 +51194,25 @@ function buildZoomProps(core, viewport) {
  * <SheetSourceHomeScreen {...shellProps.homeScreenProps} />
  *
  * @example
- * const { homeButtonProps, settingsPanelProps } = buildShellProps(core, focusNav, applyDraft);
+ * const { homeButtonProps, settingsPanelProps, settingsFabProps } = buildShellProps(core, focusNav, applyDraft);
  */
 function buildShellProps(core, focusNav, applyDemographicSettingsDraft) {
     const openSheet = (url) => {
         core.setIsHomeOpen(false);
         focusNav.handleImport(url);
+    };
+    const clearAllStoredData = () => {
+        clearStoredPreferences();
+        core.setThemeId(DEFAULT_COLOR_THEME_ID);
+    };
+    const handleFabSelect = (actionId) => {
+        if (actionId === 'privacy') {
+            if (typeof window === 'undefined' || window.confirm('Clear remembered Google Sheets, deduction settings and colour theme from this browser?')) {
+                clearAllStoredData();
+            }
+            return;
+        }
+        core.openSettings(actionId);
     };
     return {
         isHomeOpen: core.isHomeOpen,
@@ -49805,11 +51220,14 @@ function buildShellProps(core, focusNav, applyDemographicSettingsDraft) {
         homeScreenProps: {
             isOpen: core.isHomeOpen, hasTree: Boolean(core.tree.rootId), isLoading: core.isLoading,
             errorMsg: core.errorMsg, onSubmit: openSheet, onClose: () => core.setIsHomeOpen(false),
-            onClearStoredData: clearStoredPreferences
+            onClearStoredData: clearAllStoredData
         },
+        settingsFabProps: { onSelect: handleFabSelect },
         settingsPanelProps: {
-            isOpen: core.isSettingsOpen, onClose: () => core.setIsSettingsOpen(false),
-            onApply: applyDemographicSettingsDraft
+            isOpen: core.isSettingsOpen, initialTab: core.settingsTab,
+            onClose: () => core.setIsSettingsOpen(false),
+            onApplyDeduction: applyDemographicSettingsDraft,
+            themeId: core.themeId, onThemeChange: core.changeTheme
         }
     };
 }
@@ -49859,14 +51277,14 @@ function useAppViewModel() {
 /**
  * Main application visual layout shell containing top navigation, zoom controls,
  * main canvas viewport, collateral sidebar panels, and the shell overlays
- * (Home emblem button, sheet-chooser home screen, deduction-settings panel).
+ * (Home emblem button, sheet-chooser home screen, radial settings FAB, and settings panel).
  *
  * @param {object} props
  * @param {object} props.topNavProps - Props for TopNavigation component
  * @param {object} props.zoomProps - Props for ZoomControls component
  * @param {object} props.viewportProps - Props for MainCanvasViewport component
  * @param {object} props.sidebarProps - Props for PersonSidebar component
- * @param {object} props.shellProps - Props for the home button, home screen and settings panel
+ * @param {object} props.shellProps - Props for the home button, home screen, radial FAB and settings panel
  * @param {boolean} props.showZoom - Whether zoom controls should be displayed
  * @returns {React.ReactNode}
  *
@@ -49876,7 +51294,7 @@ function useAppViewModel() {
  *   zoomProps={{}}
  *   viewportProps={{}}
  *   sidebarProps={{}}
- *   shellProps={{ isHomeOpen: false, homeButtonProps: {}, homeScreenProps: {}, settingsPanelProps: {} }}
+ *   shellProps={{ isHomeOpen: false, homeButtonProps: {}, homeScreenProps: {}, settingsFabProps: {}, settingsPanelProps: {} }}
  *   showZoom={true}
  * />
  *
@@ -49886,7 +51304,7 @@ function useAppViewModel() {
  *   zoomProps={{}}
  *   viewportProps={{}}
  *   sidebarProps={{}}
- *   shellProps={{ isHomeOpen: true, homeButtonProps: {}, homeScreenProps: { isOpen: true }, settingsPanelProps: {} }}
+ *   shellProps={{ isHomeOpen: true, homeButtonProps: {}, homeScreenProps: { isOpen: true }, settingsFabProps: {}, settingsPanelProps: {} }}
  *   showZoom={false}
  * />
  */
@@ -49899,8 +51317,9 @@ const AppRootView = ({ topNavProps, zoomProps, viewportProps, sidebarProps, shel
         {showZoom && <ZoomControls {...zoomProps} />}
         <MainCanvasViewport {...viewportProps} />
         <PersonSidebar {...sidebarProps} />
-        <DeductionSettingsPanel {...shellProps.settingsPanelProps} />
+        <AppSettingsPanel {...shellProps.settingsPanelProps} />
         <SheetSourceHomeScreen {...shellProps.homeScreenProps} />
+        <SettingsRadialFab {...shellProps.settingsFabProps} />
     </div>
 );
 

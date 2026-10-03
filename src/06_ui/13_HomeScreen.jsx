@@ -119,7 +119,7 @@ function useSheetSourceForm(isOpen) {
  * <SheetHistoryRow entry={{ id: '1BQvy…', title: '', uses: 1 }} onPick={open} onForget={forget} />
  */
 const SheetHistoryRow = ({ entry, onPick, onForget }) => (
-    <li className="group flex items-center gap-3 px-3 py-2 hover:bg-[#f3f8ea] cursor-pointer" onClick={() => onPick(entry)}
+    <li className="group flex items-center gap-3 px-3 py-2 hover:bg-primary-container/60 cursor-pointer" onClick={() => onPick(entry)}
         title={formatSheetHistoryLabel(entry)} data-sheet-id={entry.id}>
         <div className="min-w-0 flex-1">
             <div className={`truncate text-sm ${entry.title ? 'font-semibold text-slate-800' : 'italic text-slate-500'}`}>
@@ -202,7 +202,7 @@ const SheetSourceInput = ({ form, onSubmit }) => {
                 onKeyDown={(e) => { if (e.key === 'Escape') form.setIsListOpen(false); if (e.key === 'ArrowDown') form.setIsListOpen(true); }}
                 onFocus={(e) => e.target.select()}
                 placeholder="https://docs.google.com/spreadsheets/d/…  or a spreadsheet ID"
-                className="h-12 w-full rounded-xl border border-slate-300 bg-white pl-4 pr-11 font-mono text-[13px] text-slate-800 shadow-sm outline-none transition focus:border-[#5c7c33] focus:ring-2 focus:ring-[#9cc95f]/50" />
+                className="h-12 w-full rounded-xl border border-slate-300 bg-white pl-4 pr-11 font-mono text-[13px] text-slate-800 shadow-sm outline-none transition focus:border-primary focus:ring-2 focus:ring-primary/30" />
             {form.history.length > 0 && (
                 <button type="button" onClick={() => form.setIsListOpen(!form.isListOpen)} aria-label="Show sheets you have opened before"
                     title="Sheets you have opened before" aria-expanded={form.isListOpen}
@@ -216,8 +216,8 @@ const SheetSourceInput = ({ form, onSubmit }) => {
 };
 
 /**
- * The whole form: label, textbox row with the Open button, prefill hint, and any error
- * (local validation or the import error passed down from the app).
+ * The whole form: label + known-sheet-name chip, textbox row with the Open button, prefill
+ * hint, and any error (local validation or the import error passed down from the app).
  *
  * @param {object} props
  * @param {object} props.form - Result of useSheetSourceForm()
@@ -232,28 +232,39 @@ const SheetSourceInput = ({ form, onSubmit }) => {
  * @example
  * <SheetSourceForm form={form} isLoading={true} errorMsg="Invalid Google Sheets URL." onSubmit={handleSubmit} />
  */
-const SheetSourceForm = ({ form, isLoading, errorMsg, onSubmit }) => (
-    <form className="relative z-10 w-full max-w-2xl px-6" onSubmit={(e) => { e.preventDefault(); onSubmit(form.value); }}>
-        <label htmlFor="sheet-source-input" className="mb-2 block text-sm font-semibold text-slate-600">
-            Google Sheets link or spreadsheet ID
-        </label>
-        <div className="flex gap-2">
-            <SheetSourceInput form={form} onSubmit={onSubmit} />
-            <button type="submit" disabled={isLoading}
-                className="h-12 shrink-0 rounded-xl bg-[#5c7c33] px-6 text-sm font-semibold text-white shadow-md transition hover:bg-[#4a6a27] disabled:opacity-60">
-                {isLoading ? 'Loading…' : 'Open'}
-            </button>
-        </div>
-        <div className="mt-2 text-xs text-slate-500" data-prefill-source={form.prefillSource}>
-            {HOME_PREFILL_HINTS[form.prefillSource] || HOME_PREFILL_HINTS.demo}
-        </div>
-        {(form.error || errorMsg) && (
-            <div role="alert" className="mt-3 rounded-xl border border-red-200 bg-red-50 px-4 py-2.5 text-sm text-red-700">
-                {form.error || errorMsg}
+const SheetSourceForm = ({ form, isLoading, errorMsg, onSubmit }) => {
+    const sheetTitle = resolveKnownSheetTitle(form.value, form.history);
+    return (
+        <form className="relative z-10 w-full max-w-2xl px-6" onSubmit={(e) => { e.preventDefault(); onSubmit(form.value); }}>
+            <div className="mb-2 flex items-center justify-between gap-2">
+                <label htmlFor="sheet-source-input" className="text-sm font-semibold text-slate-600">
+                    Google Sheets link or spreadsheet ID
+                </label>
+                {sheetTitle && (
+                    <span data-testid="sheet-source-title" title={`Spreadsheet name: ${sheetTitle}`}
+                        className="inline-flex max-w-[60%] items-center gap-1.5 truncate rounded-full border border-slate-200 bg-white/90 px-2.5 py-0.5 text-xs font-semibold text-primary shadow-sm">
+                        <Icons.Sheet /><span className="truncate">{sheetTitle}</span>
+                    </span>
+                )}
             </div>
-        )}
-    </form>
-);
+            <div className="flex gap-2">
+                <SheetSourceInput form={form} onSubmit={onSubmit} />
+                <button type="submit" disabled={isLoading} data-doc-key="Open the Google Sheet"
+                    className="h-12 shrink-0 rounded-xl bg-primary px-6 text-sm font-semibold text-on-primary shadow-md transition hover:bg-primary-hover disabled:opacity-60">
+                    {isLoading ? 'Loading…' : 'Open'}
+                </button>
+            </div>
+            <div className="mt-2 text-xs text-slate-500" data-prefill-source={form.prefillSource}>
+                {HOME_PREFILL_HINTS[form.prefillSource] || HOME_PREFILL_HINTS.demo}
+            </div>
+            {(form.error || errorMsg) && (
+                <div role="alert" className="mt-3 rounded-xl border border-red-200 bg-red-50 px-4 py-2.5 text-sm text-red-700">
+                    {form.error || errorMsg}
+                </div>
+            )}
+        </form>
+    );
+};
 
 /**
  * Emblem, title and tagline at the top of the home screen.
@@ -269,7 +280,7 @@ const SheetSourceForm = ({ form, isLoading, errorMsg, onSubmit }) => (
 const HomeScreenHeader = () => (
     <div className="relative z-10 mb-8 flex flex-col items-center text-center select-none">
         <BrandLogo size={128} idPrefix="home" className="h-[128px] w-[128px] drop-shadow-md" />
-        <h1 className="mt-5 bg-gradient-to-r from-slate-700 via-[#5c7c33] to-[#9cc95f] bg-clip-text text-[48px] font-bold leading-none tracking-wide text-transparent"
+        <h1 className="mt-5 bg-gradient-to-r from-slate-700 via-primary to-inverse-primary bg-clip-text text-[48px] font-bold leading-none tracking-wide text-transparent"
             style={{ fontFamily: "'Uncial Antiqua', serif" }}>Family Tree</h1>
         <p className="mt-3 max-w-xl text-sm text-slate-500">
             Turn a family register kept in a Google Sheet into an interactive, deduced family tree.
@@ -279,7 +290,7 @@ const HomeScreenHeader = () => (
 
 /**
  * GDPR / privacy notice pinned to the bottom of the home screen, with a one-click
- * "Clear stored data" that deletes both preference cookies and their mirrors.
+ * "Clear stored data" that deletes all three preference cookies and their mirrors.
  *
  * @param {object} props
  * @param {Function} props.onClearStoredData - Handler for the clear button
@@ -292,11 +303,11 @@ const HomeScreenHeader = () => (
  * <HomePrivacyNotice onClearStoredData={handleClearStoredData} />
  */
 const HomePrivacyNotice = ({ onClearStoredData }) => (
-    <footer data-testid="home-privacy-notice" className="relative z-10 mt-auto w-full max-w-3xl px-6 pb-5 pt-8 text-center text-[11px] leading-relaxed text-slate-500">
-        <strong className="text-slate-600">Privacy.</strong> For your convenience this app stores the spreadsheet links you open and your
-        deduction settings in cookies / local storage on <em>this device only</em>. Nothing is sent to any server other than
+    <footer data-testid="home-privacy-notice" className="relative z-10 mt-auto w-full max-w-3xl px-6 pb-5 pt-8 text-center text-[11px] leading-relaxed text-slate-500 sm:px-20">
+        <strong className="text-slate-600">Privacy.</strong> For your convenience this app stores the spreadsheet links you open, your
+        deduction settings and your colour theme in cookies / local storage on <em>this device only</em>. Nothing is sent to any server other than
         Google Sheets, which serves the spreadsheet you request. You can withdraw this at any time:{' '}
-        <button type="button" onClick={onClearStoredData} className="font-semibold text-[#5c7c33] underline underline-offset-2 hover:text-[#4a6a27]">
+        <button type="button" onClick={onClearStoredData} className="font-semibold text-primary underline underline-offset-2 hover:text-primary-hover">
             clear stored data
         </button>.
     </footer>
@@ -334,13 +345,13 @@ const SheetSourceHomeScreen = ({ isOpen, hasTree, isLoading, errorMsg, onSubmit,
         form.resetHistory();
     };
     return (
-        <div data-testid="sheet-source-home" className="fixed inset-0 z-[70] flex flex-col items-center overflow-y-auto bg-gradient-to-b from-white via-[#f7faf1] to-[#e9f2da] pt-[9vh]"
+        <div data-testid="sheet-source-home" className="fixed inset-0 z-[70] flex flex-col items-center overflow-y-auto bg-white bg-gradient-to-b from-white via-primary-container/30 to-primary-container pt-[9vh]"
             style={{ fontFamily: '"Google Sans", system-ui, -apple-system, sans-serif' }}>
             <BrandWatermark size={640} opacity={0.06} />
             <HomeScreenHeader />
             <SheetSourceForm form={form} isLoading={isLoading} errorMsg={errorMsg} onSubmit={handleSubmit} />
             {hasTree && (
-                <button type="button" onClick={onClose} className="relative z-10 mt-6 text-sm font-medium text-[#5c7c33] hover:underline">
+                <button type="button" onClick={onClose} className="relative z-10 mt-6 text-sm font-medium text-primary hover:underline">
                     ← Back to the tree
                 </button>
             )}
@@ -368,7 +379,7 @@ const HomeButton = ({ onClick }) => {
     if (isStandaloneExportMode()) return null;
     return (
         <button type="button" onClick={onClick} data-testid="home-button" title="Family Tree Home – choose a Google Sheet"
-            className="fixed left-4 top-4 z-[60] flex h-[44px] w-[44px] items-center justify-center rounded-xl border border-slate-200 bg-white/95 shadow-sm backdrop-blur-md transition-colors hover:bg-[#f3f8ea]">
+            className="fixed left-4 top-4 z-[60] flex h-[44px] w-[44px] items-center justify-center rounded-xl border border-slate-200 bg-white/95 shadow-sm backdrop-blur-md transition-colors hover:bg-primary-container/60">
             <BrandLogo size={30} idPrefix="homebtn" className="h-[30px] w-[30px]" />
         </button>
     );

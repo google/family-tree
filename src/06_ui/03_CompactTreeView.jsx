@@ -216,7 +216,8 @@ const CompactTreeConnectorSvg = React.memo(({ paths, padX, padY, totalW, totalH 
                 <path 
                     key={`path-${idx}`} 
                     d={p.d} 
-                    stroke="#cbd5e1" 
+                    stroke="currentColor" 
+                    className="text-slate-300"
                     strokeWidth="2" 
                     fill="none" 
                     strokeLinecap="round"
