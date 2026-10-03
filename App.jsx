@@ -1788,16 +1788,6 @@ const COLOR_THEMES = [
         families: { white: '#fdfaf4' }
     },
     {
-        id: 'ocean', name: 'Ocean Breeze', mode: 'light',
-        blurb: 'Cool teal and sea-blue accents on airy, slightly bluish surfaces.',
-        seeds: { primary: '#1f7a8c', secondary: '#3b6ea5', tertiary: '#2a9d8f', neutral: '#76808a', error: '#c0392b', accent: '#2f6fd6', male: '#3a86b8', female: '#d0677d', success: '#2e9e6b', warning: '#d9a441' }
-    },
-    {
-        id: 'lavender', name: 'Lavender Dusk', mode: 'light',
-        blurb: 'Violet and orchid accents with soft grey-lilac surfaces.',
-        seeds: { primary: '#6d5bb5', secondary: '#9b6aa8', tertiary: '#c26f9a', neutral: '#837c90', error: '#c24b5a', accent: '#5f6fd1', male: '#6b8bd6', female: '#c97aa6', success: '#6a9a6a', warning: '#c99a4a' }
-    },
-    {
         id: 'solarized-light', name: 'Solarized Light', mode: 'light',
         blurb: 'Ethan Schoonover\u2019s precision palette: cream base3 canvas with the classic blue, cyan and magenta accents.',
         seeds: SOLARIZED_SEEDS, families: neutralFamilyOverrides(solarizedNeutralScale('light'))
@@ -1806,13 +1796,6 @@ const COLOR_THEMES = [
         id: 'dark', name: 'Dark Forest', mode: 'dark',
         blurb: 'The Classic palette inverted: charcoal slate surfaces with luminous green accents.',
         seeds: CLASSIC_FOREST_SEEDS
-    },
-    {
-        id: 'midnight', name: 'Midnight Black', mode: 'dark',
-        blurb: 'True-black surfaces for OLED screens with muted, high-legibility accents.',
-        seeds: { ...CLASSIC_FOREST_SEEDS, neutral: '#6b7280' },
-        shadeTones: { white: 0, 50: 10, 100: 23, 200: 30, 300: 39 },
-        roleTones: { surface: 0, surfaceDim: 0, surfaceContainerLowest: 0, surfaceContainerLow: 4, surfaceContainer: 8, surfaceContainerHigh: 12, surfaceContainerHighest: 17, surfaceBright: 22 }
     },
     {
         id: 'solarized-dark', name: 'Solarized Dark', mode: 'dark',
@@ -1831,7 +1814,7 @@ const COLOR_THEMES = [
 /**
  * Looks a theme definition up by id, falling back to Classic for unknown / missing ids.
  *
- * @example getColorThemeDefinition('midnight').mode // → 'dark'
+ * @example getColorThemeDefinition('dark').mode // → 'dark'
  * @example getColorThemeDefinition('does-not-exist').id // → 'classic'
  * @param {string} id
  * @returns {Object}
@@ -1973,7 +1956,7 @@ function resolveColorTheme(idOrDefinition) {
  * Reads a Tailwind family colour for a resolved theme (Classic falls back to the stock palette).
  *
  * @example themeFamilyHex(resolveColorTheme('classic'), 'sky', 100) // → '#e0f2fe'
- * @example themeFamilyHex(resolveColorTheme('midnight'), 'white')   // → '#000000'
+ * @example themeFamilyHex(resolveColorTheme('dark'), 'white')      // → a deep charcoal hex
  * @param {Object} resolved
  * @param {string} family e.g. 'slate' or 'white'
  * @param {number} [shade]
@@ -2030,7 +2013,7 @@ function removeThemeCssVariables(root) {
  * Applies a theme to the document: swaps the CSS variables, sets `color-scheme` and the
  * `data-theme` / `data-theme-mode` attributes used by the global stylesheet.
  *
- * @example applyColorTheme('midnight').mode // → 'dark' (and <html data-theme="midnight">)
+ * @example applyColorTheme('dark').mode // → 'dark' (and <html data-theme="dark">)
  * @example applyColorTheme('classic', null).id // → 'classic' (no DOM touched)
  * @param {string} id
  * @param {Object} [root=document.documentElement]
@@ -2053,7 +2036,7 @@ function applyColorTheme(id, root = typeof document === 'undefined' ? null : doc
  * primary button and body text).
  *
  * @example describeThemeSwatches(resolveColorTheme('classic')).male // → '#e0f2fe' (sky-100)
- * @example describeThemeSwatches(resolveColorTheme('midnight')).canvas // → '#000000'
+ * @example describeThemeSwatches(resolveColorTheme('dark')).canvas // → a deep charcoal hex
  * @param {Object} resolved
  * @returns {{canvas: string, panel: string, text: string, primary: string, onPrimary: string, male: string, maleBorder: string, female: string, femaleBorder: string, line: string}}
  */
@@ -24938,6 +24921,10 @@ const DEMOGRAPHIC_SETTINGS_COOKIE = 'ft_demographic_settings';
 const COLOR_THEME_COOKIE = 'ft_color_theme';
 /** Cookie holding the last URL hash view state (p=…&z=…&o=…&v=map) for session restore. */
 const LAST_VIEW_STATE_COOKIE = 'ft_last_view_state';
+/** Cookie holding background-geocoded location coordinates and hierarchies (JSON). */
+const GEO_CACHE_COOKIE = 'ft_geo_cache';
+/** Keep the URL-encoded geo-cache cookie payload under this many characters. */
+const GEO_CACHE_COOKIE_BUDGET = 3400;
 /** Preferences survive one year of inactivity; every write refreshes the clock. */
 const PREFERENCE_COOKIE_MAX_AGE_SECONDS = 365 * 24 * 60 * 60;
 /** Browsers cap a single cookie at 4096 bytes; a dozen compact entries stay well below. */
@@ -25831,8 +25818,8 @@ function applyStoredDemographicSettings() {
  * @returns {string|null}
  *
  * @example
- * saveColorThemeId('midnight');
- * loadStoredColorThemeId(); // => 'midnight'
+ * saveColorThemeId('dark');
+ * loadStoredColorThemeId(); // => 'dark'
  *
  * @example
  * writePreference(COLOR_THEME_COOKIE, 'neon-1999');
@@ -25869,7 +25856,7 @@ function saveColorThemeId(id) {
  * loadStoredColorThemeId(); // => null
  *
  * @example
- * saveColorThemeId('ocean'); clearStoredColorTheme(); readPreference(COLOR_THEME_COOKIE); // => null
+ * saveColorThemeId('pastel'); clearStoredColorTheme(); readPreference(COLOR_THEME_COOKIE); // => null
  */
 function clearStoredColorTheme() {
     removePreference(COLOR_THEME_COOKIE);
@@ -25881,8 +25868,8 @@ function clearStoredColorTheme() {
  * @returns {Object} The resolved theme (`{ id, name, mode, roles, … }`)
  *
  * @example
- * saveColorThemeId('midnight');
- * applyStoredColorTheme().id; // => 'midnight' (<html data-theme="midnight">)
+ * saveColorThemeId('dark');
+ * applyStoredColorTheme().id; // => 'dark' (<html data-theme="dark">)
  *
  * @example
  * clearStoredColorTheme();
@@ -25947,10 +25934,194 @@ function clearLastViewStateHash() {
     removePreference(LAST_VIEW_STATE_COOKIE);
 }
 
+// ─── Background-geocoded location cache (cookie + localStorage mirror) ──────
+
+/** In-memory mirror of `ft_geo_cache` so synchronous coordinate/hierarchy lookups are O(1). */
+const geoLocationMemoryCache = new Map();
+let geoLocationCacheRawSnapshot = null;
+
+/**
+ * Validates and normalizes one cached geocoding entry (`{ coords: [lat, lng], country, state, district }`).
+ *
+ * @param {*} entry - Candidate cache value
+ * @returns {{coords: [number, number], country: string|null, state: string|null, district: string|null}|null}
+ *
+ * @example
+ * sanitizeGeoCacheEntry({ coords: [10.025, 76.308], country: 'India', state: 'Kerala', district: 'Ernakulam' });
+ * // => { coords: [10.025, 76.308], country: 'India', state: 'Kerala', district: 'Ernakulam' }
+ *
+ * @example
+ * sanitizeGeoCacheEntry({ coords: ['bad', 0] });
+ * // => null
+ */
+function sanitizeGeoCacheEntry(entry) {
+    if (!entry || typeof entry !== 'object' || !Array.isArray(entry.coords) || entry.coords.length !== 2) return null;
+    const lat = Number(entry.coords[0]);
+    const lng = Number(entry.coords[1]);
+    if (!Number.isFinite(lat) || !Number.isFinite(lng) || Math.abs(lat) > 90 || Math.abs(lng) > 180) return null;
+    const roundCoord = (n) => Math.round(n * 10000) / 10000;
+    return {
+        coords: [roundCoord(lat), roundCoord(lng)],
+        country: typeof entry.country === 'string' && entry.country.trim() ? entry.country.trim() : null,
+        state: typeof entry.state === 'string' && entry.state.trim() ? entry.state.trim() : null,
+        district: typeof entry.district === 'string' && entry.district.trim() ? entry.district.trim() : null
+    };
+}
+
+/**
+ * Parses a JSON string of cached geocoded locations into a validated `{ [normPlace]: entry }` map.
+ *
+ * @param {string|null} raw - Raw JSON text from `ft_geo_cache`
+ * @returns {Object<string, {coords: [number, number], country: string|null, state: string|null, district: string|null}>}
+ *
+ * @example
+ * parseGeoLocationCacheJson('{"edappilly":{"coords":[10.025,76.308],"country":"India","state":"Kerala","district":"Ernakulam"}}');
+ * // => { edappilly: { coords: [10.025, 76.308], country: 'India', state: 'Kerala', district: 'Ernakulam' } }
+ *
+ * @example
+ * parseGeoLocationCacheJson('not-json');
+ * // => {}
+ */
+function parseGeoLocationCacheJson(raw) {
+    if (!raw || typeof raw !== 'string') return {};
+    try {
+        const parsed = JSON.parse(raw);
+        if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) return {};
+        const clean = {};
+        for (const [key, val] of Object.entries(parsed)) {
+            const normKey = String(key || '').toLowerCase().trim();
+            const entry = sanitizeGeoCacheEntry(val);
+            if (normKey && entry) clean[normKey] = entry;
+        }
+        return clean;
+    } catch (e) {
+        return {};
+    }
+}
+
+/**
+ * Serializes a geo-location cache map to a compact JSON string that fits within the browser cookie budget.
+ *
+ * @param {Object<string, Object>} cacheObj - Map of normalized place → entry
+ * @returns {string} JSON text
+ *
+ * @example
+ * serializeGeoLocationCache({ edappilly: { coords: [10.025, 76.308], country: 'India', state: 'Kerala', district: 'Ernakulam' } });
+ * // => '{"edappilly":{"coords":[10.025,76.308],"country":"India","state":"Kerala","district":"Ernakulam"}}'
+ *
+ * @example
+ * serializeGeoLocationCache({});
+ * // => '{}'
+ */
+function serializeGeoLocationCache(cacheObj) {
+    const entries = Object.entries(cacheObj || {})
+        .map(([k, v]) => [String(k || '').toLowerCase().trim(), sanitizeGeoCacheEntry(v)])
+        .filter(([k, v]) => k && v);
+    let json = JSON.stringify(Object.fromEntries(entries));
+    while (entries.length > 1 && encodeURIComponent(json).length > GEO_CACHE_COOKIE_BUDGET) {
+        entries.shift();
+        json = JSON.stringify(Object.fromEntries(entries));
+    }
+    return json;
+}
+
+/**
+ * Loads the persisted geocoding cache from the `ft_geo_cache` cookie/localStorage and syncs the in-memory map.
+ *
+ * @returns {Object<string, {coords: [number, number], country: string|null, state: string|null, district: string|null}>}
+ *
+ * @example
+ * saveCachedGeoLocation('Edappilly', { coords: [10.025, 76.308], country: 'India', state: 'Kerala', district: 'Ernakulam' });
+ * loadGeoLocationCache().edappilly.coords; // => [10.025, 76.308]
+ *
+ * @example
+ * clearGeoLocationCache();
+ * loadGeoLocationCache(); // => {}
+ */
+function loadGeoLocationCache() {
+    const raw = readPreference(GEO_CACHE_COOKIE);
+    if (raw !== geoLocationCacheRawSnapshot) {
+        geoLocationMemoryCache.clear();
+        const parsed = parseGeoLocationCacheJson(raw);
+        for (const [k, v] of Object.entries(parsed)) {
+            geoLocationMemoryCache.set(k, v);
+        }
+        geoLocationCacheRawSnapshot = raw;
+    }
+    return Object.fromEntries(geoLocationMemoryCache.entries());
+}
+
+/**
+ * Synchronously looks up a place in the browser geocoding cache (hydrating from `ft_geo_cache` if needed).
+ *
+ * @param {string} place - Raw or normalized location name
+ * @returns {{coords: [number, number], country: string|null, state: string|null, district: string|null}|null}
+ *
+ * @example
+ * saveCachedGeoLocation('Edappilly', { coords: [10.025, 76.308], country: 'India', state: 'Kerala', district: 'Ernakulam' });
+ * getCachedGeoLocation('edappilly').coords; // => [10.025, 76.308]
+ *
+ * @example
+ * getCachedGeoLocation('unknown-village-xyz'); // => null
+ */
+function getCachedGeoLocation(place) {
+    if (!place || typeof place !== 'string') return null;
+    const norm = place.toLowerCase().trim();
+    if (!norm) return null;
+    loadGeoLocationCache();
+    return geoLocationMemoryCache.get(norm) || null;
+}
+
+/**
+ * Persists a resolved location entry (`coords` + optional `country`/`state`/`district`) in the
+ * browser's `ft_geo_cache` cookie and `localStorage` mirror.
+ *
+ * @param {string} place - Location name to cache
+ * @param {Object} entry - `{ coords: [lat, lng], country?, state?, district? }`
+ * @returns {{coords: [number, number], country: string|null, state: string|null, district: string|null}|null}
+ *
+ * @example
+ * saveCachedGeoLocation('Edappilly', { coords: [10.025, 76.308], country: 'India', state: 'Kerala', district: 'Ernakulam' });
+ * // => { coords: [10.025, 76.308], country: 'India', state: 'Kerala', district: 'Ernakulam' }
+ *
+ * @example
+ * saveCachedGeoLocation('', { coords: [0, 0] });
+ * // => null
+ */
+function saveCachedGeoLocation(place, entry) {
+    if (!place || typeof place !== 'string') return null;
+    const norm = place.toLowerCase().trim();
+    const clean = sanitizeGeoCacheEntry(entry);
+    if (!norm || !clean) return null;
+    const current = loadGeoLocationCache();
+    current[norm] = clean;
+    const json = serializeGeoLocationCache(current);
+    writePreference(GEO_CACHE_COOKIE, json);
+    geoLocationMemoryCache.set(norm, clean);
+    geoLocationCacheRawSnapshot = readPreference(GEO_CACHE_COOKIE);
+    return clean;
+}
+
+/**
+ * Clears all cached geocoded locations from the browser cookie, localStorage mirror, and in-memory map.
+ *
+ * @example
+ * clearGeoLocationCache();
+ * getCachedGeoLocation('Edappilly'); // => null
+ *
+ * @example
+ * saveCachedGeoLocation('TVM', { coords: [8.5241, 76.9366] }); clearGeoLocationCache(); loadGeoLocationCache(); // => {}
+ */
+function clearGeoLocationCache() {
+    removePreference(GEO_CACHE_COOKIE);
+    geoLocationMemoryCache.clear();
+    geoLocationCacheRawSnapshot = null;
+}
+
 /**
  * The "Clear stored data" action of the GDPR notice: deletes all preference cookies and
- * their mirrors, empties the in-memory title registry, restores the shipped model and repaints
- * the Classic theme.
+ * their mirrors, empties the in-memory title registry and geo cache, restores the shipped model
+ * and repaints the Classic theme.
  *
  * @example
  * clearStoredPreferences();
@@ -25966,6 +26137,7 @@ function clearStoredPreferences() {
     removePreference(DEMOGRAPHIC_SETTINGS_COOKIE);
     removePreference(COLOR_THEME_COOKIE);
     removePreference(LAST_VIEW_STATE_COOKIE);
+    clearGeoLocationCache();
     sheetTitleRegistry.clear();
     FamilyTreeBuilder.resetDemographicSettings();
     applyColorTheme(DEFAULT_COLOR_THEME_ID);
@@ -28746,7 +28918,7 @@ function setupCanvasTouchListeners({
     const onTouchStart = (e) => {
         if (e.touches.length !== 2) return;
         e.preventDefault();
-        touchPinch = initTouchPinchState(e.touches, cameraRef, onInteract);
+        touchPinch = initTouchPinchState(e.touches, cameraRef);
     };
 
     const onTouchMove = (e) => {
@@ -29129,7 +29301,6 @@ function setupCanvasResizeObserver({
 function useCanvasWheelZoom({ onInteract, containerRef, setCamera, clampCamera, getBounds, getPpy }) {
     return useCallback((e) => {
         if (e.target.closest('.interactive-element')) return;
-        if (onInteract) onInteract();
         
         const cont = containerRef.current ? containerRef.current.getBoundingClientRect() : { left: 0, top: 0 };
         const pointerX = e.clientX - cont.left;
@@ -29148,7 +29319,7 @@ function useCanvasWheelZoom({ onInteract, containerRef, setCamera, clampCamera, 
             });
             return clampCamera(nextCam);
         });
-    }, [clampCamera, getBounds, onInteract, getPpy, setCamera, containerRef]);
+    }, [clampCamera, getBounds, getPpy, setCamera, containerRef]);
 }
 
 /**
@@ -29157,7 +29328,7 @@ function useCanvasWheelZoom({ onInteract, containerRef, setCamera, clampCamera, 
  *
  * @param {object} params
  * @param {React.PointerEvent} params.e - Native pointermove event
- * @param {React.MutableRefObject<Map<number, {x: number, y: number}>>} params.activePointersRef - Active pointers map
+ * @param {React.MutableRefObject<Map<number, {x: number, y: number, startX?: number, startY?: number, moved?: boolean}>>} params.activePointersRef - Active pointers map
  * @param {React.MutableRefObject<object|null>} params.pointerPinchRef - Multi-touch pinch tracking state
  * @param {boolean} params.isDragging - Whether single pointer drag is active
  * @param {{x: number, y: number}} params.dragStart - Drag origin coordinates
@@ -29199,8 +29370,12 @@ function processPointerMove({
     e, activePointersRef, pointerPinchRef, isDragging, dragStart,
     containerRef, getBounds, getPpy, setCamera, clampCamera
 }) {
-    if (!activePointersRef.current.has(e.pointerId)) return;
-    activePointersRef.current.set(e.pointerId, { x: e.clientX, y: e.clientY });
+    const prev = activePointersRef.current.get(e.pointerId);
+    if (!prev) return;
+    const startX = prev.startX !== undefined ? prev.startX : prev.x;
+    const startY = prev.startY !== undefined ? prev.startY : prev.y;
+    const moved = Boolean(prev.moved) || activePointersRef.current.size > 1 || Math.hypot(e.clientX - startX, e.clientY - startY) > 5;
+    activePointersRef.current.set(e.pointerId, { x: e.clientX, y: e.clientY, startX, startY, moved });
 
     if (activePointersRef.current.size === 2 && pointerPinchRef.current && pointerPinchRef.current.dist > 10) {
         const [p1, p2] = Array.from(activePointersRef.current.values());
@@ -29218,15 +29393,17 @@ function processPointerMove({
 
 /**
  * Handles pointer release or cancellation by clearing pointer tracking state,
- * adjusting the active pinch anchor, or ending drag interactions.
+ * adjusting the active pinch anchor, ending drag interactions, and invoking `onInteract`
+ * when a single-pointer click on the empty canvas completes without dragging.
  *
  * @param {object} params
  * @param {React.PointerEvent} params.e - Native pointerup event
- * @param {React.MutableRefObject<Map<number, {x: number, y: number}>>} params.activePointersRef - Active pointers map
+ * @param {React.MutableRefObject<Map<number, {x: number, y: number, startX?: number, startY?: number, moved?: boolean}>>} params.activePointersRef - Active pointers map
  * @param {React.MutableRefObject<object|null>} params.pointerPinchRef - Multi-touch pinch tracking state
  * @param {React.MutableRefObject<object>} params.cameraRef - Current camera coordinates ref
  * @param {Function} params.setDragStart - Setter for drag origin
  * @param {Function} params.setIsDragging - Setter for drag state
+ * @param {Function} [params.onInteract] - Callback invoked on clean background tap/click
  *
  * @example
  * processPointerUp({
@@ -29254,8 +29431,13 @@ function processPointerUp({
     pointerPinchRef,
     cameraRef,
     setDragStart,
-    setIsDragging
+    setIsDragging,
+    onInteract
 }) {
+    const released = activePointersRef.current.get(e.pointerId);
+    const wasCleanTap = Boolean(
+        released && !released.moved && activePointersRef.current.size === 1 && !pointerPinchRef.current
+    );
     activePointersRef.current.delete(e.pointerId);
     try {
         if (e.pointerId && e.currentTarget) {
@@ -29272,6 +29454,7 @@ function processPointerUp({
     } else if (activePointersRef.current.size === 0) {
         setIsDragging(false);
     }
+    if (wasCleanTap && onInteract) onInteract();
 }
 
 /**
@@ -29356,7 +29539,7 @@ function initializePointerGestureState({
  *
  * @param {Object} options
  * @param {PointerEvent} options.e - Native DOM pointer down event.
- * @param {React.MutableRefObject<Map<number, {x: number, y: number}>>} options.activePointersRef - Active pointers tracking ref.
+ * @param {React.MutableRefObject<Map<number, {x: number, y: number, startX?: number, startY?: number, moved?: boolean}>>} options.activePointersRef - Active pointers tracking ref.
  * @param {React.MutableRefObject<Object|null>} options.pointerPinchRef - Multi-touch pinch state ref.
  * @param {React.MutableRefObject<Object>} options.cameraRef - Current camera state ref.
  * @param {Function} options.setIsDragging - State setter for isDragging boolean.
@@ -29390,8 +29573,7 @@ function processPointerDown({
     pointerPinchRef,
     cameraRef,
     setIsDragging,
-    setDragStart,
-    onInteract
+    setDragStart
 }) {
     if (shouldIgnorePointerDown(e, activePointersRef.current.size)) return;
 
@@ -29399,7 +29581,19 @@ function processPointerDown({
         e.currentTarget.setPointerCapture(e.pointerId);
     } catch (err) {}
 
-    activePointersRef.current.set(e.pointerId, { x: e.clientX, y: e.clientY });
+    const isMultiPointer = activePointersRef.current.size >= 1;
+    if (isMultiPointer) {
+        activePointersRef.current.forEach((val, key) => {
+            activePointersRef.current.set(key, { ...val, moved: true });
+        });
+    }
+    activePointersRef.current.set(e.pointerId, {
+        x: e.clientX,
+        y: e.clientY,
+        startX: e.clientX,
+        startY: e.clientY,
+        moved: isMultiPointer
+    });
 
     initializePointerGestureState({
         e,
@@ -29409,8 +29603,6 @@ function processPointerDown({
         setIsDragging,
         setDragStart
     });
-
-    if (onInteract) onInteract();
 }
 
 /**
@@ -29445,9 +29637,9 @@ function useCanvasPointerCallbacks({
     const handlePointerDown = useCallback((e) => {
         processPointerDown({
             e, activePointersRef, pointerPinchRef, cameraRef,
-            setIsDragging, setDragStart, onInteract
+            setIsDragging, setDragStart
         });
-    }, [onInteract, cameraRef]);
+    }, [cameraRef]);
     
     const handlePointerMove = useCallback((e) => {
         processPointerMove({
@@ -29458,9 +29650,9 @@ function useCanvasPointerCallbacks({
     
     const handlePointerUp = useCallback((e) => {
         processPointerUp({
-            e, activePointersRef, pointerPinchRef, cameraRef, setDragStart, setIsDragging
+            e, activePointersRef, pointerPinchRef, cameraRef, setDragStart, setIsDragging, onInteract
         });
-    }, [cameraRef]);
+    }, [cameraRef, onInteract]);
 
     return { handlePointerDown, handlePointerMove, handlePointerUp };
 }
@@ -35127,7 +35319,7 @@ const LOCATION_GEO_HIERARCHY = {
         'India.Kerala.Ernakulam': [
             'ernakulam', 'vaitila', 'vyttila', 'cochin', 'kochi', 'kaloor',
             'വൈപ്പിൻ, കണക്കൻകടവ്', 'vypin', 'അങ്കമാലി', 'angamaly', 'angamali',
-            'kootappuzha', 'kalamassery', 'aluva', 'edappally', 'kakkanad',
+            'kootappuzha', 'kalamassery', 'aluva', 'edappally', 'edappilly', 'kakkanad',
             'maradu', 'mattancherry', 'north paravur', 'palarivattom',
             'panampilly nagar', 'perumbavoor', 'thevara', 'tripunithura',
             'varapuzha', 'champannoor', 'champannur', 'thoppumpadi', 'thoppumpady'
@@ -35141,13 +35333,14 @@ const LOCATION_GEO_HIERARCHY = {
             'velliyamattom', 'velliyaamattam', 'idukki', 'thodupuzha'
         ],
         'India.Kerala.Palakkad': [
-            'palakkad', 'palghat', 'shoranur', 'ottapalam', 'alathur'
+            'palakkad', 'palghat', 'shoranur', 'ottapalam', 'alathur',
+            'vadakkanjeri', 'vadakkanchery', 'vadakkenchery', 'vadakkencherry'
         ],
         'India.Kerala.Kozhikode': ['calicut', 'kozhikode'],
         'India.Kerala.Kannur': ['kannur'],
         'India.Kerala.Kollam': ['kollam'],
         'India.Kerala.Alappuzha': ['alappuzha', 'alleppey'],
-        'India.Kerala.Thiruvananthapuram': ['trivandrum', 'thiruvananthapuram'],
+        'India.Kerala.Thiruvananthapuram': ['trivandrum', 'thiruvananthapuram', 'tvm'],
         'India.Kerala.Kerala': ['kerala'],
         'India.Karnataka.': ['bangalore', 'bengaluru', 'mangalore', 'mysore'],
         'India.Tamil Nadu.': [
@@ -35250,6 +35443,32 @@ const _matchSortedGeoEntries = (norm) => {
 };
 
 /**
+ * Checks the persisted browser geocoding cache (`ft_geo_cache`) for a place's hierarchy metadata.
+ *
+ * @param {string} norm - Normalized location name
+ * @param {Array<string>} tokens - Comma/slash delimited sub-tokens
+ * @returns {{ country: string, state: string|null, district: string|null }|null}
+ *
+ * @example
+ * _matchCachedGeoHierarchy('edappilly', ['edappilly']);
+ * // => { country: 'India', state: 'Kerala', district: 'Ernakulam' } (when cached)
+ *
+ * @example
+ * _matchCachedGeoHierarchy('unknown', ['unknown']);
+ * // => null
+ */
+const _matchCachedGeoHierarchy = (norm, tokens) => {
+    if (typeof getCachedGeoLocation !== 'function') return null;
+    for (const candidate of [norm, ...(tokens || [])]) {
+        const cached = getCachedGeoLocation(candidate);
+        if (cached && cached.country && cached.country !== 'Other') {
+            return { country: cached.country, state: cached.state || null, district: cached.district || null };
+        }
+    }
+    return null;
+};
+
+/**
  * Resolves country, state, and district metadata for a given location string.
  * 
  * @param {string} place - Raw location name (e.g. "Thrissur", "San Jose, California")
@@ -35268,13 +35487,14 @@ const resolvePlaceHierarchy = (place) => {
     const norm = place.toLowerCase().trim();
     if (LOCATION_GEO_HIERARCHY[norm]) return LOCATION_GEO_HIERARCHY[norm];
 
-    // Check individual comma/slash separated tokens first
     const tokens = norm.split(/[,/]/).map(s => s.trim()).filter(Boolean);
     for (const token of tokens) {
         if (LOCATION_GEO_HIERARCHY[token]) return LOCATION_GEO_HIERARCHY[token];
     }
 
-    // Trie spatial lookup supporting phonetic transliteration and prefix matching
+    const cachedMatch = _matchCachedGeoHierarchy(norm, tokens);
+    if (cachedMatch) return cachedMatch;
+
     const trie = FamilyTreeBuilder.getGeoTrie(LOCATION_GEO_HIERARCHY);
     const trieMatch = _matchGeoTrie(trie, norm, tokens);
     if (trieMatch) return trieMatch;
@@ -38093,6 +38313,7 @@ const PRE_GEOCODED_LOCATIONS = {
     'kalamassery': [10.0550, 76.3150],
     'palarivattom': [10.0050, 76.3100],
     'edappally': [10.0250, 76.3080],
+    'edappilly': [10.0250, 76.3080],
     'kakkanad': [10.0150, 76.3450],
     'tripunithura': [9.9500, 76.3450],
     'maradu': [9.9350, 76.3250],
@@ -38123,9 +38344,13 @@ const PRE_GEOCODED_LOCATIONS = {
     'shoranur': [10.7600, 76.2800],
     'ottapalam': [10.7700, 76.3800],
     'alathur': [10.6400, 76.5400],
+    'vadakkanjeri': [10.5900, 76.4900],
+    'vadakkanchery': [10.5900, 76.4900],
+    'vadakkenchery': [10.5900, 76.4900],
     'vadakkencherry': [10.5900, 76.4900],
     'trivandrum': [8.5241, 76.9366],
     'thiruvananthapuram': [8.5241, 76.9366],
+    'tvm': [8.5241, 76.9366],
     'kozhikode': [11.2588, 75.7804],
     'calicut': [11.2588, 75.7804],
     'kannur': [11.8745, 75.3704],
@@ -38241,27 +38466,301 @@ const PRE_GEOCODED_LOCATIONS = {
 };
 
 /**
- * Resolves geographic coordinates [latitude, longitude] for a known place name.
+ * Resolves geographic coordinates `[latitude, longitude]` for a place name, checking
+ * `PRE_GEOCODED_LOCATIONS`, the persisted browser geocoding cache (`ft_geo_cache`),
+ * comma/slash sub-tokens, and safe `>= 3`-character substring fallbacks.
  * 
  * @param {string} place - Location name or address string
  * @returns {[number, number] | null} Coordinate pair or null if unresolved
  * 
  * @example
- * resolveLocationCoords('Thrissur');
- * // => [10.5276, 76.2144]
+ * resolveLocationCoords('Edappilly');
+ * // => [10.025, 76.308]
  * 
  * @example
  * resolveLocationCoords('Unknown Place');
  * // => null
  */
 const resolveLocationCoords = (place) => {
-    if (!place) return null;
+    if (!place || typeof place !== 'string') return null;
     const norm = place.toLowerCase().trim();
+    if (!norm) return null;
     if (PRE_GEOCODED_LOCATIONS[norm]) return PRE_GEOCODED_LOCATIONS[norm];
-    const foundKey = Object.keys(PRE_GEOCODED_LOCATIONS).find(k => norm.includes(k) || k.includes(norm));
+    if (typeof getCachedGeoLocation === 'function') {
+        const cached = getCachedGeoLocation(norm);
+        if (cached && Array.isArray(cached.coords)) return cached.coords;
+    }
+    const tokens = norm.split(/[,/]/).map(s => s.trim()).filter(Boolean);
+    for (const tok of tokens) {
+        if (PRE_GEOCODED_LOCATIONS[tok]) return PRE_GEOCODED_LOCATIONS[tok];
+        if (typeof getCachedGeoLocation === 'function') {
+            const tokCached = getCachedGeoLocation(tok);
+            if (tokCached && Array.isArray(tokCached.coords)) return tokCached.coords;
+        }
+    }
+    const foundKey = Object.keys(PRE_GEOCODED_LOCATIONS).find(
+        k => k.length >= 3 && (norm.includes(k) || (norm.length >= 3 && k.includes(norm)))
+    );
     if (foundKey) return PRE_GEOCODED_LOCATIONS[foundKey];
     return null;
 };
+
+// ─── Background public geocoding lookup service (OpenStreetMap Nominatim) ───
+
+/** Set of location keys already attempted in this browser session so we never re-query them. */
+const attemptedBackgroundGeocodes = new Set();
+/** Monotonic counter bumped whenever background geocoding caches a new location. */
+let backgroundGeocodeRevision = 0;
+const backgroundGeocodeListeners = new Set();
+
+/**
+ * Notifies subscribed hooks (`useQuickDirectoryData`, `useLeafletMap`) that a new location
+ * was geocoded in the background.
+ *
+ * @returns {number} New revision counter
+ *
+ * @example
+ * notifyBackgroundGeocodeUpdate(); // => 1
+ *
+ * @example
+ * notifyBackgroundGeocodeUpdate(); // => 2
+ */
+function notifyBackgroundGeocodeUpdate() {
+    backgroundGeocodeRevision += 1;
+    backgroundGeocodeListeners.forEach((fn) => {
+        try { fn(backgroundGeocodeRevision); } catch (e) {}
+    });
+    return backgroundGeocodeRevision;
+}
+
+/**
+ * Extracts normalized `{ coords: [lat, lng], country, state, district }` from one OpenStreetMap
+ * Nominatim JSON search item.
+ *
+ * @param {Object} item - One element of the Nominatim JSON array response
+ * @returns {{coords: [number, number], country: string|null, state: string|null, district: string|null}|null}
+ *
+ * @example
+ * parseNominatimGeoResult({ lat: '10.025', lon: '76.308', address: { country: 'India', state: 'Kerala', state_district: 'Ernakulam District' } });
+ * // => { coords: [10.025, 76.308], country: 'India', state: 'Kerala', district: 'Ernakulam' }
+ *
+ * @example
+ * parseNominatimGeoResult(null);
+ * // => null
+ */
+function parseNominatimGeoResult(item) {
+    if (!item || typeof item !== 'object') return null;
+    const lat = parseFloat(item.lat);
+    const lng = parseFloat(item.lon);
+    if (!Number.isFinite(lat) || !Number.isFinite(lng)) return null;
+    const addr = item.address || {};
+    const rawDistrict = addr.state_district || addr.county || addr.city_district || null;
+    const cleanDistrict = rawDistrict ? String(rawDistrict).replace(/\s+district$/i, '').trim() : null;
+    return {
+        coords: [Math.round(lat * 10000) / 10000, Math.round(lng * 10000) / 10000],
+        country: addr.country ? String(addr.country).trim() : null,
+        state: addr.state ? String(addr.state).trim() : null,
+        district: cleanDistrict || null
+    };
+}
+
+/**
+ * Stores a geocoded location into the browser cookie/localStorage cache (`ft_geo_cache`) AND
+ * registers it in the live `PRE_GEOCODED_LOCATIONS` and `LOCATION_GEO_HIERARCHY` tables.
+ *
+ * @param {string} place - Location string
+ * @param {Object} resolved - `{ coords: [lat, lng], country?, state?, district? }`
+ * @returns {{coords: [number, number], country: string|null, state: string|null, district: string|null}|null}
+ *
+ * @example
+ * cacheResolvedGeoLocation('Edappilly', { coords: [10.025, 76.308], country: 'India', state: 'Kerala', district: 'Ernakulam' });
+ * resolveLocationCoords('Edappilly'); // => [10.025, 76.308]
+ *
+ * @example
+ * cacheResolvedGeoLocation('', null); // => null
+ */
+function cacheResolvedGeoLocation(place, resolved) {
+    if (!place || typeof place !== 'string' || !resolved || !Array.isArray(resolved.coords)) return null;
+    const norm = place.toLowerCase().trim();
+    if (!norm) return null;
+    const saved = typeof saveCachedGeoLocation === 'function'
+        ? saveCachedGeoLocation(norm, resolved)
+        : resolved;
+    if (!saved) return null;
+    PRE_GEOCODED_LOCATIONS[norm] = saved.coords;
+    if (saved.country && saved.country !== 'Other' && typeof LOCATION_GEO_HIERARCHY === 'object') {
+        LOCATION_GEO_HIERARCHY[norm] = {
+            country: saved.country,
+            state: saved.state || null,
+            district: saved.district || null
+        };
+    }
+    notifyBackgroundGeocodeUpdate();
+    return saved;
+}
+
+/**
+ * Hydrates all previously cached browser locations from `ft_geo_cache` into the live
+ * `PRE_GEOCODED_LOCATIONS` and `LOCATION_GEO_HIERARCHY` lookup tables.
+ *
+ * @returns {number} Count of hydrated locations
+ *
+ * @example
+ * hydrateCachedGeoLocations(); // => 0 (when cache is empty)
+ *
+ * @example
+ * saveCachedGeoLocation('Kakkanad', { coords: [10.015, 76.345], country: 'India', state: 'Kerala', district: 'Ernakulam' });
+ * hydrateCachedGeoLocations(); // => 1
+ */
+function hydrateCachedGeoLocations() {
+    if (typeof loadGeoLocationCache !== 'function') return 0;
+    const cached = loadGeoLocationCache();
+    let count = 0;
+    for (const [norm, entry] of Object.entries(cached)) {
+        if (!entry || !Array.isArray(entry.coords)) continue;
+        PRE_GEOCODED_LOCATIONS[norm] = entry.coords;
+        if (entry.country && entry.country !== 'Other' && typeof LOCATION_GEO_HIERARCHY === 'object' && !LOCATION_GEO_HIERARCHY[norm]) {
+            LOCATION_GEO_HIERARCHY[norm] = {
+                country: entry.country,
+                state: entry.state || null,
+                district: entry.district || null
+            };
+        }
+        count += 1;
+    }
+    return count;
+}
+
+/**
+ * Collects unique location strings in `tree` that do not yet have resolved map coordinates
+ * or geographic hierarchy metadata.
+ *
+ * @param {FamilyTree|Object} tree - Family tree instance
+ * @returns {Array<string>} Unique unresolved location strings
+ *
+ * @example
+ * findUnresolvedTreePlaces({ people: new Map([['1', { place: 'Thrissur' }]]) });
+ * // => []
+ *
+ * @example
+ * findUnresolvedTreePlaces({ people: new Map([['1', { place: 'Kanjiramattom' }]]) });
+ * // => ['Kanjiramattom']
+ */
+function findUnresolvedTreePlaces(tree) {
+    hydrateCachedGeoLocations();
+    const people = tree?.people instanceof Map
+        ? Array.from(tree.people.values())
+        : Object.values(tree?.people || {});
+    const unresolved = [];
+    const seen = new Set();
+    for (const person of people) {
+        if (!person || !person.place) continue;
+        const places = String(person.place).split(';').map(s => s.trim()).filter(Boolean);
+        for (const p of places) {
+            if (FamilyTreeBuilder.isInvalidLocation(p)) continue;
+            const norm = p.toLowerCase();
+            if (seen.has(norm) || attemptedBackgroundGeocodes.has(norm)) continue;
+            seen.add(norm);
+            if (!resolveLocationCoords(p)) unresolved.push(p);
+        }
+    }
+    return unresolved;
+}
+
+/**
+ * Queries the public OpenStreetMap Nominatim geocoding API for `place`, caches the result in
+ * the browser (`ft_geo_cache`), and updates the live coordinate/hierarchy tables.
+ *
+ * @param {string} place - Location string to look up
+ * @param {Function} [fetchImpl] - Optional `fetch` implementation (defaults to `globalThis.fetch`)
+ * @returns {Promise<{coords: [number, number], country: string|null, state: string|null, district: string|null}|null>}
+ *
+ * @example
+ * await fetchPublicGeoLocation('Edappilly', async () => ({
+ *   ok: true,
+ *   json: async () => ([{ lat: '10.025', lon: '76.308', address: { country: 'India', state: 'Kerala', state_district: 'Ernakulam District' } }])
+ * }));
+ * // => { coords: [10.025, 76.308], country: 'India', state: 'Kerala', district: 'Ernakulam' }
+ *
+ * @example
+ * await fetchPublicGeoLocation('', async () => ({ ok: false }));
+ * // => null
+ */
+async function fetchPublicGeoLocation(place, fetchImpl = typeof fetch === 'function' ? fetch : null) {
+    if (!place || typeof place !== 'string' || !fetchImpl) return null;
+    const norm = place.toLowerCase().trim();
+    if (!norm) return null;
+    attemptedBackgroundGeocodes.add(norm);
+    const queries = norm.includes(',') ? [place.trim()] : [place.trim(), `${place.trim()}, Kerala, India`];
+    for (const q of queries) {
+        try {
+            const url = `https://nominatim.openstreetmap.org/search?format=json&limit=1&addressdetails=1&accept-language=en&q=${encodeURIComponent(q)}`;
+            const res = await fetchImpl(url, { headers: { Accept: 'application/json' } });
+            if (!res || !res.ok) continue;
+            const data = await res.json();
+            const parsed = Array.isArray(data) && data.length > 0 ? parseNominatimGeoResult(data[0]) : null;
+            if (parsed) return cacheResolvedGeoLocation(place, parsed);
+        } catch (e) {
+            return null;
+        }
+    }
+    return null;
+}
+
+/**
+ * React hook that subscribes to background geocoding updates so directory and map views
+ * automatically refresh when a background lookup finishes.
+ *
+ * @returns {number} Current background geocode revision counter
+ *
+ * @example
+ * const geoRev = useBackgroundGeocodeRevision();
+ *
+ * @example
+ * useMemo(() => computePlaceGroups(tree), [tree, geoRev]);
+ */
+function useBackgroundGeocodeRevision() {
+    const [rev, setRev] = useState(backgroundGeocodeRevision);
+    useEffect(() => {
+        const listener = (nextRev) => setRev(nextRev);
+        backgroundGeocodeListeners.add(listener);
+        return () => { backgroundGeocodeListeners.delete(listener); };
+    }, []);
+    return rev;
+}
+
+/**
+ * Background hook that resolves any unknown locations in `tree` asynchronously while the user
+ * browses, storing coordinates and hierarchies in the browser cookie/localStorage (`ft_geo_cache`)
+ * so the map and Places directory display them with zero perceived lag.
+ *
+ * @param {FamilyTree|Object} tree - Active family tree dataset
+ *
+ * @example
+ * useBackgroundGeocoder(tree);
+ *
+ * @example
+ * useBackgroundGeocoder(null);
+ */
+function useBackgroundGeocoder(tree) {
+    useEffect(() => {
+        hydrateCachedGeoLocations();
+        const unresolved = findUnresolvedTreePlaces(tree);
+        if (unresolved.length === 0) return;
+        let cancelled = false;
+        let timerId = null;
+        const step = (idx) => {
+            if (cancelled || idx >= unresolved.length) return;
+            fetchPublicGeoLocation(unresolved[idx]).finally(() => {
+                if (!cancelled && idx + 1 < unresolved.length) {
+                    timerId = setTimeout(() => step(idx + 1), 1100);
+                }
+            });
+        };
+        timerId = setTimeout(() => step(0), 300);
+        return () => { cancelled = true; if (timerId) clearTimeout(timerId); };
+    }, [tree]);
+}
 
 const LOCATION_ZOOM_LEVELS = {
     // Countries: wide country-level overview
@@ -40778,12 +41277,13 @@ function createDirectorySelectionHandlers({ onFilterBy, onFlyToLocation, onFlyTo
  * });
  */
 function useDirectoryGroupData({ tree, currentTab, searchQuery }) {
-    const placeGroups = useMemo(() => computePlaceGroups(tree), [tree]);
+    const geoRev = useBackgroundGeocodeRevision();
+    const placeGroups = useMemo(() => computePlaceGroups(tree), [tree, geoRev]);
 
     const locationHierarchyTree = useMemo(() => {
         const q = (currentTab === 'place' ? searchQuery : '').toLowerCase().trim();
         return buildLocationHierarchy(placeGroups, q);
-    }, [placeGroups, searchQuery, currentTab]);
+    }, [placeGroups, searchQuery, currentTab, geoRev]);
 
     const jobGroups = useMemo(() => {
         const q = (currentTab === 'job' ? searchQuery : '').toLowerCase().trim();
@@ -41155,20 +41655,22 @@ const ensureLeafletStyles = () => {
 };
 
 /**
- * Generates inline HTML markup for a Leaflet custom location pin marker.
+ * Generates inline HTML markup for a Leaflet custom location pill marker.
+ * Uses `display:inline-flex;width:max-content` so the pill never collapses inside
+ * Leaflet's `0×0` `divIcon` wrapper and stays centered at the exact coordinate.
  *
- * @param {string} place - The location label to display on the marker pin
+ * @param {string} place - The location label to display on the marker pill
  * @param {number} count - The count of individuals associated with this location
  * @param {boolean} isSelected - Whether this marker represents the currently active filter
- * @returns {string} HTML string representing the styled marker bubble
+ * @returns {string} HTML string representing the styled marker pill
  *
  * @example
  * _buildMapMarkerHtml('Kochi', 42, true)
- * // => '<div style="display:flex;align-items:center;...background:#e11d48...<span>📍 Kochi</span>...'
+ * // => '<div style="display:inline-flex;width:max-content;align-items:center;...background:#e11d48...<span>Kochi</span>...'
  *
  * @example
  * _buildMapMarkerHtml('Thrissur', 15, false)
- * // => '<div style="display:flex;align-items:center;...background:#2563eb...<span>📍 Thrissur</span>...'
+ * // => '<div style="display:inline-flex;width:max-content;align-items:center;...background:#2563eb...<span>Thrissur</span>...'
  */
 function _buildMapMarkerHtml(place, count, isSelected) {
     const bg = isSelected ? '#e11d48' : '#2563eb';
@@ -41177,9 +41679,9 @@ function _buildMapMarkerHtml(place, count, isSelected) {
         ? '0 0 0 4px rgba(225,29,72,0.3), 0 6px 18px rgba(0,0,0,0.35)'
         : '0 4px 14px rgba(0,0,0,0.3)';
     return `
-            <div style="display:flex;align-items:center;justify-content:center;background:${bg};color:white;border-radius:9999px;padding:${padding};font-size:11.5px;font-weight:bold;box-shadow:${shadow};border:2px solid white;white-space:nowrap;cursor:pointer;transform:translate(-50%, -50%);transition:all 0.2s ease;">
-                <span>📍 ${place}</span>
-                <span style="background:rgba(255,255,255,0.28);border-radius:9999px;padding:0.5px 5px;margin-left:4px;font-size:10px;">${count}</span>
+            <div style="display:inline-flex;width:max-content;align-items:center;justify-content:center;background:${bg};color:white;border-radius:9999px;padding:${padding};font-size:11.5px;font-weight:bold;box-shadow:${shadow};border:2px solid white;white-space:nowrap;cursor:pointer;transform:translate(-50%, -50%);transition:all 0.2s ease;">
+                <span>${place}</span>
+                <span style="background:rgba(255,255,255,0.28);border-radius:9999px;padding:0.5px 5px;margin-left:5px;font-size:10px;">${count}</span>
             </div>
         `;
 }
@@ -41284,13 +41786,16 @@ function createAndBindMapMarkers({ L, map, placeGroups, activePlaceName, onFilte
 }
 
 /**
- * Refreshes custom HTML divIcons for existing markers to reflect selection states and counts.
+ * Refreshes custom HTML divIcons for existing markers (and attaches markers for any locations
+ * resolved asynchronously in the background) to reflect selection states and counts.
  *
  * @param {Object} options
  * @param {Object} options.L - Global Leaflet namespace.
- * @param {Array<{ place: string, marker: Object }>} options.markers - Active marker entries.
+ * @param {Object} [options.map] - Active Leaflet map instance.
+ * @param {Array<{ place: string, coords?: [number, number], marker: Object }>} options.markers - Active marker entries.
  * @param {Array<{ place: string, count: number }>} options.placeGroups - Place counts.
  * @param {string|null} options.activePlaceName - Selected location name.
+ * @param {Function} [options.onFilterBy] - Filter callback when a newly added marker is clicked.
  *
  * @example
  * updateMarkerIcons({ L: window.L, markers, placeGroups, activePlaceName: 'Thrissur' });
@@ -41298,11 +41803,19 @@ function createAndBindMapMarkers({ L, map, placeGroups, activePlaceName, onFilte
  * @example
  * updateMarkerIcons({ L: null, markers: [] });
  */
-function updateMarkerIcons({ L, markers, placeGroups, activePlaceName }) {
+function updateMarkerIcons({ L, map, markers, placeGroups, activePlaceName, onFilterBy }) {
     if (!L || !markers) return;
+    if (map && Array.isArray(placeGroups)) {
+        const existing = new Set(markers.map(m => m.place.toLowerCase().trim()));
+        const missing = placeGroups.filter(g => !existing.has(g.place.toLowerCase().trim()) && resolveLocationCoords(g.place));
+        if (missing.length > 0) {
+            const added = createAndBindMapMarkers({ L, map, placeGroups: missing, activePlaceName, onFilterBy: onFilterBy || (() => {}) });
+            markers.push(...added.markers);
+        }
+    }
     markers.forEach(({ place, marker }) => {
         const isSelected = activePlaceName && activePlaceName.toLowerCase().trim() === place.toLowerCase().trim();
-        const count = placeGroups.find(g => g.place === place)?.count || 0;
+        const count = (placeGroups || []).find(g => g.place === place)?.count || 0;
         marker.setIcon(createMapMarkerIcon(L, place, count, isSelected));
     });
 }
@@ -41554,6 +42067,8 @@ function useLeafletMapInitializer({
  * @param {boolean} params.showMap - Whether map is visible
  * @param {number} params.sidebarWidth - Width of details sidebar
  * @param {boolean} params.isSidebarVisible - Whether sidebar is shown
+ * @param {Function} [params.onFilterBy] - Callback invoked when clicking a marker
+ * @param {number} [params.geoRev] - Background geocoder revision counter
  *
  * @example
  * useLeafletMarkerSync({
@@ -41579,15 +42094,18 @@ function useLeafletMapInitializer({
  */
 function useLeafletMarkerSync({
     mapInstanceRef, markersRef, placeGroups,
-    activePlaceName, showMap, sidebarWidth, isSidebarVisible
+    activePlaceName, showMap, sidebarWidth, isSidebarVisible, onFilterBy, geoRev
 }) {
     useEffect(() => {
         if (!mapInstanceRef.current || !window.L) return;
-        updateMarkerIcons({ L: window.L, markers: markersRef.current, placeGroups, activePlaceName });
+        updateMarkerIcons({
+            L: window.L, map: mapInstanceRef.current, markers: markersRef.current,
+            placeGroups, activePlaceName, onFilterBy
+        });
         if (activePlaceName && showMap) {
             flyMapToPlace(mapInstanceRef.current, markersRef.current, activePlaceName);
         }
-    }, [activePlaceName, placeGroups, showMap, mapInstanceRef, markersRef]);
+    }, [activePlaceName, placeGroups, showMap, mapInstanceRef, markersRef, onFilterBy, geoRev]);
 
     useEffect(() => {
         if (mapInstanceRef.current && showMap) {
@@ -41636,9 +42154,10 @@ function useLeafletMap({ tree, activeFilter, onFilterBy, showMap, sidebarWidth, 
     const mapContainerRef = useRef(null);
     const mapInstanceRef = useRef(null);
     const markersRef = useRef([]);
+    const geoRev = useBackgroundGeocodeRevision();
 
     const { activePlaceName } = useMapActivePlaceTracking({ activeFilter, showMap, onFilterBy });
-    const placeGroups = useMemo(() => computePlaceGroups(tree), [tree]);
+    const placeGroups = useMemo(() => computePlaceGroups(tree), [tree, geoRev]);
 
     useLeafletMapInitializer({
         showMap, placeGroups, activePlaceName, onFilterBy,
@@ -41647,7 +42166,7 @@ function useLeafletMap({ tree, activeFilter, onFilterBy, showMap, sidebarWidth, 
 
     useLeafletMarkerSync({
         mapInstanceRef, markersRef, placeGroups, activePlaceName,
-        showMap, sidebarWidth, isSidebarVisible
+        showMap, sidebarWidth, isSidebarVisible, onFilterBy, geoRev
     });
 
     return { mapContainerRef, mapInstanceRef, markersRef, activePlaceName, placeGroups };
@@ -44088,11 +44607,6 @@ const ButtonDocTooltipOverlay = () => {
 const ZoomControls = ({ setCamera, clampCamera, centerOnPerson, fitToScreen, focusId, rootId, setIsSidebarVisible, closeAllPanels }) => {
     const handleZoom = (delta) => {
         setCamera(cam => clampCamera({ ...cam, z: cam.z + delta }));
-        if (closeAllPanels) {
-            closeAllPanels();
-        } else {
-            setIsSidebarVisible(false);
-        }
     };
 
     return (
@@ -48012,9 +48526,8 @@ function useAppCanvasViewportManager({
     });
 
     const handleFitToScreen = useCallback(() => {
-        closeAllPanels();
         canvas.fitToScreen(true);
-    }, [closeAllPanels, canvas.fitToScreen]);
+    }, [canvas.fitToScreen]);
 
     return {
         ...canvas,
@@ -50792,11 +51305,11 @@ const SETTINGS_FAB_ACTIONS = Object.freeze([
 /** Tooltip of the main FAB button (also the key of its documentation card). */
 const SETTINGS_FAB_TITLE = 'Settings: theme, deduction rules, stored data';
 
-/** Distance (px) from the FAB centre to each action centre for a compact 3-item fan. */
+/** Distance (px) from the FAB centre to each action centre on the inner 3-button arc. */
 const SETTINGS_FAB_RADIUS = 84;
 
-/** Distance (px) from the FAB centre to each action centre when all tree actions are shown. */
-const SETTINGS_FAB_EXPANDED_RADIUS = 188;
+/** Distance (px) from the FAB centre to each action centre on the outer arc. */
+const SETTINGS_FAB_EXPANDED_RADIUS = 148;
 
 /**
  * Evenly spreads `count` items along an arc and returns their pixel offsets from the hub.
@@ -50835,8 +51348,9 @@ function computeRadialMenuOffsets(count, radius = SETTINGS_FAB_RADIUS, startDeg 
 }
 
 /**
- * Chooses the arc radius and angle span for `count` radial items so neither buttons nor the
- * viewport edges collide when the full 8-item toolbar is expanded.
+ * Arranges `count` radial items across two concentric quarter-circle arcs (90°→180°):
+ * up to 3 buttons sit on the inner arc (`SETTINGS_FAB_RADIUS`) and any remaining buttons
+ * fan along the outer arc (`SETTINGS_FAB_EXPANDED_RADIUS`).
  *
  * @param {number} count - Number of visible radial items
  * @returns {Array<{x: number, y: number}>} Offsets from the hub centre
@@ -50847,11 +51361,14 @@ function computeRadialMenuOffsets(count, radius = SETTINGS_FAB_RADIUS, startDeg 
  *
  * @example
  * resolveRadialFabOffsets(8).length;
- * // => 8
+ * // => 8 (3 on the inner arc + 5 on the outer arc)
  */
 function resolveRadialFabOffsets(count) {
-    if (count <= 3) return computeRadialMenuOffsets(count, SETTINGS_FAB_RADIUS, 90, 180);
-    return computeRadialMenuOffsets(count, SETTINGS_FAB_EXPANDED_RADIUS, 83, 187);
+    const n = Math.max(0, Math.floor(count));
+    if (n <= 3) return computeRadialMenuOffsets(n, SETTINGS_FAB_RADIUS, 90, 180);
+    const inner = computeRadialMenuOffsets(3, SETTINGS_FAB_RADIUS, 90, 180);
+    const outer = computeRadialMenuOffsets(n - 3, SETTINGS_FAB_EXPANDED_RADIUS, 90, 180);
+    return [...inner, ...outer];
 }
 
 /**
@@ -51499,6 +52016,7 @@ function useAppViewModel() {
         ...core, ...viewport, ...focusNav
     });
     useUrlViewStateSync({ ...core, ...viewport, ...focusNav });
+    useBackgroundGeocoder(core.tree);
     const applyDemographicSettingsDraft = useDemographicSettingsApply({
         sheetUrl: core.sheetUrl, setTree: core.setTree, appendLog: core.appendLog,
         fetchFromUrl: core.fetchFromUrl, setIsSettingsOpen: core.setIsSettingsOpen

@@ -105,6 +105,7 @@ const PRE_GEOCODED_LOCATIONS = {
     'kalamassery': [10.0550, 76.3150],
     'palarivattom': [10.0050, 76.3100],
     'edappally': [10.0250, 76.3080],
+    'edappilly': [10.0250, 76.3080],
     'kakkanad': [10.0150, 76.3450],
     'tripunithura': [9.9500, 76.3450],
     'maradu': [9.9350, 76.3250],
@@ -135,9 +136,13 @@ const PRE_GEOCODED_LOCATIONS = {
     'shoranur': [10.7600, 76.2800],
     'ottapalam': [10.7700, 76.3800],
     'alathur': [10.6400, 76.5400],
+    'vadakkanjeri': [10.5900, 76.4900],
+    'vadakkanchery': [10.5900, 76.4900],
+    'vadakkenchery': [10.5900, 76.4900],
     'vadakkencherry': [10.5900, 76.4900],
     'trivandrum': [8.5241, 76.9366],
     'thiruvananthapuram': [8.5241, 76.9366],
+    'tvm': [8.5241, 76.9366],
     'kozhikode': [11.2588, 75.7804],
     'calicut': [11.2588, 75.7804],
     'kannur': [11.8745, 75.3704],
@@ -253,27 +258,301 @@ const PRE_GEOCODED_LOCATIONS = {
 };
 
 /**
- * Resolves geographic coordinates [latitude, longitude] for a known place name.
+ * Resolves geographic coordinates `[latitude, longitude]` for a place name, checking
+ * `PRE_GEOCODED_LOCATIONS`, the persisted browser geocoding cache (`ft_geo_cache`),
+ * comma/slash sub-tokens, and safe `>= 3`-character substring fallbacks.
  * 
  * @param {string} place - Location name or address string
  * @returns {[number, number] | null} Coordinate pair or null if unresolved
  * 
  * @example
- * resolveLocationCoords('Thrissur');
- * // => [10.5276, 76.2144]
+ * resolveLocationCoords('Edappilly');
+ * // => [10.025, 76.308]
  * 
  * @example
  * resolveLocationCoords('Unknown Place');
  * // => null
  */
 const resolveLocationCoords = (place) => {
-    if (!place) return null;
+    if (!place || typeof place !== 'string') return null;
     const norm = place.toLowerCase().trim();
+    if (!norm) return null;
     if (PRE_GEOCODED_LOCATIONS[norm]) return PRE_GEOCODED_LOCATIONS[norm];
-    const foundKey = Object.keys(PRE_GEOCODED_LOCATIONS).find(k => norm.includes(k) || k.includes(norm));
+    if (typeof getCachedGeoLocation === 'function') {
+        const cached = getCachedGeoLocation(norm);
+        if (cached && Array.isArray(cached.coords)) return cached.coords;
+    }
+    const tokens = norm.split(/[,/]/).map(s => s.trim()).filter(Boolean);
+    for (const tok of tokens) {
+        if (PRE_GEOCODED_LOCATIONS[tok]) return PRE_GEOCODED_LOCATIONS[tok];
+        if (typeof getCachedGeoLocation === 'function') {
+            const tokCached = getCachedGeoLocation(tok);
+            if (tokCached && Array.isArray(tokCached.coords)) return tokCached.coords;
+        }
+    }
+    const foundKey = Object.keys(PRE_GEOCODED_LOCATIONS).find(
+        k => k.length >= 3 && (norm.includes(k) || (norm.length >= 3 && k.includes(norm)))
+    );
     if (foundKey) return PRE_GEOCODED_LOCATIONS[foundKey];
     return null;
 };
+
+// ─── Background public geocoding lookup service (OpenStreetMap Nominatim) ───
+
+/** Set of location keys already attempted in this browser session so we never re-query them. */
+const attemptedBackgroundGeocodes = new Set();
+/** Monotonic counter bumped whenever background geocoding caches a new location. */
+let backgroundGeocodeRevision = 0;
+const backgroundGeocodeListeners = new Set();
+
+/**
+ * Notifies subscribed hooks (`useQuickDirectoryData`, `useLeafletMap`) that a new location
+ * was geocoded in the background.
+ *
+ * @returns {number} New revision counter
+ *
+ * @example
+ * notifyBackgroundGeocodeUpdate(); // => 1
+ *
+ * @example
+ * notifyBackgroundGeocodeUpdate(); // => 2
+ */
+function notifyBackgroundGeocodeUpdate() {
+    backgroundGeocodeRevision += 1;
+    backgroundGeocodeListeners.forEach((fn) => {
+        try { fn(backgroundGeocodeRevision); } catch (e) {}
+    });
+    return backgroundGeocodeRevision;
+}
+
+/**
+ * Extracts normalized `{ coords: [lat, lng], country, state, district }` from one OpenStreetMap
+ * Nominatim JSON search item.
+ *
+ * @param {Object} item - One element of the Nominatim JSON array response
+ * @returns {{coords: [number, number], country: string|null, state: string|null, district: string|null}|null}
+ *
+ * @example
+ * parseNominatimGeoResult({ lat: '10.025', lon: '76.308', address: { country: 'India', state: 'Kerala', state_district: 'Ernakulam District' } });
+ * // => { coords: [10.025, 76.308], country: 'India', state: 'Kerala', district: 'Ernakulam' }
+ *
+ * @example
+ * parseNominatimGeoResult(null);
+ * // => null
+ */
+function parseNominatimGeoResult(item) {
+    if (!item || typeof item !== 'object') return null;
+    const lat = parseFloat(item.lat);
+    const lng = parseFloat(item.lon);
+    if (!Number.isFinite(lat) || !Number.isFinite(lng)) return null;
+    const addr = item.address || {};
+    const rawDistrict = addr.state_district || addr.county || addr.city_district || null;
+    const cleanDistrict = rawDistrict ? String(rawDistrict).replace(/\s+district$/i, '').trim() : null;
+    return {
+        coords: [Math.round(lat * 10000) / 10000, Math.round(lng * 10000) / 10000],
+        country: addr.country ? String(addr.country).trim() : null,
+        state: addr.state ? String(addr.state).trim() : null,
+        district: cleanDistrict || null
+    };
+}
+
+/**
+ * Stores a geocoded location into the browser cookie/localStorage cache (`ft_geo_cache`) AND
+ * registers it in the live `PRE_GEOCODED_LOCATIONS` and `LOCATION_GEO_HIERARCHY` tables.
+ *
+ * @param {string} place - Location string
+ * @param {Object} resolved - `{ coords: [lat, lng], country?, state?, district? }`
+ * @returns {{coords: [number, number], country: string|null, state: string|null, district: string|null}|null}
+ *
+ * @example
+ * cacheResolvedGeoLocation('Edappilly', { coords: [10.025, 76.308], country: 'India', state: 'Kerala', district: 'Ernakulam' });
+ * resolveLocationCoords('Edappilly'); // => [10.025, 76.308]
+ *
+ * @example
+ * cacheResolvedGeoLocation('', null); // => null
+ */
+function cacheResolvedGeoLocation(place, resolved) {
+    if (!place || typeof place !== 'string' || !resolved || !Array.isArray(resolved.coords)) return null;
+    const norm = place.toLowerCase().trim();
+    if (!norm) return null;
+    const saved = typeof saveCachedGeoLocation === 'function'
+        ? saveCachedGeoLocation(norm, resolved)
+        : resolved;
+    if (!saved) return null;
+    PRE_GEOCODED_LOCATIONS[norm] = saved.coords;
+    if (saved.country && saved.country !== 'Other' && typeof LOCATION_GEO_HIERARCHY === 'object') {
+        LOCATION_GEO_HIERARCHY[norm] = {
+            country: saved.country,
+            state: saved.state || null,
+            district: saved.district || null
+        };
+    }
+    notifyBackgroundGeocodeUpdate();
+    return saved;
+}
+
+/**
+ * Hydrates all previously cached browser locations from `ft_geo_cache` into the live
+ * `PRE_GEOCODED_LOCATIONS` and `LOCATION_GEO_HIERARCHY` lookup tables.
+ *
+ * @returns {number} Count of hydrated locations
+ *
+ * @example
+ * hydrateCachedGeoLocations(); // => 0 (when cache is empty)
+ *
+ * @example
+ * saveCachedGeoLocation('Kakkanad', { coords: [10.015, 76.345], country: 'India', state: 'Kerala', district: 'Ernakulam' });
+ * hydrateCachedGeoLocations(); // => 1
+ */
+function hydrateCachedGeoLocations() {
+    if (typeof loadGeoLocationCache !== 'function') return 0;
+    const cached = loadGeoLocationCache();
+    let count = 0;
+    for (const [norm, entry] of Object.entries(cached)) {
+        if (!entry || !Array.isArray(entry.coords)) continue;
+        PRE_GEOCODED_LOCATIONS[norm] = entry.coords;
+        if (entry.country && entry.country !== 'Other' && typeof LOCATION_GEO_HIERARCHY === 'object' && !LOCATION_GEO_HIERARCHY[norm]) {
+            LOCATION_GEO_HIERARCHY[norm] = {
+                country: entry.country,
+                state: entry.state || null,
+                district: entry.district || null
+            };
+        }
+        count += 1;
+    }
+    return count;
+}
+
+/**
+ * Collects unique location strings in `tree` that do not yet have resolved map coordinates
+ * or geographic hierarchy metadata.
+ *
+ * @param {FamilyTree|Object} tree - Family tree instance
+ * @returns {Array<string>} Unique unresolved location strings
+ *
+ * @example
+ * findUnresolvedTreePlaces({ people: new Map([['1', { place: 'Thrissur' }]]) });
+ * // => []
+ *
+ * @example
+ * findUnresolvedTreePlaces({ people: new Map([['1', { place: 'Kanjiramattom' }]]) });
+ * // => ['Kanjiramattom']
+ */
+function findUnresolvedTreePlaces(tree) {
+    hydrateCachedGeoLocations();
+    const people = tree?.people instanceof Map
+        ? Array.from(tree.people.values())
+        : Object.values(tree?.people || {});
+    const unresolved = [];
+    const seen = new Set();
+    for (const person of people) {
+        if (!person || !person.place) continue;
+        const places = String(person.place).split(';').map(s => s.trim()).filter(Boolean);
+        for (const p of places) {
+            if (FamilyTreeBuilder.isInvalidLocation(p)) continue;
+            const norm = p.toLowerCase();
+            if (seen.has(norm) || attemptedBackgroundGeocodes.has(norm)) continue;
+            seen.add(norm);
+            if (!resolveLocationCoords(p)) unresolved.push(p);
+        }
+    }
+    return unresolved;
+}
+
+/**
+ * Queries the public OpenStreetMap Nominatim geocoding API for `place`, caches the result in
+ * the browser (`ft_geo_cache`), and updates the live coordinate/hierarchy tables.
+ *
+ * @param {string} place - Location string to look up
+ * @param {Function} [fetchImpl] - Optional `fetch` implementation (defaults to `globalThis.fetch`)
+ * @returns {Promise<{coords: [number, number], country: string|null, state: string|null, district: string|null}|null>}
+ *
+ * @example
+ * await fetchPublicGeoLocation('Edappilly', async () => ({
+ *   ok: true,
+ *   json: async () => ([{ lat: '10.025', lon: '76.308', address: { country: 'India', state: 'Kerala', state_district: 'Ernakulam District' } }])
+ * }));
+ * // => { coords: [10.025, 76.308], country: 'India', state: 'Kerala', district: 'Ernakulam' }
+ *
+ * @example
+ * await fetchPublicGeoLocation('', async () => ({ ok: false }));
+ * // => null
+ */
+async function fetchPublicGeoLocation(place, fetchImpl = typeof fetch === 'function' ? fetch : null) {
+    if (!place || typeof place !== 'string' || !fetchImpl) return null;
+    const norm = place.toLowerCase().trim();
+    if (!norm) return null;
+    attemptedBackgroundGeocodes.add(norm);
+    const queries = norm.includes(',') ? [place.trim()] : [place.trim(), `${place.trim()}, Kerala, India`];
+    for (const q of queries) {
+        try {
+            const url = `https://nominatim.openstreetmap.org/search?format=json&limit=1&addressdetails=1&accept-language=en&q=${encodeURIComponent(q)}`;
+            const res = await fetchImpl(url, { headers: { Accept: 'application/json' } });
+            if (!res || !res.ok) continue;
+            const data = await res.json();
+            const parsed = Array.isArray(data) && data.length > 0 ? parseNominatimGeoResult(data[0]) : null;
+            if (parsed) return cacheResolvedGeoLocation(place, parsed);
+        } catch (e) {
+            return null;
+        }
+    }
+    return null;
+}
+
+/**
+ * React hook that subscribes to background geocoding updates so directory and map views
+ * automatically refresh when a background lookup finishes.
+ *
+ * @returns {number} Current background geocode revision counter
+ *
+ * @example
+ * const geoRev = useBackgroundGeocodeRevision();
+ *
+ * @example
+ * useMemo(() => computePlaceGroups(tree), [tree, geoRev]);
+ */
+function useBackgroundGeocodeRevision() {
+    const [rev, setRev] = useState(backgroundGeocodeRevision);
+    useEffect(() => {
+        const listener = (nextRev) => setRev(nextRev);
+        backgroundGeocodeListeners.add(listener);
+        return () => { backgroundGeocodeListeners.delete(listener); };
+    }, []);
+    return rev;
+}
+
+/**
+ * Background hook that resolves any unknown locations in `tree` asynchronously while the user
+ * browses, storing coordinates and hierarchies in the browser cookie/localStorage (`ft_geo_cache`)
+ * so the map and Places directory display them with zero perceived lag.
+ *
+ * @param {FamilyTree|Object} tree - Active family tree dataset
+ *
+ * @example
+ * useBackgroundGeocoder(tree);
+ *
+ * @example
+ * useBackgroundGeocoder(null);
+ */
+function useBackgroundGeocoder(tree) {
+    useEffect(() => {
+        hydrateCachedGeoLocations();
+        const unresolved = findUnresolvedTreePlaces(tree);
+        if (unresolved.length === 0) return;
+        let cancelled = false;
+        let timerId = null;
+        const step = (idx) => {
+            if (cancelled || idx >= unresolved.length) return;
+            fetchPublicGeoLocation(unresolved[idx]).finally(() => {
+                if (!cancelled && idx + 1 < unresolved.length) {
+                    timerId = setTimeout(() => step(idx + 1), 1100);
+                }
+            });
+        };
+        timerId = setTimeout(() => step(0), 300);
+        return () => { cancelled = true; if (timerId) clearTimeout(timerId); };
+    }, [tree]);
+}
 
 const LOCATION_ZOOM_LEVELS = {
     // Countries: wide country-level overview
@@ -2790,12 +3069,13 @@ function createDirectorySelectionHandlers({ onFilterBy, onFlyToLocation, onFlyTo
  * });
  */
 function useDirectoryGroupData({ tree, currentTab, searchQuery }) {
-    const placeGroups = useMemo(() => computePlaceGroups(tree), [tree]);
+    const geoRev = useBackgroundGeocodeRevision();
+    const placeGroups = useMemo(() => computePlaceGroups(tree), [tree, geoRev]);
 
     const locationHierarchyTree = useMemo(() => {
         const q = (currentTab === 'place' ? searchQuery : '').toLowerCase().trim();
         return buildLocationHierarchy(placeGroups, q);
-    }, [placeGroups, searchQuery, currentTab]);
+    }, [placeGroups, searchQuery, currentTab, geoRev]);
 
     const jobGroups = useMemo(() => {
         const q = (currentTab === 'job' ? searchQuery : '').toLowerCase().trim();
@@ -3167,20 +3447,22 @@ const ensureLeafletStyles = () => {
 };
 
 /**
- * Generates inline HTML markup for a Leaflet custom location pin marker.
+ * Generates inline HTML markup for a Leaflet custom location pill marker.
+ * Uses `display:inline-flex;width:max-content` so the pill never collapses inside
+ * Leaflet's `0×0` `divIcon` wrapper and stays centered at the exact coordinate.
  *
- * @param {string} place - The location label to display on the marker pin
+ * @param {string} place - The location label to display on the marker pill
  * @param {number} count - The count of individuals associated with this location
  * @param {boolean} isSelected - Whether this marker represents the currently active filter
- * @returns {string} HTML string representing the styled marker bubble
+ * @returns {string} HTML string representing the styled marker pill
  *
  * @example
  * _buildMapMarkerHtml('Kochi', 42, true)
- * // => '<div style="display:flex;align-items:center;...background:#e11d48...<span>📍 Kochi</span>...'
+ * // => '<div style="display:inline-flex;width:max-content;align-items:center;...background:#e11d48...<span>Kochi</span>...'
  *
  * @example
  * _buildMapMarkerHtml('Thrissur', 15, false)
- * // => '<div style="display:flex;align-items:center;...background:#2563eb...<span>📍 Thrissur</span>...'
+ * // => '<div style="display:inline-flex;width:max-content;align-items:center;...background:#2563eb...<span>Thrissur</span>...'
  */
 function _buildMapMarkerHtml(place, count, isSelected) {
     const bg = isSelected ? '#e11d48' : '#2563eb';
@@ -3189,9 +3471,9 @@ function _buildMapMarkerHtml(place, count, isSelected) {
         ? '0 0 0 4px rgba(225,29,72,0.3), 0 6px 18px rgba(0,0,0,0.35)'
         : '0 4px 14px rgba(0,0,0,0.3)';
     return `
-            <div style="display:flex;align-items:center;justify-content:center;background:${bg};color:white;border-radius:9999px;padding:${padding};font-size:11.5px;font-weight:bold;box-shadow:${shadow};border:2px solid white;white-space:nowrap;cursor:pointer;transform:translate(-50%, -50%);transition:all 0.2s ease;">
-                <span>📍 ${place}</span>
-                <span style="background:rgba(255,255,255,0.28);border-radius:9999px;padding:0.5px 5px;margin-left:4px;font-size:10px;">${count}</span>
+            <div style="display:inline-flex;width:max-content;align-items:center;justify-content:center;background:${bg};color:white;border-radius:9999px;padding:${padding};font-size:11.5px;font-weight:bold;box-shadow:${shadow};border:2px solid white;white-space:nowrap;cursor:pointer;transform:translate(-50%, -50%);transition:all 0.2s ease;">
+                <span>${place}</span>
+                <span style="background:rgba(255,255,255,0.28);border-radius:9999px;padding:0.5px 5px;margin-left:5px;font-size:10px;">${count}</span>
             </div>
         `;
 }
@@ -3296,13 +3578,16 @@ function createAndBindMapMarkers({ L, map, placeGroups, activePlaceName, onFilte
 }
 
 /**
- * Refreshes custom HTML divIcons for existing markers to reflect selection states and counts.
+ * Refreshes custom HTML divIcons for existing markers (and attaches markers for any locations
+ * resolved asynchronously in the background) to reflect selection states and counts.
  *
  * @param {Object} options
  * @param {Object} options.L - Global Leaflet namespace.
- * @param {Array<{ place: string, marker: Object }>} options.markers - Active marker entries.
+ * @param {Object} [options.map] - Active Leaflet map instance.
+ * @param {Array<{ place: string, coords?: [number, number], marker: Object }>} options.markers - Active marker entries.
  * @param {Array<{ place: string, count: number }>} options.placeGroups - Place counts.
  * @param {string|null} options.activePlaceName - Selected location name.
+ * @param {Function} [options.onFilterBy] - Filter callback when a newly added marker is clicked.
  *
  * @example
  * updateMarkerIcons({ L: window.L, markers, placeGroups, activePlaceName: 'Thrissur' });
@@ -3310,11 +3595,19 @@ function createAndBindMapMarkers({ L, map, placeGroups, activePlaceName, onFilte
  * @example
  * updateMarkerIcons({ L: null, markers: [] });
  */
-function updateMarkerIcons({ L, markers, placeGroups, activePlaceName }) {
+function updateMarkerIcons({ L, map, markers, placeGroups, activePlaceName, onFilterBy }) {
     if (!L || !markers) return;
+    if (map && Array.isArray(placeGroups)) {
+        const existing = new Set(markers.map(m => m.place.toLowerCase().trim()));
+        const missing = placeGroups.filter(g => !existing.has(g.place.toLowerCase().trim()) && resolveLocationCoords(g.place));
+        if (missing.length > 0) {
+            const added = createAndBindMapMarkers({ L, map, placeGroups: missing, activePlaceName, onFilterBy: onFilterBy || (() => {}) });
+            markers.push(...added.markers);
+        }
+    }
     markers.forEach(({ place, marker }) => {
         const isSelected = activePlaceName && activePlaceName.toLowerCase().trim() === place.toLowerCase().trim();
-        const count = placeGroups.find(g => g.place === place)?.count || 0;
+        const count = (placeGroups || []).find(g => g.place === place)?.count || 0;
         marker.setIcon(createMapMarkerIcon(L, place, count, isSelected));
     });
 }
@@ -3566,6 +3859,8 @@ function useLeafletMapInitializer({
  * @param {boolean} params.showMap - Whether map is visible
  * @param {number} params.sidebarWidth - Width of details sidebar
  * @param {boolean} params.isSidebarVisible - Whether sidebar is shown
+ * @param {Function} [params.onFilterBy] - Callback invoked when clicking a marker
+ * @param {number} [params.geoRev] - Background geocoder revision counter
  *
  * @example
  * useLeafletMarkerSync({
@@ -3591,15 +3886,18 @@ function useLeafletMapInitializer({
  */
 function useLeafletMarkerSync({
     mapInstanceRef, markersRef, placeGroups,
-    activePlaceName, showMap, sidebarWidth, isSidebarVisible
+    activePlaceName, showMap, sidebarWidth, isSidebarVisible, onFilterBy, geoRev
 }) {
     useEffect(() => {
         if (!mapInstanceRef.current || !window.L) return;
-        updateMarkerIcons({ L: window.L, markers: markersRef.current, placeGroups, activePlaceName });
+        updateMarkerIcons({
+            L: window.L, map: mapInstanceRef.current, markers: markersRef.current,
+            placeGroups, activePlaceName, onFilterBy
+        });
         if (activePlaceName && showMap) {
             flyMapToPlace(mapInstanceRef.current, markersRef.current, activePlaceName);
         }
-    }, [activePlaceName, placeGroups, showMap, mapInstanceRef, markersRef]);
+    }, [activePlaceName, placeGroups, showMap, mapInstanceRef, markersRef, onFilterBy, geoRev]);
 
     useEffect(() => {
         if (mapInstanceRef.current && showMap) {
@@ -3648,9 +3946,10 @@ function useLeafletMap({ tree, activeFilter, onFilterBy, showMap, sidebarWidth, 
     const mapContainerRef = useRef(null);
     const mapInstanceRef = useRef(null);
     const markersRef = useRef([]);
+    const geoRev = useBackgroundGeocodeRevision();
 
     const { activePlaceName } = useMapActivePlaceTracking({ activeFilter, showMap, onFilterBy });
-    const placeGroups = useMemo(() => computePlaceGroups(tree), [tree]);
+    const placeGroups = useMemo(() => computePlaceGroups(tree), [tree, geoRev]);
 
     useLeafletMapInitializer({
         showMap, placeGroups, activePlaceName, onFilterBy,
@@ -3659,7 +3958,7 @@ function useLeafletMap({ tree, activeFilter, onFilterBy, showMap, sidebarWidth, 
 
     useLeafletMarkerSync({
         mapInstanceRef, markersRef, placeGroups, activePlaceName,
-        showMap, sidebarWidth, isSidebarVisible
+        showMap, sidebarWidth, isSidebarVisible, onFilterBy, geoRev
     });
 
     return { mapContainerRef, mapInstanceRef, markersRef, activePlaceName, placeGroups };

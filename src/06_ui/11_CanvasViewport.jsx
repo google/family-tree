@@ -39,11 +39,6 @@
 const ZoomControls = ({ setCamera, clampCamera, centerOnPerson, fitToScreen, focusId, rootId, setIsSidebarVisible, closeAllPanels }) => {
     const handleZoom = (delta) => {
         setCamera(cam => clampCamera({ ...cam, z: cam.z + delta }));
-        if (closeAllPanels) {
-            closeAllPanels();
-        } else {
-            setIsSidebarVisible(false);
-        }
     };
 
     return (
@@ -3963,9 +3958,8 @@ function useAppCanvasViewportManager({
     });
 
     const handleFitToScreen = useCallback(() => {
-        closeAllPanels();
         canvas.fitToScreen(true);
-    }, [closeAllPanels, canvas.fitToScreen]);
+    }, [canvas.fitToScreen]);
 
     return {
         ...canvas,

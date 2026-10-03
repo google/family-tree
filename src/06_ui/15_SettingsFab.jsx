@@ -22,11 +22,11 @@ const SETTINGS_FAB_ACTIONS = Object.freeze([
 /** Tooltip of the main FAB button (also the key of its documentation card). */
 const SETTINGS_FAB_TITLE = 'Settings: theme, deduction rules, stored data';
 
-/** Distance (px) from the FAB centre to each action centre for a compact 3-item fan. */
+/** Distance (px) from the FAB centre to each action centre on the inner 3-button arc. */
 const SETTINGS_FAB_RADIUS = 84;
 
-/** Distance (px) from the FAB centre to each action centre when all tree actions are shown. */
-const SETTINGS_FAB_EXPANDED_RADIUS = 188;
+/** Distance (px) from the FAB centre to each action centre on the outer arc. */
+const SETTINGS_FAB_EXPANDED_RADIUS = 148;
 
 /**
  * Evenly spreads `count` items along an arc and returns their pixel offsets from the hub.
@@ -65,8 +65,9 @@ function computeRadialMenuOffsets(count, radius = SETTINGS_FAB_RADIUS, startDeg 
 }
 
 /**
- * Chooses the arc radius and angle span for `count` radial items so neither buttons nor the
- * viewport edges collide when the full 8-item toolbar is expanded.
+ * Arranges `count` radial items across two concentric quarter-circle arcs (90°→180°):
+ * up to 3 buttons sit on the inner arc (`SETTINGS_FAB_RADIUS`) and any remaining buttons
+ * fan along the outer arc (`SETTINGS_FAB_EXPANDED_RADIUS`).
  *
  * @param {number} count - Number of visible radial items
  * @returns {Array<{x: number, y: number}>} Offsets from the hub centre
@@ -77,11 +78,14 @@ function computeRadialMenuOffsets(count, radius = SETTINGS_FAB_RADIUS, startDeg 
  *
  * @example
  * resolveRadialFabOffsets(8).length;
- * // => 8
+ * // => 8 (3 on the inner arc + 5 on the outer arc)
  */
 function resolveRadialFabOffsets(count) {
-    if (count <= 3) return computeRadialMenuOffsets(count, SETTINGS_FAB_RADIUS, 90, 180);
-    return computeRadialMenuOffsets(count, SETTINGS_FAB_EXPANDED_RADIUS, 83, 187);
+    const n = Math.max(0, Math.floor(count));
+    if (n <= 3) return computeRadialMenuOffsets(n, SETTINGS_FAB_RADIUS, 90, 180);
+    const inner = computeRadialMenuOffsets(3, SETTINGS_FAB_RADIUS, 90, 180);
+    const outer = computeRadialMenuOffsets(n - 3, SETTINGS_FAB_EXPANDED_RADIUS, 90, 180);
+    return [...inner, ...outer];
 }
 
 /**

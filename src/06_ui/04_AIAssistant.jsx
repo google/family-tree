@@ -2185,7 +2185,7 @@ const LOCATION_GEO_HIERARCHY = {
         'India.Kerala.Ernakulam': [
             'ernakulam', 'vaitila', 'vyttila', 'cochin', 'kochi', 'kaloor',
             'വൈപ്പിൻ, കണക്കൻകടവ്', 'vypin', 'അങ്കമാലി', 'angamaly', 'angamali',
-            'kootappuzha', 'kalamassery', 'aluva', 'edappally', 'kakkanad',
+            'kootappuzha', 'kalamassery', 'aluva', 'edappally', 'edappilly', 'kakkanad',
             'maradu', 'mattancherry', 'north paravur', 'palarivattom',
             'panampilly nagar', 'perumbavoor', 'thevara', 'tripunithura',
             'varapuzha', 'champannoor', 'champannur', 'thoppumpadi', 'thoppumpady'
@@ -2199,13 +2199,14 @@ const LOCATION_GEO_HIERARCHY = {
             'velliyamattom', 'velliyaamattam', 'idukki', 'thodupuzha'
         ],
         'India.Kerala.Palakkad': [
-            'palakkad', 'palghat', 'shoranur', 'ottapalam', 'alathur'
+            'palakkad', 'palghat', 'shoranur', 'ottapalam', 'alathur',
+            'vadakkanjeri', 'vadakkanchery', 'vadakkenchery', 'vadakkencherry'
         ],
         'India.Kerala.Kozhikode': ['calicut', 'kozhikode'],
         'India.Kerala.Kannur': ['kannur'],
         'India.Kerala.Kollam': ['kollam'],
         'India.Kerala.Alappuzha': ['alappuzha', 'alleppey'],
-        'India.Kerala.Thiruvananthapuram': ['trivandrum', 'thiruvananthapuram'],
+        'India.Kerala.Thiruvananthapuram': ['trivandrum', 'thiruvananthapuram', 'tvm'],
         'India.Kerala.Kerala': ['kerala'],
         'India.Karnataka.': ['bangalore', 'bengaluru', 'mangalore', 'mysore'],
         'India.Tamil Nadu.': [
@@ -2308,6 +2309,32 @@ const _matchSortedGeoEntries = (norm) => {
 };
 
 /**
+ * Checks the persisted browser geocoding cache (`ft_geo_cache`) for a place's hierarchy metadata.
+ *
+ * @param {string} norm - Normalized location name
+ * @param {Array<string>} tokens - Comma/slash delimited sub-tokens
+ * @returns {{ country: string, state: string|null, district: string|null }|null}
+ *
+ * @example
+ * _matchCachedGeoHierarchy('edappilly', ['edappilly']);
+ * // => { country: 'India', state: 'Kerala', district: 'Ernakulam' } (when cached)
+ *
+ * @example
+ * _matchCachedGeoHierarchy('unknown', ['unknown']);
+ * // => null
+ */
+const _matchCachedGeoHierarchy = (norm, tokens) => {
+    if (typeof getCachedGeoLocation !== 'function') return null;
+    for (const candidate of [norm, ...(tokens || [])]) {
+        const cached = getCachedGeoLocation(candidate);
+        if (cached && cached.country && cached.country !== 'Other') {
+            return { country: cached.country, state: cached.state || null, district: cached.district || null };
+        }
+    }
+    return null;
+};
+
+/**
  * Resolves country, state, and district metadata for a given location string.
  * 
  * @param {string} place - Raw location name (e.g. "Thrissur", "San Jose, California")
@@ -2326,13 +2353,14 @@ const resolvePlaceHierarchy = (place) => {
     const norm = place.toLowerCase().trim();
     if (LOCATION_GEO_HIERARCHY[norm]) return LOCATION_GEO_HIERARCHY[norm];
 
-    // Check individual comma/slash separated tokens first
     const tokens = norm.split(/[,/]/).map(s => s.trim()).filter(Boolean);
     for (const token of tokens) {
         if (LOCATION_GEO_HIERARCHY[token]) return LOCATION_GEO_HIERARCHY[token];
     }
 
-    // Trie spatial lookup supporting phonetic transliteration and prefix matching
+    const cachedMatch = _matchCachedGeoHierarchy(norm, tokens);
+    if (cachedMatch) return cachedMatch;
+
     const trie = FamilyTreeBuilder.getGeoTrie(LOCATION_GEO_HIERARCHY);
     const trieMatch = _matchGeoTrie(trie, norm, tokens);
     if (trieMatch) return trieMatch;

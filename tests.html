@@ -135,7 +135,9 @@ try {
     }
     const extractClass = (src, className) => extractBlock(src, `class ${className} {`);
     function extractFunction(src, funcName) {
-        const marker = `function ${funcName}(`;
+        const asyncMarker = `async function ${funcName}(`;
+        const syncMarker = `function ${funcName}(`;
+        const marker = src.indexOf(asyncMarker) !== -1 ? asyncMarker : syncMarker;
         const start = src.indexOf(marker);
         if (start === -1) throw new Error(`Could not find ${marker}`);
         let paramDepth = 0;
@@ -188,7 +190,12 @@ try {
 
     const geoSrc = extractBlock(source, 'const LOCATION_GEO_HIERARCHY =');
     const sortedGeoSrc = 'const SORTED_GEO_ENTRIES = Object.entries(LOCATION_GEO_HIERARCHY).sort((a, b) => b[0].length - a[0].length);';
+    const matchGeoTrieSrc = extractBlock(source, 'const _matchGeoTrie =');
+    const matchSortedGeoEntriesSrc = extractBlock(source, 'const _matchSortedGeoEntries =');
+    const matchCachedGeoHierarchySrc = extractBlock(source, 'const _matchCachedGeoHierarchy =');
     const resolvePlaceSrc = extractBlock(source, 'const resolvePlaceHierarchy =');
+    const preGeocodedSrc = extractBlock(source, 'const PRE_GEOCODED_LOCATIONS =');
+    const resolveLocationCoordsSrc = extractBlock(source, 'const resolveLocationCoords =');
     const matchesPlaceFilterSrc = extractFunction(source, 'matchesPlaceFilter');
     const matchesPersonSearchSrc = extractFunction(source, 'matchesPersonSearch');
     const matchesPersonFilterSrc = extractFunction(source, 'matchesPersonFilter');
@@ -234,11 +241,13 @@ try {
         extractFrozenArrayConst(source, 'SETTINGS_PANEL_TABS')
     ].join('\n');
     const browserPreferencesSrc = [
-        'SHEET_HISTORY_COOKIE', 'DEMOGRAPHIC_SETTINGS_COOKIE', 'COLOR_THEME_COOKIE', 'LAST_VIEW_STATE_COOKIE',
+        'SHEET_HISTORY_COOKIE', 'DEMOGRAPHIC_SETTINGS_COOKIE', 'COLOR_THEME_COOKIE', 'LAST_VIEW_STATE_COOKIE', 'GEO_CACHE_COOKIE',
         'PREFERENCE_COOKIE_MAX_AGE_SECONDS', 'SHEET_HISTORY_LIMIT', 'SHEET_TITLE_MAX_LENGTH',
-        'SHEET_HISTORY_COOKIE_BUDGET', 'DEMO_SHEET_ID', 'DEMO_SHEET_TITLE',
-        'SHEET_ID_EXACT_PATTERN', 'sheetTitleRegistry', 'MARRIAGE_AGE_PREVIEW_COHORTS'
+        'SHEET_HISTORY_COOKIE_BUDGET', 'GEO_CACHE_COOKIE_BUDGET', 'DEMO_SHEET_ID', 'DEMO_SHEET_TITLE',
+        'SHEET_ID_EXACT_PATTERN', 'sheetTitleRegistry', 'geoLocationMemoryCache', 'MARRIAGE_AGE_PREVIEW_COHORTS'
     ].map(name => extractConst(source, name)).concat([
+        'let geoLocationCacheRawSnapshot = null;'
+    ]).concat([
         'parseCookieHeader', 'buildCookieAssignment', 'readCookieValue', 'writeCookieValue',
         'preferenceStorageKey', 'readPreference', 'writePreference', 'removePreference',
         'isValidSheetId', 'rankSheetHistory', 'parseSheetHistoryJson', 'serializeSheetHistory',
@@ -252,10 +261,32 @@ try {
         'applyStoredDemographicSettings', 'loadStoredColorThemeId', 'saveColorThemeId',
         'clearStoredColorTheme', 'applyStoredColorTheme',
         'loadLastViewStateHash', 'saveLastViewStateHash', 'clearLastViewStateHash',
+        'sanitizeGeoCacheEntry', 'parseGeoLocationCacheJson', 'serializeGeoLocationCache',
+        'loadGeoLocationCache', 'getCachedGeoLocation', 'saveCachedGeoLocation', 'clearGeoLocationCache',
         'clearStoredPreferences',
         'hasExplicitSheetQueryParam', 'buildSheetDeepLinkUrl', 'syncSheetIdIntoLocation',
         'commitSuccessfulSheetImport', 'suggestNextMarriageAnchor', 'describeMarriageAgePreview'
     ].map(name => extractFunction(source, name))).join('\n');
+    const backgroundGeocoderSrc = [
+        extractConst(source, 'attemptedBackgroundGeocodes'),
+        'let backgroundGeocodeRevision = 0;',
+        extractConst(source, 'backgroundGeocodeListeners'),
+        extractFunction(source, 'notifyBackgroundGeocodeUpdate'),
+        extractFunction(source, 'parseNominatimGeoResult'),
+        extractFunction(source, 'cacheResolvedGeoLocation'),
+        extractFunction(source, 'hydrateCachedGeoLocations'),
+        extractFunction(source, 'findUnresolvedTreePlaces'),
+        extractFunction(source, 'fetchPublicGeoLocation')
+    ].join('\n');
+    const buildMapMarkerHtmlSrc = extractFunction(source, '_buildMapMarkerHtml');
+    const pointerControlsSrc = [
+        extractFunction(source, 'calculateTwoPointGeometry'),
+        extractFunction(source, 'shouldIgnorePointerDown'),
+        extractFunction(source, 'initializePointerGestureState'),
+        extractFunction(source, 'processPointerDown'),
+        extractFunction(source, 'processPointerMove'),
+        extractFunction(source, 'processPointerUp')
+    ].join('\n');
     const urlViewStateSrc = [
         'formatCompactNumber', 'encodeViewStateToken', 'decodeViewStateToken',
         'collectViewStateSheetIds', 'compactViewStateSheetIds', 'expandViewStateSheetIds', 'encodePersonIdToken',
@@ -290,7 +321,7 @@ try {
         applyRestoredSelection, applyRestoredCamera,
         resolveCanvasDisplayMode,
         DEFAULT_URL, DEMO_SHEET_ID, DEMO_SHEET_TITLE, SHEET_HISTORY_LIMIT, SHEET_TITLE_MAX_LENGTH,
-        SHEET_HISTORY_COOKIE, DEMOGRAPHIC_SETTINGS_COOKIE, COLOR_THEME_COOKIE, LAST_VIEW_STATE_COOKIE,
+        SHEET_HISTORY_COOKIE, DEMOGRAPHIC_SETTINGS_COOKIE, COLOR_THEME_COOKIE, LAST_VIEW_STATE_COOKIE, GEO_CACHE_COOKIE,
         parseCookieHeader, buildCookieAssignment, readPreference, writePreference, removePreference,
         isValidSheetId, rankSheetHistory, parseSheetHistoryJson, serializeSheetHistory,
         mergeSheetHistoryEntry, resolveMostUsedSheet, resolveLastUsedSheet, filterSheetHistoryForInput,
@@ -303,6 +334,7 @@ try {
         applyStoredDemographicSettings, loadStoredColorThemeId, saveColorThemeId,
         clearStoredColorTheme, applyStoredColorTheme,
         loadLastViewStateHash, saveLastViewStateHash, clearLastViewStateHash,
+        loadGeoLocationCache, getCachedGeoLocation, saveCachedGeoLocation, clearGeoLocationCache,
         clearStoredPreferences,
         hasExplicitSheetQueryParam, buildSheetDeepLinkUrl, syncSheetIdIntoLocation,
         commitSuccessfulSheetImport, suggestNextMarriageAnchor, describeMarriageAgePreview,
@@ -315,7 +347,11 @@ try {
         buildTailwindThemeConfigScript, TAILWIND_THEME_CONFIG_SCRIPT, shadeChromaMultiplier,
         SETTINGS_FAB_ACTIONS, SETTINGS_FAB_TITLE, SETTINGS_FAB_RADIUS, SETTINGS_FAB_EXPANDED_RADIUS,
         SETTINGS_PANEL_TABS, computeRadialMenuOffsets, resolveRadialFabOffsets, resolveRadialFabActions,
-        resolveSettingsPanelTab, resolveThemeCardDoc
+        resolveSettingsPanelTab, resolveThemeCardDoc,
+        PRE_GEOCODED_LOCATIONS, resolveLocationCoords,
+        parseNominatimGeoResult, cacheResolvedGeoLocation, hydrateCachedGeoLocations,
+        findUnresolvedTreePlaces, fetchPublicGeoLocation, _buildMapMarkerHtml,
+        processPointerDown, processPointerMove, processPointerUp
     ] = new Function(`
         // Isolated cookie jar + localStorage + documentElement: preference & theme tests must never
         // touch the real browser state, and Stage 3 runs in node where neither exists. Every other
@@ -401,9 +437,18 @@ try {
         ${computeLayoutAnchorShiftSrc}
         ${applyCameraShiftTransitionSrc}
         ${executeBackgroundTreeTransitionSrc}
+        ${browserPreferencesSrc}
         ${geoSrc}
         ${sortedGeoSrc}
+        ${matchGeoTrieSrc}
+        ${matchSortedGeoEntriesSrc}
+        ${matchCachedGeoHierarchySrc}
         ${resolvePlaceSrc}
+        ${preGeocodedSrc}
+        ${resolveLocationCoordsSrc}
+        ${backgroundGeocoderSrc}
+        ${buildMapMarkerHtmlSrc}
+        ${pointerControlsSrc}
         ${matchesPlaceFilterSrc}
         ${matchesPersonSearchSrc}
         ${matchesPersonFilterSrc}
@@ -433,7 +478,6 @@ try {
             contH: container ? container.clientHeight : 800
         });
         ${urlViewStateSrc}
-        ${browserPreferencesSrc}
         FamilyTreeBuilder.matchesPersonFilter = matchesPersonFilter;
         FamilyTreeBuilder.FILTER_BADGE_CONFIG = FILTER_BADGE_CONFIG;
         FamilyTreeBuilder.computeFilterHighlightedIds = function(tree, activeFilter) {
@@ -468,7 +512,7 @@ try {
             applyRestoredSelection, applyRestoredCamera,
             resolveCanvasDisplayMode,
             DEFAULT_URL, DEMO_SHEET_ID, DEMO_SHEET_TITLE, SHEET_HISTORY_LIMIT, SHEET_TITLE_MAX_LENGTH,
-            SHEET_HISTORY_COOKIE, DEMOGRAPHIC_SETTINGS_COOKIE, COLOR_THEME_COOKIE, LAST_VIEW_STATE_COOKIE,
+            SHEET_HISTORY_COOKIE, DEMOGRAPHIC_SETTINGS_COOKIE, COLOR_THEME_COOKIE, LAST_VIEW_STATE_COOKIE, GEO_CACHE_COOKIE,
             parseCookieHeader, buildCookieAssignment, readPreference, writePreference, removePreference,
             isValidSheetId, rankSheetHistory, parseSheetHistoryJson, serializeSheetHistory,
             mergeSheetHistoryEntry, resolveMostUsedSheet, resolveLastUsedSheet, filterSheetHistoryForInput,
@@ -481,6 +525,7 @@ try {
             applyStoredDemographicSettings, loadStoredColorThemeId, saveColorThemeId,
             clearStoredColorTheme, applyStoredColorTheme,
             loadLastViewStateHash, saveLastViewStateHash, clearLastViewStateHash,
+            loadGeoLocationCache, getCachedGeoLocation, saveCachedGeoLocation, clearGeoLocationCache,
             clearStoredPreferences,
             hasExplicitSheetQueryParam, buildSheetDeepLinkUrl, syncSheetIdIntoLocation,
             commitSuccessfulSheetImport, suggestNextMarriageAnchor, describeMarriageAgePreview,
@@ -493,7 +538,11 @@ try {
             buildTailwindThemeConfigScript, TAILWIND_THEME_CONFIG_SCRIPT, shadeChromaMultiplier,
             SETTINGS_FAB_ACTIONS, SETTINGS_FAB_TITLE, SETTINGS_FAB_RADIUS, SETTINGS_FAB_EXPANDED_RADIUS,
             SETTINGS_PANEL_TABS, computeRadialMenuOffsets, resolveRadialFabOffsets, resolveRadialFabActions,
-            resolveSettingsPanelTab, resolveThemeCardDoc
+            resolveSettingsPanelTab, resolveThemeCardDoc,
+            PRE_GEOCODED_LOCATIONS, resolveLocationCoords,
+            parseNominatimGeoResult, cacheResolvedGeoLocation, hydrateCachedGeoLocations,
+            findUnresolvedTreePlaces, fetchPublicGeoLocation, _buildMapMarkerHtml,
+            processPointerDown, processPointerMove, processPointerUp
         ];
     `)();
 
@@ -14765,8 +14814,8 @@ const m3 = tree.all.find(n => n.id === '3');
         section('211. Material 3 Colour Theme Engine & Tailwind Config Script');
         try {
             const themeIds = COLOR_THEMES.map(t => t.id);
-            const expectedIds = ['classic', 'pastel', 'earthy', 'ocean', 'lavender', 'solarized-light', 'dark', 'midnight', 'solarized-dark', 'contrast'];
-            assertEqual('Test 211.01: COLOR_THEMES defines all 10 Material 3 themes in order', themeIds.join(','), expectedIds.join(','));
+            const expectedIds = ['classic', 'pastel', 'earthy', 'solarized-light', 'dark', 'solarized-dark', 'contrast'];
+            assertEqual('Test 211.01: COLOR_THEMES defines all 7 curated Material 3 themes in order (ocean, lavender, and midnight pruned)', themeIds.join(','), expectedIds.join(','));
 
             // Color space round-trips & gamut clamping
             const sampleRgb = hexToRgb('#5c7c33');
@@ -14811,21 +14860,22 @@ const m3 = tree.all.find(n => n.id === '3');
                     /^#[0-9a-f]{6}$/.test(swatches.male) && /^#[0-9a-f]{6}$/.test(swatches.female));
             }
 
-            // Authentic Solarized & OLED black checks
+            // Authentic Solarized & Dark Forest checks
             assertEqual('Test 211.10: Solarized Light uses Schoonover base3 #fdf6e3 canvas',
                 resolveColorTheme('solarized-light').families.white, '#fdf6e3');
             assertEqual('Test 211.11: Solarized Dark uses Schoonover base03 #002b36 canvas',
                 resolveColorTheme('solarized-dark').families.white, '#002b36');
-            assertEqual('Test 211.12: Midnight Black uses pure #000000 black canvas',
-                resolveColorTheme('midnight').families.white, '#000000');
+            assertEqual('Test 211.12: Retired theme IDs ("ocean", "lavender", "midnight") return false from isKnownColorThemeId and fall back to classic',
+                [isKnownColorThemeId('ocean'), isKnownColorThemeId('lavender'), isKnownColorThemeId('midnight'), getColorThemeDefinition('midnight').id].join('|'),
+                'false|false|false|classic');
 
             // DOM application & cleanup on fakeDocElement
             fakeDocElement._clear();
-            const appliedMidnight = applyColorTheme('midnight', fakeDocElement);
-            assertEqual('Test 211.13: applyColorTheme("midnight") sets data-theme, data-theme-mode="dark", colorScheme="dark", and --tw-white',
-                [appliedMidnight.id, fakeDocElement.getAttribute('data-theme'), fakeDocElement.getAttribute('data-theme-mode'),
+            const appliedDark = applyColorTheme('dark', fakeDocElement);
+            assertEqual('Test 211.13: applyColorTheme("dark") sets data-theme, data-theme-mode="dark", colorScheme="dark", and --tw-white',
+                [appliedDark.id, fakeDocElement.getAttribute('data-theme'), fakeDocElement.getAttribute('data-theme-mode'),
                  fakeDocElement.style.colorScheme, fakeDocElement.style.getPropertyValue('--tw-white')].join('|'),
-                'midnight|midnight|dark|dark|' + rgbTriplet(appliedMidnight.families.white));
+                'dark|dark|dark|dark|' + rgbTriplet(appliedDark.families.white));
             applyColorTheme('classic', fakeDocElement);
             assertEqual('Test 211.14: Switching back to classic removes all --tw-* variables while keeping --md-sys-color-primary',
                 [fakeDocElement.getAttribute('data-theme'), fakeDocElement.style.getPropertyValue('--tw-white'),
@@ -14876,18 +14926,19 @@ const m3 = tree.all.find(n => n.id === '3');
             assertEqual('Test 212.05: clearStoredColorTheme() removes the ft_color_theme cookie',
                 cookieJar.has(COLOR_THEME_COOKIE), false);
 
-            // Full clearStoredPreferences wipes sheet history, deduction settings, colour theme, and last view state
+            // Full clearStoredPreferences wipes sheet history, deduction settings, colour theme, last view state, and geo cache
             recordSheetUse(DEMO_SHEET_ID, DEMO_SHEET_TITLE);
             saveDemographicSettings({ ...FamilyTreeBuilder.getDemographicSettings(), siblingAgeGap: 4 });
-            saveColorThemeId('midnight');
+            saveColorThemeId('dark');
             saveLastViewStateHash('sel:2~5&z:1.25');
-            applyColorTheme('midnight');
+            saveCachedGeoLocation('Edappilly', { coords: [10.025, 76.308], country: 'India', state: 'Kerala', district: 'Ernakulam' });
+            applyColorTheme('dark');
             clearStoredPreferences();
-            assertEqual('Test 212.06: clearStoredPreferences() clears all 4 cookies (history, deduction, theme, last view state) and restores the classic theme on document.documentElement',
+            assertEqual('Test 212.06: clearStoredPreferences() clears all 5 cookies (history, deduction, theme, last view state, geo cache) and restores the classic theme on document.documentElement',
                 [cookieJar.has(SHEET_HISTORY_COOKIE), cookieJar.has(DEMOGRAPHIC_SETTINGS_COOKIE),
                  cookieJar.has(COLOR_THEME_COOKIE), cookieJar.has(LAST_VIEW_STATE_COOKIE),
-                 fakeDocElement.getAttribute('data-theme')].join('|'),
-                'false|false|false|false|classic');
+                 cookieJar.has(GEO_CACHE_COOKIE), fakeDocElement.getAttribute('data-theme')].join('|'),
+                'false|false|false|false|false|classic');
         } catch (e) {
             assertEqual('Test 212 execution failed', e.message, '');
         } finally {
@@ -15024,7 +15075,7 @@ const m3 = tree.all.find(n => n.id === '3');
                  shadeChromaMultiplier('slate', 100, true), shadeChromaMultiplier('sky', 100, false)].join('|'),
                 '0.34|0.34|0.35|1');
 
-            for (const darkThemeId of ['dark', 'midnight', 'solarized-dark']) {
+            for (const darkThemeId of ['dark', 'solarized-dark']) {
                 const res = resolveColorTheme(darkThemeId);
                 for (const fam of ['sky', 'rose', 'slate']) {
                     const cardBg = themeFamilyHex(res, fam, 100);
@@ -15068,8 +15119,11 @@ const m3 = tree.all.find(n => n.id === '3');
                 }
                 return minD;
             }, Infinity);
-            assert('Test 214.13: resolveRadialFabOffsets(8) uses SETTINGS_FAB_EXPANDED_RADIUS so all 8 44px satellite buttons have >= 40px center spacing (no overlap)',
-                offsets8.length === 8 && Math.abs(offsets8[0].y + SETTINGS_FAB_EXPANDED_RADIUS) <= 2 && minPairDist >= 40);
+            assert('Test 214.13: resolveRadialFabOffsets(8) arranges 3 buttons on the inner arc (r=84) and 5 on the outer arc (r=148) with >= 55px center spacing',
+                offsets8.length === 8 &&
+                Math.round(Math.hypot(offsets8[0].x, offsets8[0].y)) === SETTINGS_FAB_RADIUS &&
+                Math.round(Math.hypot(offsets8[3].x, offsets8[3].y)) === SETTINGS_FAB_EXPANDED_RADIUS &&
+                minPairDist >= 55);
 
             // 4. Startup resumes the last opened sheet + last view state hash when opened without ?id=
             cookieJar.clear();
@@ -15100,6 +15154,144 @@ const m3 = tree.all.find(n => n.id === '3');
         } catch (e) {
             assertEqual('Test 214 execution failed', e.message, '');
         } finally {
+            cookieJar.clear();
+            fakeLocalStorage.clear();
+        }
+    }
+
+    // ══════════════════════════════════════════════════════════════════════════
+    //  215. Two-Arc Radial Menu, Zoom Highlight Persistence, Map Pill & Background Geocoder
+    // ══════════════════════════════════════════════════════════════════════════
+    {
+        section('215. Two-Arc Radial Menu, Zoom Highlight Persistence, Map Pill & Background Geocoder');
+        try {
+            cookieJar.clear();
+            fakeLocalStorage.clear();
+            clearGeoLocationCache();
+
+            const sliceComponent = (marker) => {
+                const start = appCode.indexOf(marker);
+                const end = appCode.indexOf('/**', start + marker.length);
+                return start === -1 ? '' : appCode.slice(start, end === -1 ? start + 4000 : end);
+            };
+
+            // 1. Two concentric arcs in resolveRadialFabOffsets
+            const offsets8 = resolveRadialFabOffsets(8);
+            const innerRadii = offsets8.slice(0, 3).map(o => Math.round(Math.hypot(o.x, o.y)));
+            const outerRadii = offsets8.slice(3).map(o => Math.round(Math.hypot(o.x, o.y)));
+            assertEqual('Test 215.01: First 3 radial buttons sit on the inner arc (r = 84px at 90°, 135°, 180°)',
+                innerRadii.every(r => Math.abs(r - 84) <= 1) + '|' + offsets8.slice(0, 3).map(o => `${o.x},${o.y}`).join(';'),
+                'true|0,-84;-59,-59;-84,0');
+            assertEqual('Test 215.02: Remaining 5 radial buttons sit on the outer arc (r = 148px from 90° to 180°)',
+                outerRadii.every(r => Math.abs(r - 148) <= 1) + '|' + `${offsets8[3].x},${offsets8[3].y}` + '|' + `${offsets8[7].x},${offsets8[7].y}`,
+                'true|0,-148|-148,0');
+            const offsets6 = resolveRadialFabOffsets(6);
+            assertEqual('Test 215.03: Standalone 6-button radial menu places 3 buttons on the inner arc and 3 buttons on the outer arc',
+                offsets6.slice(0, 3).map(o => `${o.x},${o.y}`).join(';') + ' || ' + offsets6.slice(3).map(o => `${o.x},${o.y}`).join(';'),
+                '0,-84;-59,-59;-84,0 || 0,-148;-105,-105;-148,0');
+
+            // 2. Zooming and panning preserve activeFilter; only a clean click on the empty canvas calls onInteract
+            const wheelBlock = sliceComponent('function useCanvasWheelZoom(');
+            const zoomControlsBlock = sliceComponent('const ZoomControls = (');
+            const fitBlock = sliceComponent('function useAppCanvasViewportManager(');
+            assert('Test 215.04: useCanvasWheelZoom, ZoomControls.handleZoom, and handleFitToScreen do NOT call onInteract() or closeAllPanels() on zoom',
+                !/onInteract\(\)/.test(wheelBlock) && !/closeAllPanels\(\)/.test(zoomControlsBlock) &&
+                !/const handleFitToScreen = useCallback\(\(\) => \{\s*closeAllPanels\(\)/.test(fitBlock));
+
+            let interactCalls = 0;
+            const activePointersRef = { current: new Map() };
+            const pointerPinchRef = { current: null };
+            const cameraRef = { current: { x: 0, y: 0, z: 1 } };
+            let isDragging = false;
+            let dragStart = { x: 0, y: 0 };
+            const setIsDragging = (v) => { isDragging = v; };
+            const setDragStart = (v) => { dragStart = v; };
+            const onInteract = () => { interactCalls += 1; };
+
+            // Case A: Pan drag on canvas (moves > 5px) -> must NOT invoke onInteract
+            processPointerDown({
+                e: { pointerId: 1, button: 0, pointerType: 'mouse', clientX: 100, clientY: 100, currentTarget: { setPointerCapture: () => {} }, target: { closest: () => null } },
+                activePointersRef, pointerPinchRef, cameraRef, setIsDragging, setDragStart
+            });
+            processPointerMove({
+                e: { pointerId: 1, clientX: 160, clientY: 140 },
+                activePointersRef, pointerPinchRef, isDragging, dragStart,
+                containerRef: { current: null }, getBounds: () => ({}), getPpy: () => 10, setCamera: () => {}, clampCamera: (c) => c
+            });
+            processPointerUp({
+                e: { pointerId: 1, currentTarget: { releasePointerCapture: () => {} } },
+                activePointersRef, pointerPinchRef, cameraRef, setDragStart, setIsDragging, onInteract
+            });
+            assertEqual('Test 215.05: Panning (dragging) the canvas does not trigger onInteract / clear activeFilter', interactCalls, 0);
+
+            // Case B: Clean click on empty canvas (no drag) -> MUST invoke onInteract to clear activeFilter
+            processPointerDown({
+                e: { pointerId: 2, button: 0, pointerType: 'mouse', clientX: 200, clientY: 200, currentTarget: { setPointerCapture: () => {} }, target: { closest: () => null } },
+                activePointersRef, pointerPinchRef, cameraRef, setIsDragging, setDragStart
+            });
+            processPointerUp({
+                e: { pointerId: 2, currentTarget: { releasePointerCapture: () => {} } },
+                activePointersRef, pointerPinchRef, cameraRef, setDragStart, setIsDragging, onInteract
+            });
+            assertEqual('Test 215.06: Clicking on the empty canvas without dragging invokes onInteract once to clear activeFilter', interactCalls, 1);
+
+            // 3. Map marker HTML omits red pushpin and uses inline-flex + width:max-content
+            const markerHtml = _buildMapMarkerHtml('Alappuzha', 4, false);
+            assert('Test 215.07: _buildMapMarkerHtml omits the red pushpin (📍) and uses display:inline-flex;width:max-content for a clean centered blue pill',
+                !markerHtml.includes('📍') &&
+                markerHtml.includes('display:inline-flex;width:max-content;') &&
+                markerHtml.includes('<span>Alappuzha</span>') &&
+                markerHtml.includes('>4</span>'));
+
+            // 4. Static + cached + background public geocoding lookup for Edappilly, TVM, Vadakkanjeri, and unknown places
+            assertEqual('Test 215.08: Edappilly, TVM, and Vadakkanjeri resolve to accurate coordinates and Kerala districts out of the box',
+                [
+                    resolveLocationCoords('Edappilly').join(','),
+                    resolvePlaceHierarchy('Edappilly').district,
+                    resolveLocationCoords('TVM').join(','),
+                    resolvePlaceHierarchy('TVM').district,
+                    resolveLocationCoords('Vadakkanjeri').join(','),
+                    resolvePlaceHierarchy('Vadakkanjeri').district
+                ].join(' | '),
+                '10.025,76.308 | Ernakulam | 8.5241,76.9366 | Thiruvananthapuram | 10.59,76.49 | Palakkad');
+
+            // Test parseNominatimGeoResult + fetchPublicGeoLocation + ft_geo_cache persistence
+            const mockNominatimFetch = async (url) => ({
+                ok: true,
+                json: async () => ([{
+                    lat: '9.8954',
+                    lon: '76.3861',
+                    address: {
+                        country: 'India',
+                        state: 'Kerala',
+                        state_district: 'Ernakulam District'
+                    }
+                }])
+            });
+            const geoRes = await fetchPublicGeoLocation('Kanjiramattom', mockNominatimFetch);
+            assertEqual('Test 215.09: fetchPublicGeoLocation resolves unknown location via Nominatim, strips "District" suffix, caches in ft_geo_cache cookie, and updates resolveLocationCoords + resolvePlaceHierarchy',
+                [
+                    geoRes && geoRes.coords.join(','),
+                    geoRes && geoRes.district,
+                    cookieJar.has(GEO_CACHE_COOKIE),
+                    resolveLocationCoords('Kanjiramattom').join(','),
+                    resolvePlaceHierarchy('Kanjiramattom').district
+                ].join(' | '),
+                '9.8954,76.3861 | Ernakulam | true | 9.8954,76.3861 | Ernakulam');
+
+            const unresolvedList = findUnresolvedTreePlaces({
+                people: new Map([
+                    ['p1', { place: 'Edappilly; TVM' }],
+                    ['p2', { place: 'Kanjiramattom' }],
+                    ['p3', { place: 'BrandNewUnmappedTownXYZ' }]
+                ])
+            });
+            assertEqual('Test 215.10: findUnresolvedTreePlaces skips known and already-cached places and returns only genuinely unresolved locations',
+                unresolvedList.join(','), 'BrandNewUnmappedTownXYZ');
+        } catch (e) {
+            assertEqual('Test 215 execution failed', e.message, '');
+        } finally {
+            clearGeoLocationCache();
             cookieJar.clear();
             fakeLocalStorage.clear();
         }

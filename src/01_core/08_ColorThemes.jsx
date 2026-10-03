@@ -421,16 +421,6 @@ const COLOR_THEMES = [
         families: { white: '#fdfaf4' }
     },
     {
-        id: 'ocean', name: 'Ocean Breeze', mode: 'light',
-        blurb: 'Cool teal and sea-blue accents on airy, slightly bluish surfaces.',
-        seeds: { primary: '#1f7a8c', secondary: '#3b6ea5', tertiary: '#2a9d8f', neutral: '#76808a', error: '#c0392b', accent: '#2f6fd6', male: '#3a86b8', female: '#d0677d', success: '#2e9e6b', warning: '#d9a441' }
-    },
-    {
-        id: 'lavender', name: 'Lavender Dusk', mode: 'light',
-        blurb: 'Violet and orchid accents with soft grey-lilac surfaces.',
-        seeds: { primary: '#6d5bb5', secondary: '#9b6aa8', tertiary: '#c26f9a', neutral: '#837c90', error: '#c24b5a', accent: '#5f6fd1', male: '#6b8bd6', female: '#c97aa6', success: '#6a9a6a', warning: '#c99a4a' }
-    },
-    {
         id: 'solarized-light', name: 'Solarized Light', mode: 'light',
         blurb: 'Ethan Schoonover\u2019s precision palette: cream base3 canvas with the classic blue, cyan and magenta accents.',
         seeds: SOLARIZED_SEEDS, families: neutralFamilyOverrides(solarizedNeutralScale('light'))
@@ -439,13 +429,6 @@ const COLOR_THEMES = [
         id: 'dark', name: 'Dark Forest', mode: 'dark',
         blurb: 'The Classic palette inverted: charcoal slate surfaces with luminous green accents.',
         seeds: CLASSIC_FOREST_SEEDS
-    },
-    {
-        id: 'midnight', name: 'Midnight Black', mode: 'dark',
-        blurb: 'True-black surfaces for OLED screens with muted, high-legibility accents.',
-        seeds: { ...CLASSIC_FOREST_SEEDS, neutral: '#6b7280' },
-        shadeTones: { white: 0, 50: 10, 100: 23, 200: 30, 300: 39 },
-        roleTones: { surface: 0, surfaceDim: 0, surfaceContainerLowest: 0, surfaceContainerLow: 4, surfaceContainer: 8, surfaceContainerHigh: 12, surfaceContainerHighest: 17, surfaceBright: 22 }
     },
     {
         id: 'solarized-dark', name: 'Solarized Dark', mode: 'dark',
@@ -464,7 +447,7 @@ const COLOR_THEMES = [
 /**
  * Looks a theme definition up by id, falling back to Classic for unknown / missing ids.
  *
- * @example getColorThemeDefinition('midnight').mode // → 'dark'
+ * @example getColorThemeDefinition('dark').mode // → 'dark'
  * @example getColorThemeDefinition('does-not-exist').id // → 'classic'
  * @param {string} id
  * @returns {Object}
@@ -606,7 +589,7 @@ function resolveColorTheme(idOrDefinition) {
  * Reads a Tailwind family colour for a resolved theme (Classic falls back to the stock palette).
  *
  * @example themeFamilyHex(resolveColorTheme('classic'), 'sky', 100) // → '#e0f2fe'
- * @example themeFamilyHex(resolveColorTheme('midnight'), 'white')   // → '#000000'
+ * @example themeFamilyHex(resolveColorTheme('dark'), 'white')      // → a deep charcoal hex
  * @param {Object} resolved
  * @param {string} family e.g. 'slate' or 'white'
  * @param {number} [shade]
@@ -663,7 +646,7 @@ function removeThemeCssVariables(root) {
  * Applies a theme to the document: swaps the CSS variables, sets `color-scheme` and the
  * `data-theme` / `data-theme-mode` attributes used by the global stylesheet.
  *
- * @example applyColorTheme('midnight').mode // → 'dark' (and <html data-theme="midnight">)
+ * @example applyColorTheme('dark').mode // → 'dark' (and <html data-theme="dark">)
  * @example applyColorTheme('classic', null).id // → 'classic' (no DOM touched)
  * @param {string} id
  * @param {Object} [root=document.documentElement]
@@ -686,7 +669,7 @@ function applyColorTheme(id, root = typeof document === 'undefined' ? null : doc
  * primary button and body text).
  *
  * @example describeThemeSwatches(resolveColorTheme('classic')).male // → '#e0f2fe' (sky-100)
- * @example describeThemeSwatches(resolveColorTheme('midnight')).canvas // → '#000000'
+ * @example describeThemeSwatches(resolveColorTheme('dark')).canvas // → a deep charcoal hex
  * @param {Object} resolved
  * @returns {{canvas: string, panel: string, text: string, primary: string, onPrimary: string, male: string, maleBorder: string, female: string, femaleBorder: string, line: string}}
  */

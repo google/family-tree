@@ -719,7 +719,7 @@ function setupCanvasTouchListeners({
     const onTouchStart = (e) => {
         if (e.touches.length !== 2) return;
         e.preventDefault();
-        touchPinch = initTouchPinchState(e.touches, cameraRef, onInteract);
+        touchPinch = initTouchPinchState(e.touches, cameraRef);
     };
 
     const onTouchMove = (e) => {

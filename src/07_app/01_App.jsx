@@ -490,6 +490,7 @@ function useAppViewModel() {
         ...core, ...viewport, ...focusNav
     });
     useUrlViewStateSync({ ...core, ...viewport, ...focusNav });
+    useBackgroundGeocoder(core.tree);
     const applyDemographicSettingsDraft = useDemographicSettingsApply({
         sheetUrl: core.sheetUrl, setTree: core.setTree, appendLog: core.appendLog,
         fetchFromUrl: core.fetchFromUrl, setIsSettingsOpen: core.setIsSettingsOpen

@@ -428,18 +428,18 @@ if (shouldRunChrome) {
             (v) => { const s = v && JSON.parse(v); return s && s.home && s.privacy && s.fab && s.titleChip.includes('Ancestry Browser: Demo') && s.value.includes(DEMO_ID) && s.nodes === 0; }));
         console.log(`  ${GREEN}✓${RESET} Home screen rendered first: demo sheet prefilled with title chip "${homeState.titleChip}", radial FAB visible, no tree loaded yet (${homeState.nodes} nodes).`);
 
-        // 2. Open the radial FAB on the home screen -> pick "Colour theme" -> switch to "midnight" -> close dialog -> reset to "classic".
+        // 2. Open the radial FAB on the home screen -> pick "Colour theme" -> switch to "dark" -> close dialog -> reset to "classic".
         await evaluate(`${q('[data-testid="settings-fab-toggle"]')}.click(); 'clicked'`);
         await waitFor('radial FAB satellite buttons', `!!${q('[data-testid="settings-fab-theme"]')}`, Boolean, 10, 200);
         await evaluate(`${q('[data-testid="settings-fab-theme"]')}.click(); 'clicked'`);
-        const themeCount = await waitFor('Appearance tab with 10 M3 themes', `document.querySelectorAll('[data-testid^="theme-card-"]').length`, (n) => n === 10, 10, 200);
-        await evaluate(`${q('[data-testid="theme-card-midnight"]')}.click(); 'clicked'`);
-        const midnightState = JSON.parse(await waitFor('midnight theme applied',
+        const themeCount = await waitFor('Appearance tab with 7 M3 themes', `document.querySelectorAll('[data-testid^="theme-card-"]').length`, (n) => n === 7, 10, 200);
+        await evaluate(`${q('[data-testid="theme-card-dark"]')}.click(); 'clicked'`);
+        const darkState = JSON.parse(await waitFor('dark theme applied',
             `JSON.stringify({ theme: document.documentElement.getAttribute('data-theme'), mode: document.documentElement.getAttribute('data-theme-mode'), cookie: document.cookie })`,
-            (v) => { const s = v && JSON.parse(v); return s && s.theme === 'midnight' && s.mode === 'dark' && s.cookie.includes('ft_color_theme=midnight'); }, 10, 200));
+            (v) => { const s = v && JSON.parse(v); return s && s.theme === 'dark' && s.mode === 'dark' && s.cookie.includes('ft_color_theme=dark'); }, 10, 200));
         await evaluate(`${q('[data-testid="theme-card-classic"]')}.click(); 'clicked'`);
         await evaluate(`${q('[data-testid="app-settings-panel"] button[title="Close"]')}.click(); 'clicked'`);
-        console.log(`  ${GREEN}✓${RESET} Radial FAB opened Settings (${themeCount} M3 themes); applied "${midnightState.theme}" (${midnightState.mode}) and persisted cookie.`);
+        console.log(`  ${GREEN}✓${RESET} Radial FAB opened Settings (${themeCount} M3 themes); applied "${darkState.theme}" (${darkState.mode}) and persisted cookie.`);
 
         // 3. Press Open → the demo sheet is fetched from Google and the tree renders. The demo's own tab is a flat
         //    roster; its `Links` tab leads to the 14-person "Husband's Family" sheet that actually forms the tree.

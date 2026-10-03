@@ -20,7 +20,6 @@
 function useCanvasWheelZoom({ onInteract, containerRef, setCamera, clampCamera, getBounds, getPpy }) {
     return useCallback((e) => {
         if (e.target.closest('.interactive-element')) return;
-        if (onInteract) onInteract();
         
         const cont = containerRef.current ? containerRef.current.getBoundingClientRect() : { left: 0, top: 0 };
         const pointerX = e.clientX - cont.left;
@@ -39,7 +38,7 @@ function useCanvasWheelZoom({ onInteract, containerRef, setCamera, clampCamera, 
             });
             return clampCamera(nextCam);
         });
-    }, [clampCamera, getBounds, onInteract, getPpy, setCamera, containerRef]);
+    }, [clampCamera, getBounds, getPpy, setCamera, containerRef]);
 }
 
 /**
@@ -48,7 +47,7 @@ function useCanvasWheelZoom({ onInteract, containerRef, setCamera, clampCamera, 
  *
  * @param {object} params
  * @param {React.PointerEvent} params.e - Native pointermove event
- * @param {React.MutableRefObject<Map<number, {x: number, y: number}>>} params.activePointersRef - Active pointers map
+ * @param {React.MutableRefObject<Map<number, {x: number, y: number, startX?: number, startY?: number, moved?: boolean}>>} params.activePointersRef - Active pointers map
  * @param {React.MutableRefObject<object|null>} params.pointerPinchRef - Multi-touch pinch tracking state
  * @param {boolean} params.isDragging - Whether single pointer drag is active
  * @param {{x: number, y: number}} params.dragStart - Drag origin coordinates
@@ -90,8 +89,12 @@ function processPointerMove({
     e, activePointersRef, pointerPinchRef, isDragging, dragStart,
     containerRef, getBounds, getPpy, setCamera, clampCamera
 }) {
-    if (!activePointersRef.current.has(e.pointerId)) return;
-    activePointersRef.current.set(e.pointerId, { x: e.clientX, y: e.clientY });
+    const prev = activePointersRef.current.get(e.pointerId);
+    if (!prev) return;
+    const startX = prev.startX !== undefined ? prev.startX : prev.x;
+    const startY = prev.startY !== undefined ? prev.startY : prev.y;
+    const moved = Boolean(prev.moved) || activePointersRef.current.size > 1 || Math.hypot(e.clientX - startX, e.clientY - startY) > 5;
+    activePointersRef.current.set(e.pointerId, { x: e.clientX, y: e.clientY, startX, startY, moved });
 
     if (activePointersRef.current.size === 2 && pointerPinchRef.current && pointerPinchRef.current.dist > 10) {
         const [p1, p2] = Array.from(activePointersRef.current.values());
@@ -109,15 +112,17 @@ function processPointerMove({
 
 /**
  * Handles pointer release or cancellation by clearing pointer tracking state,
- * adjusting the active pinch anchor, or ending drag interactions.
+ * adjusting the active pinch anchor, ending drag interactions, and invoking `onInteract`
+ * when a single-pointer click on the empty canvas completes without dragging.
  *
  * @param {object} params
  * @param {React.PointerEvent} params.e - Native pointerup event
- * @param {React.MutableRefObject<Map<number, {x: number, y: number}>>} params.activePointersRef - Active pointers map
+ * @param {React.MutableRefObject<Map<number, {x: number, y: number, startX?: number, startY?: number, moved?: boolean}>>} params.activePointersRef - Active pointers map
  * @param {React.MutableRefObject<object|null>} params.pointerPinchRef - Multi-touch pinch tracking state
  * @param {React.MutableRefObject<object>} params.cameraRef - Current camera coordinates ref
  * @param {Function} params.setDragStart - Setter for drag origin
  * @param {Function} params.setIsDragging - Setter for drag state
+ * @param {Function} [params.onInteract] - Callback invoked on clean background tap/click
  *
  * @example
  * processPointerUp({
@@ -145,8 +150,13 @@ function processPointerUp({
     pointerPinchRef,
     cameraRef,
     setDragStart,
-    setIsDragging
+    setIsDragging,
+    onInteract
 }) {
+    const released = activePointersRef.current.get(e.pointerId);
+    const wasCleanTap = Boolean(
+        released && !released.moved && activePointersRef.current.size === 1 && !pointerPinchRef.current
+    );
     activePointersRef.current.delete(e.pointerId);
     try {
         if (e.pointerId && e.currentTarget) {
@@ -163,6 +173,7 @@ function processPointerUp({
     } else if (activePointersRef.current.size === 0) {
         setIsDragging(false);
     }
+    if (wasCleanTap && onInteract) onInteract();
 }
 
 /**
@@ -247,7 +258,7 @@ function initializePointerGestureState({
  *
  * @param {Object} options
  * @param {PointerEvent} options.e - Native DOM pointer down event.
- * @param {React.MutableRefObject<Map<number, {x: number, y: number}>>} options.activePointersRef - Active pointers tracking ref.
+ * @param {React.MutableRefObject<Map<number, {x: number, y: number, startX?: number, startY?: number, moved?: boolean}>>} options.activePointersRef - Active pointers tracking ref.
  * @param {React.MutableRefObject<Object|null>} options.pointerPinchRef - Multi-touch pinch state ref.
  * @param {React.MutableRefObject<Object>} options.cameraRef - Current camera state ref.
  * @param {Function} options.setIsDragging - State setter for isDragging boolean.
@@ -281,8 +292,7 @@ function processPointerDown({
     pointerPinchRef,
     cameraRef,
     setIsDragging,
-    setDragStart,
-    onInteract
+    setDragStart
 }) {
     if (shouldIgnorePointerDown(e, activePointersRef.current.size)) return;
 
@@ -290,7 +300,19 @@ function processPointerDown({
         e.currentTarget.setPointerCapture(e.pointerId);
     } catch (err) {}
 
-    activePointersRef.current.set(e.pointerId, { x: e.clientX, y: e.clientY });
+    const isMultiPointer = activePointersRef.current.size >= 1;
+    if (isMultiPointer) {
+        activePointersRef.current.forEach((val, key) => {
+            activePointersRef.current.set(key, { ...val, moved: true });
+        });
+    }
+    activePointersRef.current.set(e.pointerId, {
+        x: e.clientX,
+        y: e.clientY,
+        startX: e.clientX,
+        startY: e.clientY,
+        moved: isMultiPointer
+    });
 
     initializePointerGestureState({
         e,
@@ -300,8 +322,6 @@ function processPointerDown({
         setIsDragging,
         setDragStart
     });
-
-    if (onInteract) onInteract();
 }
 
 /**
@@ -336,9 +356,9 @@ function useCanvasPointerCallbacks({
     const handlePointerDown = useCallback((e) => {
         processPointerDown({
             e, activePointersRef, pointerPinchRef, cameraRef,
-            setIsDragging, setDragStart, onInteract
+            setIsDragging, setDragStart
         });
-    }, [onInteract, cameraRef]);
+    }, [cameraRef]);
     
     const handlePointerMove = useCallback((e) => {
         processPointerMove({
@@ -349,9 +369,9 @@ function useCanvasPointerCallbacks({
     
     const handlePointerUp = useCallback((e) => {
         processPointerUp({
-            e, activePointersRef, pointerPinchRef, cameraRef, setDragStart, setIsDragging
+            e, activePointersRef, pointerPinchRef, cameraRef, setDragStart, setIsDragging, onInteract
         });
-    }, [cameraRef]);
+    }, [cameraRef, onInteract]);
 
     return { handlePointerDown, handlePointerMove, handlePointerUp };
 }

@@ -17,6 +17,10 @@ const DEMOGRAPHIC_SETTINGS_COOKIE = 'ft_demographic_settings';
 const COLOR_THEME_COOKIE = 'ft_color_theme';
 /** Cookie holding the last URL hash view state (p=…&z=…&o=…&v=map) for session restore. */
 const LAST_VIEW_STATE_COOKIE = 'ft_last_view_state';
+/** Cookie holding background-geocoded location coordinates and hierarchies (JSON). */
+const GEO_CACHE_COOKIE = 'ft_geo_cache';
+/** Keep the URL-encoded geo-cache cookie payload under this many characters. */
+const GEO_CACHE_COOKIE_BUDGET = 3400;
 /** Preferences survive one year of inactivity; every write refreshes the clock. */
 const PREFERENCE_COOKIE_MAX_AGE_SECONDS = 365 * 24 * 60 * 60;
 /** Browsers cap a single cookie at 4096 bytes; a dozen compact entries stay well below. */
@@ -910,8 +914,8 @@ function applyStoredDemographicSettings() {
  * @returns {string|null}
  *
  * @example
- * saveColorThemeId('midnight');
- * loadStoredColorThemeId(); // => 'midnight'
+ * saveColorThemeId('dark');
+ * loadStoredColorThemeId(); // => 'dark'
  *
  * @example
  * writePreference(COLOR_THEME_COOKIE, 'neon-1999');
@@ -948,7 +952,7 @@ function saveColorThemeId(id) {
  * loadStoredColorThemeId(); // => null
  *
  * @example
- * saveColorThemeId('ocean'); clearStoredColorTheme(); readPreference(COLOR_THEME_COOKIE); // => null
+ * saveColorThemeId('pastel'); clearStoredColorTheme(); readPreference(COLOR_THEME_COOKIE); // => null
  */
 function clearStoredColorTheme() {
     removePreference(COLOR_THEME_COOKIE);
@@ -960,8 +964,8 @@ function clearStoredColorTheme() {
  * @returns {Object} The resolved theme (`{ id, name, mode, roles, … }`)
  *
  * @example
- * saveColorThemeId('midnight');
- * applyStoredColorTheme().id; // => 'midnight' (<html data-theme="midnight">)
+ * saveColorThemeId('dark');
+ * applyStoredColorTheme().id; // => 'dark' (<html data-theme="dark">)
  *
  * @example
  * clearStoredColorTheme();
@@ -1026,10 +1030,194 @@ function clearLastViewStateHash() {
     removePreference(LAST_VIEW_STATE_COOKIE);
 }
 
+// ─── Background-geocoded location cache (cookie + localStorage mirror) ──────
+
+/** In-memory mirror of `ft_geo_cache` so synchronous coordinate/hierarchy lookups are O(1). */
+const geoLocationMemoryCache = new Map();
+let geoLocationCacheRawSnapshot = null;
+
+/**
+ * Validates and normalizes one cached geocoding entry (`{ coords: [lat, lng], country, state, district }`).
+ *
+ * @param {*} entry - Candidate cache value
+ * @returns {{coords: [number, number], country: string|null, state: string|null, district: string|null}|null}
+ *
+ * @example
+ * sanitizeGeoCacheEntry({ coords: [10.025, 76.308], country: 'India', state: 'Kerala', district: 'Ernakulam' });
+ * // => { coords: [10.025, 76.308], country: 'India', state: 'Kerala', district: 'Ernakulam' }
+ *
+ * @example
+ * sanitizeGeoCacheEntry({ coords: ['bad', 0] });
+ * // => null
+ */
+function sanitizeGeoCacheEntry(entry) {
+    if (!entry || typeof entry !== 'object' || !Array.isArray(entry.coords) || entry.coords.length !== 2) return null;
+    const lat = Number(entry.coords[0]);
+    const lng = Number(entry.coords[1]);
+    if (!Number.isFinite(lat) || !Number.isFinite(lng) || Math.abs(lat) > 90 || Math.abs(lng) > 180) return null;
+    const roundCoord = (n) => Math.round(n * 10000) / 10000;
+    return {
+        coords: [roundCoord(lat), roundCoord(lng)],
+        country: typeof entry.country === 'string' && entry.country.trim() ? entry.country.trim() : null,
+        state: typeof entry.state === 'string' && entry.state.trim() ? entry.state.trim() : null,
+        district: typeof entry.district === 'string' && entry.district.trim() ? entry.district.trim() : null
+    };
+}
+
+/**
+ * Parses a JSON string of cached geocoded locations into a validated `{ [normPlace]: entry }` map.
+ *
+ * @param {string|null} raw - Raw JSON text from `ft_geo_cache`
+ * @returns {Object<string, {coords: [number, number], country: string|null, state: string|null, district: string|null}>}
+ *
+ * @example
+ * parseGeoLocationCacheJson('{"edappilly":{"coords":[10.025,76.308],"country":"India","state":"Kerala","district":"Ernakulam"}}');
+ * // => { edappilly: { coords: [10.025, 76.308], country: 'India', state: 'Kerala', district: 'Ernakulam' } }
+ *
+ * @example
+ * parseGeoLocationCacheJson('not-json');
+ * // => {}
+ */
+function parseGeoLocationCacheJson(raw) {
+    if (!raw || typeof raw !== 'string') return {};
+    try {
+        const parsed = JSON.parse(raw);
+        if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) return {};
+        const clean = {};
+        for (const [key, val] of Object.entries(parsed)) {
+            const normKey = String(key || '').toLowerCase().trim();
+            const entry = sanitizeGeoCacheEntry(val);
+            if (normKey && entry) clean[normKey] = entry;
+        }
+        return clean;
+    } catch (e) {
+        return {};
+    }
+}
+
+/**
+ * Serializes a geo-location cache map to a compact JSON string that fits within the browser cookie budget.
+ *
+ * @param {Object<string, Object>} cacheObj - Map of normalized place → entry
+ * @returns {string} JSON text
+ *
+ * @example
+ * serializeGeoLocationCache({ edappilly: { coords: [10.025, 76.308], country: 'India', state: 'Kerala', district: 'Ernakulam' } });
+ * // => '{"edappilly":{"coords":[10.025,76.308],"country":"India","state":"Kerala","district":"Ernakulam"}}'
+ *
+ * @example
+ * serializeGeoLocationCache({});
+ * // => '{}'
+ */
+function serializeGeoLocationCache(cacheObj) {
+    const entries = Object.entries(cacheObj || {})
+        .map(([k, v]) => [String(k || '').toLowerCase().trim(), sanitizeGeoCacheEntry(v)])
+        .filter(([k, v]) => k && v);
+    let json = JSON.stringify(Object.fromEntries(entries));
+    while (entries.length > 1 && encodeURIComponent(json).length > GEO_CACHE_COOKIE_BUDGET) {
+        entries.shift();
+        json = JSON.stringify(Object.fromEntries(entries));
+    }
+    return json;
+}
+
+/**
+ * Loads the persisted geocoding cache from the `ft_geo_cache` cookie/localStorage and syncs the in-memory map.
+ *
+ * @returns {Object<string, {coords: [number, number], country: string|null, state: string|null, district: string|null}>}
+ *
+ * @example
+ * saveCachedGeoLocation('Edappilly', { coords: [10.025, 76.308], country: 'India', state: 'Kerala', district: 'Ernakulam' });
+ * loadGeoLocationCache().edappilly.coords; // => [10.025, 76.308]
+ *
+ * @example
+ * clearGeoLocationCache();
+ * loadGeoLocationCache(); // => {}
+ */
+function loadGeoLocationCache() {
+    const raw = readPreference(GEO_CACHE_COOKIE);
+    if (raw !== geoLocationCacheRawSnapshot) {
+        geoLocationMemoryCache.clear();
+        const parsed = parseGeoLocationCacheJson(raw);
+        for (const [k, v] of Object.entries(parsed)) {
+            geoLocationMemoryCache.set(k, v);
+        }
+        geoLocationCacheRawSnapshot = raw;
+    }
+    return Object.fromEntries(geoLocationMemoryCache.entries());
+}
+
+/**
+ * Synchronously looks up a place in the browser geocoding cache (hydrating from `ft_geo_cache` if needed).
+ *
+ * @param {string} place - Raw or normalized location name
+ * @returns {{coords: [number, number], country: string|null, state: string|null, district: string|null}|null}
+ *
+ * @example
+ * saveCachedGeoLocation('Edappilly', { coords: [10.025, 76.308], country: 'India', state: 'Kerala', district: 'Ernakulam' });
+ * getCachedGeoLocation('edappilly').coords; // => [10.025, 76.308]
+ *
+ * @example
+ * getCachedGeoLocation('unknown-village-xyz'); // => null
+ */
+function getCachedGeoLocation(place) {
+    if (!place || typeof place !== 'string') return null;
+    const norm = place.toLowerCase().trim();
+    if (!norm) return null;
+    loadGeoLocationCache();
+    return geoLocationMemoryCache.get(norm) || null;
+}
+
+/**
+ * Persists a resolved location entry (`coords` + optional `country`/`state`/`district`) in the
+ * browser's `ft_geo_cache` cookie and `localStorage` mirror.
+ *
+ * @param {string} place - Location name to cache
+ * @param {Object} entry - `{ coords: [lat, lng], country?, state?, district? }`
+ * @returns {{coords: [number, number], country: string|null, state: string|null, district: string|null}|null}
+ *
+ * @example
+ * saveCachedGeoLocation('Edappilly', { coords: [10.025, 76.308], country: 'India', state: 'Kerala', district: 'Ernakulam' });
+ * // => { coords: [10.025, 76.308], country: 'India', state: 'Kerala', district: 'Ernakulam' }
+ *
+ * @example
+ * saveCachedGeoLocation('', { coords: [0, 0] });
+ * // => null
+ */
+function saveCachedGeoLocation(place, entry) {
+    if (!place || typeof place !== 'string') return null;
+    const norm = place.toLowerCase().trim();
+    const clean = sanitizeGeoCacheEntry(entry);
+    if (!norm || !clean) return null;
+    const current = loadGeoLocationCache();
+    current[norm] = clean;
+    const json = serializeGeoLocationCache(current);
+    writePreference(GEO_CACHE_COOKIE, json);
+    geoLocationMemoryCache.set(norm, clean);
+    geoLocationCacheRawSnapshot = readPreference(GEO_CACHE_COOKIE);
+    return clean;
+}
+
+/**
+ * Clears all cached geocoded locations from the browser cookie, localStorage mirror, and in-memory map.
+ *
+ * @example
+ * clearGeoLocationCache();
+ * getCachedGeoLocation('Edappilly'); // => null
+ *
+ * @example
+ * saveCachedGeoLocation('TVM', { coords: [8.5241, 76.9366] }); clearGeoLocationCache(); loadGeoLocationCache(); // => {}
+ */
+function clearGeoLocationCache() {
+    removePreference(GEO_CACHE_COOKIE);
+    geoLocationMemoryCache.clear();
+    geoLocationCacheRawSnapshot = null;
+}
+
 /**
  * The "Clear stored data" action of the GDPR notice: deletes all preference cookies and
- * their mirrors, empties the in-memory title registry, restores the shipped model and repaints
- * the Classic theme.
+ * their mirrors, empties the in-memory title registry and geo cache, restores the shipped model
+ * and repaints the Classic theme.
  *
  * @example
  * clearStoredPreferences();
@@ -1045,6 +1233,7 @@ function clearStoredPreferences() {
     removePreference(DEMOGRAPHIC_SETTINGS_COOKIE);
     removePreference(COLOR_THEME_COOKIE);
     removePreference(LAST_VIEW_STATE_COOKIE);
+    clearGeoLocationCache();
     sheetTitleRegistry.clear();
     FamilyTreeBuilder.resetDemographicSettings();
     applyColorTheme(DEFAULT_COLOR_THEME_ID);
