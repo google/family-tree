@@ -254,7 +254,7 @@ try {
         'mergeSheetHistoryEntry', 'resolveMostUsedSheet', 'resolveLastUsedSheet',
         'filterSheetHistoryForInput', 'readSheetHistory', 'writeSheetHistory',
         'recordSheetUse', 'forgetSheetHistoryEntry', 'buildSheetUrlFromId', 'normalizeSheetReference',
-        'isLikelySheetReference', 'resolveHomeScreenPrefill', 'formatSheetHistoryLabel',
+        'isLikelySheetReference', 'resolveHomeScreenPrefill', 'resolveHomeScreenSheetList', 'formatSheetHistoryLabel',
         'resolveKnownSheetTitle', 'parseContentDispositionFilename', 'deriveSpreadsheetTitle',
         'rememberSheetTitle', 'getRememberedSheetTitle', 'rememberSheetTitleFromResponse',
         'loadStoredDemographicSettings', 'saveDemographicSettings', 'clearStoredDemographicSettings',
@@ -327,7 +327,7 @@ try {
         mergeSheetHistoryEntry, resolveMostUsedSheet, resolveLastUsedSheet, filterSheetHistoryForInput,
         readSheetHistory, recordSheetUse,
         forgetSheetHistoryEntry, buildSheetUrlFromId, normalizeSheetReference, isLikelySheetReference,
-        resolveHomeScreenPrefill, formatSheetHistoryLabel, resolveKnownSheetTitle,
+        resolveHomeScreenPrefill, resolveHomeScreenSheetList, formatSheetHistoryLabel, resolveKnownSheetTitle,
         parseContentDispositionFilename, deriveSpreadsheetTitle, rememberSheetTitle,
         getRememberedSheetTitle, rememberSheetTitleFromResponse,
         loadStoredDemographicSettings, saveDemographicSettings, clearStoredDemographicSettings,
@@ -518,7 +518,7 @@ try {
             mergeSheetHistoryEntry, resolveMostUsedSheet, resolveLastUsedSheet, filterSheetHistoryForInput,
             readSheetHistory, recordSheetUse,
             forgetSheetHistoryEntry, buildSheetUrlFromId, normalizeSheetReference, isLikelySheetReference,
-            resolveHomeScreenPrefill, formatSheetHistoryLabel, resolveKnownSheetTitle,
+            resolveHomeScreenPrefill, resolveHomeScreenSheetList, formatSheetHistoryLabel, resolveKnownSheetTitle,
             parseContentDispositionFilename, deriveSpreadsheetTitle, rememberSheetTitle,
             getRememberedSheetTitle, rememberSheetTitleFromResponse,
             loadStoredDemographicSettings, saveDemographicSettings, clearStoredDemographicSettings,
@@ -14554,15 +14554,16 @@ const m3 = tree.all.find(n => n.id === '3');
                 isLikelySheetReference(DEFAULT_URL) && isLikelySheetReference(ID_A) &&
                 !isLikelySheetReference('3bd09a0f6c2e4d1b8a7f9e0c1d2b3a4f5e6d7c8b') && !isLikelySheetReference('hello'));
 
-            // Prefill precedence
+            // Prefill precedence (clipboard only; otherwise empty)
             const clip = { id: ID_C, url: buildSheetUrlFromId(ID_C) };
             const hist = [{ id: ID_B, title: 'Second', uses: 4, lastUsed: 1 }];
-            assertEqual('Test 209.34: Prefill prefers a sheet reference found on the clipboard',
+            assertEqual('Test 209.34: Prefill populates the input box when a sheet reference is found in the copy buffer (clipboard)',
                 JSON.stringify(resolveHomeScreenPrefill(clip, hist)), JSON.stringify({ id: ID_C, url: clip.url, source: 'clipboard' }));
-            assertEqual('Test 209.35: Without a clipboard hit the most-used sheet is prefilled',
-                JSON.stringify(resolveHomeScreenPrefill(null, hist)), JSON.stringify({ id: ID_B, url: buildSheetUrlFromId(ID_B), source: 'history' }));
-            assertEqual('Test 209.36: With no history the demo sheet (DEFAULT_URL) is prefilled',
-                JSON.stringify(resolveHomeScreenPrefill(null, [])), JSON.stringify({ id: DEMO_SHEET_ID, url: DEFAULT_URL, source: 'demo' }));
+            assertEqual('Test 209.35: Without a clipboard hit the input box stays empty even when history has saved sheets',
+                JSON.stringify(resolveHomeScreenPrefill(null, hist)), JSON.stringify({ id: '', url: '', source: 'empty' }));
+            assertEqual('Test 209.36: With no clipboard hit and no history the input box stays empty while resolveHomeScreenSheetList offers the demo sheet inline',
+                JSON.stringify(resolveHomeScreenPrefill(null, [])) + '|' + resolveHomeScreenSheetList([])[0].id,
+                JSON.stringify({ id: '', url: '', source: 'empty' }) + '|' + DEMO_SHEET_ID);
             assertEqual('Test 209.37: Dropdown label is "<title> — <id>" with the rest of the URL trimmed',
                 formatSheetHistoryLabel({ id: ID_A, title: DEMO_SHEET_TITLE }), `${DEMO_SHEET_TITLE} — ${ID_A}`);
             assertEqual('Test 209.38: Dropdown label falls back to "Untitled sheet" when the title is unknown',
@@ -14702,23 +14703,26 @@ const m3 = tree.all.find(n => n.id === '3');
                 return start === -1 ? '' : appCode.slice(start, end === -1 ? start + 4000 : end);
             };
             const homeBlock = sliceComponent('const SheetSourceHomeScreen = ({');
+            const formBlock = sliceComponent('const SheetSourceForm = ({');
+            const dropdownBlock = sliceComponent('const SheetHistoryDropdown = ({');
             assert('Test 210.01: SheetSourceHomeScreen is a full-screen overlay with the watermark, header, form and privacy notice, hidden while closed',
                 /data-testid="sheet-source-home"/.test(homeBlock) && /fixed inset-0/.test(homeBlock) && /<BrandWatermark\b/.test(homeBlock) &&
                 /<HomeScreenHeader\s*\/>/.test(homeBlock) && /<SheetSourceForm\b/.test(homeBlock) && /<HomePrivacyNotice\b/.test(homeBlock) &&
                 /if \(!isOpen\) return null;/.test(homeBlock));
-            assert('Test 210.02: The home screen only opens a sheet after validation on submit, and offers "Back to the tree" when one is loaded',
-                /const ref = form\.validate\(text\);\s*if \(ref\) onSubmit\(ref\.url\);/.test(homeBlock) && /hasTree && \(/.test(homeBlock) && /Back to the tree/.test(homeBlock));
+            assert('Test 210.02: The home screen only opens a sheet after validation on submit, and offers "Back to the current tree" alongside the inline sheet list',
+                /const ref = form\.validate\(text\);\s*if \(ref\) onSubmit\(ref\.url\);/.test(homeBlock) &&
+                /hasTree=\{hasTree\}/.test(homeBlock) && /Back to the current tree/.test(dropdownBlock));
 
             const inputBlock = sliceComponent('const SheetSourceInput = ({');
             assert('Test 210.03: Typing in the textbox only updates state (marks the form touched) — nothing loads until Enter/Open',
-                /id="sheet-source-input"/.test(inputBlock) && /onChange=\{\(e\) => \{ form\.markTouched\(\); form\.setValue\(e\.target\.value\); \}\}/.test(inputBlock) &&
+                /id="sheet-source-input"/.test(inputBlock) && /onChange=\{handleChange\}/.test(inputBlock) &&
                 !/onChange=[^\n]*onSubmit\(/.test(inputBlock));
-            assert('Test 210.04: Picking a dropdown row fills the textbox with the canonical URL and opens that sheet at once',
-                /const pickEntry = \(entry\) => \{\s*const url = buildSheetUrlFromId\(entry\.id\);[\s\S]*?form\.setValue\(url\);[\s\S]*?onSubmit\(url\);/.test(inputBlock));
-            assert('Test 210.05: The history caret and dropdown appear only when filtered dropdownEntries (excluding the current input sheet) are non-empty',
-                /dropdownEntries = filterSheetHistoryForInput\(form\.history, form\.value\)/.test(inputBlock) &&
-                /dropdownEntries\.length > 0 && \(/.test(inputBlock) &&
-                /form\.isListOpen && <SheetHistoryDropdown\b/.test(inputBlock));
+            assert('Test 210.04: Picking an inline sheet row fills the textbox with the canonical URL and opens that sheet at once',
+                /const pickEntry = \(entry\) => \{\s*const url = buildSheetUrlFromId\(entry\.id\);[\s\S]*?form\.setValue\(url\);[\s\S]*?onSubmit\(url\);/.test(formBlock));
+            assert('Test 210.05: Previously used sheets are rendered inline directly below the input box without any pulldown caret toggle',
+                /inlineEntries = resolveHomeScreenSheetList\(form\.history\)/.test(formBlock) &&
+                /<SheetHistoryDropdown entries=\{inlineEntries\}/.test(formBlock) &&
+                !/Show sheets you have opened before/.test(inputBlock));
 
             const rowBlock = sliceComponent('const SheetHistoryRow = ({');
             assert('Test 210.06: Dropdown rows show the title (or "Untitled sheet") and the bare ID — the rest of the URL is trimmed',
@@ -14728,7 +14732,7 @@ const m3 = tree.all.find(n => n.id === '3');
                 /e\.stopPropagation\(\); onForget\(entry\.id\);/.test(rowBlock) && /title="Forget this sheet"/.test(rowBlock));
 
             const formHookBlock = sliceComponent('function useSheetSourceForm(');
-            assert('Test 210.08: The form re-prefills on open (clipboard → most-used → demo) but never overwrites text the user already typed',
+            assert('Test 210.08: The form checks the clipboard on open (keeping input empty otherwise) and never overwrites text the user already typed',
                 /resolveHomeScreenPrefill\(clipboardRef, freshHistory\)/.test(formHookBlock) && /if \(touchedRef\.current\) return;/.test(formHookBlock) &&
                 /return attachClipboardPrefill\(applyPrefill\);/.test(formHookBlock));
             const clipboardBlock = sliceComponent('function attachClipboardPrefill(');
@@ -14979,10 +14983,11 @@ const m3 = tree.all.find(n => n.id === '3');
                 return start === -1 ? '' : appCode.slice(start, end === -1 ? start + 4000 : end);
             };
             const sheetFormBlock = sliceComponent('const SheetSourceForm = ({');
-            assert('Test 213.06: SheetSourceForm computes resolveKnownSheetTitle(form.value, form.history) and renders the data-testid="sheet-source-title" chip when known',
+            const sheetFormHeaderBlock = sliceComponent('const SheetSourceFormHeader = ({');
+            assert('Test 213.06: SheetSourceForm computes resolveKnownSheetTitle(form.value, form.history) and SheetSourceFormHeader renders the data-testid="sheet-source-title" chip when known',
                 /resolveKnownSheetTitle\(form\.value,\s*form\.history\)/.test(sheetFormBlock) &&
-                /data-testid="sheet-source-title"/.test(sheetFormBlock) &&
-                /<Icons\.Sheet\s*\/>/.test(sheetFormBlock));
+                /data-testid="sheet-source-title"/.test(sheetFormHeaderBlock) &&
+                /<Icons\.Sheet\s*\/>/.test(sheetFormHeaderBlock));
 
             // 2. Radial Settings FAB geometry & visibility on both screens
             const offsets = computeRadialMenuOffsets(3, 84);
@@ -15294,6 +15299,70 @@ const m3 = tree.all.find(n => n.id === '3');
             clearGeoLocationCache();
             cookieJar.clear();
             fakeLocalStorage.clear();
+        }
+    }
+
+    // ══════════════════════════════════════════════════════════════════════════
+    //  216. Inline Sheet List, Back to Current Tree Link & Clipboard Copy Buffer Indicator
+    // ══════════════════════════════════════════════════════════════════════════
+    {
+        section('216. Inline Sheet List, Back to Current Tree Link & Clipboard Copy Buffer Indicator');
+        try {
+            const sliceComponent = (marker) => {
+                const start = appCode.indexOf(marker);
+                const end = appCode.indexOf('/**', start + marker.length);
+                return start === -1 ? '' : appCode.slice(start, end === -1 ? start + 4000 : end);
+            };
+
+            // 1. resolveHomeScreenPrefill keeps the input box empty unless clipboard has a sheet URL/ID
+            assertEqual('Test 216.01: resolveHomeScreenPrefill returns empty URL and source="empty" when clipboard is empty, regardless of saved history',
+                JSON.stringify(resolveHomeScreenPrefill(null, [{ id: DEMO_SHEET_ID, title: DEMO_SHEET_TITLE, uses: 5, lastUsed: 999 }])),
+                JSON.stringify({ id: '', url: '', source: 'empty' }));
+
+            const clipSheetId = '1ClipboardCopiedSheetIdForHomeScreenTest01';
+            const clipPrefill = resolveHomeScreenPrefill({ id: clipSheetId, url: buildSheetUrlFromId(clipSheetId) }, []);
+            assertEqual('Test 216.02: resolveHomeScreenPrefill returns source="clipboard" and canonical URL when clipboard contains a Google Sheets reference',
+                `${clipPrefill.source}|${clipPrefill.id}|${clipPrefill.url}`,
+                `clipboard|${clipSheetId}|${buildSheetUrlFromId(clipSheetId)}`);
+
+            // 2. resolveHomeScreenSheetList returns all previously used sheets (or fallback demo sheet when history is empty)
+            const fallbackList = resolveHomeScreenSheetList([]);
+            assertEqual('Test 216.03: resolveHomeScreenSheetList falls back to the built-in demo sheet (with isDemo=true) when history is empty',
+                `${fallbackList.length}|${fallbackList[0].id}|${fallbackList[0].title}|${Boolean(fallbackList[0].isDemo)}`,
+                `1|${DEMO_SHEET_ID}|${DEMO_SHEET_TITLE}|true`);
+
+            const savedSheets = [
+                { id: DEMO_SHEET_ID, title: DEMO_SHEET_TITLE, uses: 4, lastUsed: 200 },
+                { id: clipSheetId, title: 'Second Family Tree', uses: 2, lastUsed: 100 }
+            ];
+            const resolvedSaved = resolveHomeScreenSheetList(savedSheets);
+            assertEqual('Test 216.04: resolveHomeScreenSheetList returns all previously used sheets in rank order without hiding any behind input filtering',
+                resolvedSaved.map(e => e.id).join(','),
+                `${DEMO_SHEET_ID},${clipSheetId}`);
+
+            // 3. Inline list + "Back to the current tree" link + clipboard badge wiring
+            const headerBlock = sliceComponent('const SheetSourceFormHeader = ({');
+            const inputBlock = sliceComponent('const SheetSourceInput = ({');
+            const dropdownBlock = sliceComponent('const SheetHistoryDropdown = ({');
+            const formBlock = sliceComponent('const SheetSourceForm = ({');
+
+            assert('Test 216.05: SheetSourceFormHeader renders data-testid="clipboard-prefill-badge" indicating "Copied from copy buffer" when isClipboardPrefill is true',
+                /data-testid="clipboard-prefill-badge"/.test(headerBlock) &&
+                /Copied from copy buffer/.test(headerBlock) &&
+                /isClipboardPrefill = form\.prefillSource === 'clipboard' && Boolean\(form\.value\)/.test(formBlock));
+
+            assert('Test 216.06: SheetHistoryDropdown is an inline card below the input box (no "absolute" positioning) with "Previously used sheets" and "← Back to the current tree"',
+                !/\babsolute\b/.test(dropdownBlock) &&
+                /Previously used sheets/.test(dropdownBlock) &&
+                /data-testid="back-to-tree-button"/.test(dropdownBlock) &&
+                /← Back to the current tree/.test(dropdownBlock));
+
+            assert('Test 216.07: SheetSourceInput has no pulldown menu button or caret SVG',
+                !/aria-expanded/.test(inputBlock) &&
+                !/Show sheets you have opened before/.test(inputBlock) &&
+                !/<SheetHistoryDropdown/.test(inputBlock));
+        } catch (e) {
+            assertEqual('Test 216 execution failed', e.message, '');
         }
     }
 

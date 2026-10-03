@@ -25497,29 +25497,50 @@ async function readClipboardSheetReference() {
 
 /**
  * Decides what the home-screen textbox shows before the user touches it:
- * clipboard sheet → most-used sheet → demo sheet. Never loads anything by itself.
+ * prefilled only when a Google Sheets URL/ID is found in the copy-paste buffer
+ * (clipboard); otherwise kept empty so the user can type, paste, or pick from
+ * the inline list below. Never loads anything by itself.
  *
  * @param {{id: string, url: string}|null} clipboardRef - Result of readClipboardSheetReference()
- * @param {Array<SheetHistoryEntry>} history - Persisted history
- * @returns {{id: string, url: string, source: 'clipboard'|'history'|'demo'}}
+ * @param {Array<SheetHistoryEntry>} [_history] - Persisted history (unused; kept for signature compatibility)
+ * @returns {{id: string, url: string, source: 'clipboard'|'empty'}}
  *
  * @example
  * resolveHomeScreenPrefill(null, []).source;
- * // => 'demo'
+ * // => 'empty'
  *
  * @example
- * resolveHomeScreenPrefill(null, [{ id: '1BQvyFoA_-u4MG-r1SRDel93F1TwEaN3I6v6p-kOH8z0', title: '', uses: 2, lastUsed: 1 }]).source;
- * // => 'history'
+ * resolveHomeScreenPrefill({ id: '1BQvyFoA_-u4MG-r1SRDel93F1TwEaN3I6v6p-kOH8z0', url: 'https://docs.google.com/spreadsheets/d/1BQvyFoA_-u4MG-r1SRDel93F1TwEaN3I6v6p-kOH8z0/edit' }, []).source;
+ * // => 'clipboard'
  */
-function resolveHomeScreenPrefill(clipboardRef, history) {
+function resolveHomeScreenPrefill(clipboardRef, _history) {
     if (clipboardRef && clipboardRef.id) {
         return { id: clipboardRef.id, url: clipboardRef.url || buildSheetUrlFromId(clipboardRef.id), source: 'clipboard' };
     }
-    const mostUsed = resolveMostUsedSheet(history);
-    if (mostUsed) {
-        return { id: mostUsed.id, url: buildSheetUrlFromId(mostUsed.id), source: 'history' };
-    }
-    return { id: DEMO_SHEET_ID, url: DEFAULT_URL, source: 'demo' };
+    return { id: '', url: '', source: 'empty' };
+}
+
+/**
+ * Returns the list of sheets to display inline below the home-screen input box.
+ * Lists all previously opened sheets from history; when history is empty on a
+ * fresh browser, falls back to the built-in demo sheet so a first-time visitor
+ * can still open a sample tree with one click.
+ *
+ * @param {Array<SheetHistoryEntry>} [history=readSheetHistory()] - Ranked history entries
+ * @returns {Array<SheetHistoryEntry>} Non-empty list of sheets to render inline
+ *
+ * @example
+ * resolveHomeScreenSheetList([])[0].id;
+ * // => '1BQvyFoA_-u4MG-r1SRDel93F1TwEaN3I6v6p-kOH8z0'
+ *
+ * @example
+ * resolveHomeScreenSheetList([{ id: '1AbCdEfGhIjKlMnOpQrStUvWxYz0123456789abcdef', title: 'My Family', uses: 2, lastUsed: 1 }]).length;
+ * // => 1
+ */
+function resolveHomeScreenSheetList(history = readSheetHistory()) {
+    const valid = (history || []).filter((entry) => Boolean(entry && entry.id));
+    if (valid.length > 0) return valid;
+    return [{ id: DEMO_SHEET_ID, title: DEMO_SHEET_TITLE, uses: 0, lastUsed: 0, isDemo: true }];
 }
 
 /**
@@ -50310,11 +50331,11 @@ function useUrlViewStateSync(params) {
 // (see 05_hooks/00_BrowserPreferences.jsx) and offered in a dropdown.
 // ============================================================================
 
-/** One-line hint under the textbox, keyed by where the prefilled value came from. */
+/** One-line hint under the textbox, keyed by where the current input value came from. */
 const HOME_PREFILL_HINTS = Object.freeze({
-    clipboard: 'Found a Google Sheets link on your clipboard — press Enter to open it.',
-    history: 'Your most-used sheet is prefilled — press Enter to open it, or pick another from the list.',
-    demo: 'Try the demo sheet, or paste your own link. The sheet must be shared as "Anyone with the link can view".',
+    clipboard: 'Copied from your copy-paste buffer — press Enter or click Open to load this Google Sheet.',
+    empty: 'Paste a Google Sheets link or spreadsheet ID above (shared as "Anyone with the link can view"), or pick a sheet below.',
+    manual: 'Press Enter or click Open to load this Google Sheet.',
 });
 
 /**
@@ -50351,17 +50372,17 @@ function attachClipboardPrefill(applyPrefill) {
 }
 
 /**
- * State of the home-screen form: textbox value and where its prefill came from, the
- * persisted sheet history, the validation error, and the dropdown open flag. Re-prefills
- * each time the screen opens, but never overwrites text the user has already typed.
+ * State of the home-screen form: textbox value (empty unless prefilled from clipboard),
+ * where its value came from, persisted sheet history, and validation error. Re-checks
+ * clipboard each time the screen opens, without overwriting text the user has typed.
  *
  * @param {boolean} isOpen - Whether the home screen is showing
- * @returns {{value: string, setValue: Function, prefillSource: string, history: Array, error: string,
- *   isListOpen: boolean, setIsListOpen: Function, validate: Function, forget: Function, markTouched: Function}}
+ * @returns {{value: string, setValue: Function, updateInputValue: Function, prefillSource: string,
+ *   history: Array, error: string, validate: Function, forget: Function, resetHistory: Function, markTouched: Function}}
  *
  * @example
  * const form = useSheetSourceForm(true);
- * form.value; // => 'https://docs.google.com/spreadsheets/d/<most-used or demo id>/edit…'
+ * form.value; // => '' (unless clipboard holds a Google Sheets link)
  *
  * @example
  * const form = useSheetSourceForm(isHomeOpen);
@@ -50370,9 +50391,8 @@ function attachClipboardPrefill(applyPrefill) {
 function useSheetSourceForm(isOpen) {
     const [history, setHistory] = useState(() => readSheetHistory());
     const [value, setValue] = useState('');
-    const [prefillSource, setPrefillSource] = useState('demo');
+    const [prefillSource, setPrefillSource] = useState('empty');
     const [error, setError] = useState('');
-    const [isListOpen, setIsListOpen] = useState(false);
     const touchedRef = useRef(false);
 
     useEffect(() => {
@@ -50381,7 +50401,6 @@ function useSheetSourceForm(isOpen) {
         const freshHistory = readSheetHistory();
         setHistory(freshHistory);
         setError('');
-        setIsListOpen(false);
         const applyPrefill = (clipboardRef) => {
             if (touchedRef.current) return;
             const prefill = resolveHomeScreenPrefill(clipboardRef, freshHistory);
@@ -50393,6 +50412,11 @@ function useSheetSourceForm(isOpen) {
     }, [isOpen]);
 
     const markTouched = useCallback(() => { touchedRef.current = true; }, []);
+    const updateInputValue = useCallback((nextText) => {
+        touchedRef.current = true;
+        setValue(nextText);
+        setPrefillSource(nextText.trim() ? 'manual' : 'empty');
+    }, []);
     const validate = useCallback((text) => {
         const ref = normalizeSheetReference(text);
         setError(ref ? '' : 'That does not look like a Google Sheets link or spreadsheet ID (35–60 letters, digits, "-" or "_").');
@@ -50401,15 +50425,15 @@ function useSheetSourceForm(isOpen) {
     const forget = useCallback((id) => setHistory(forgetSheetHistoryEntry(id)), []);
     const resetHistory = useCallback(() => setHistory([]), []);
 
-    return { value, setValue, prefillSource, history, error, isListOpen, setIsListOpen, validate, forget, resetHistory, markTouched };
+    return { value, setValue, updateInputValue, prefillSource, history, error, validate, forget, resetHistory, markTouched };
 }
 
 /**
- * One row of the recent-sheets dropdown: bold title (or an "Untitled sheet" placeholder),
- * the bare ID in monospace, the use count, and a "×" that forgets the entry.
+ * One row of the inline previously-used-sheets list: bold title (or an "Untitled sheet"
+ * placeholder), the bare ID in monospace, and a "×" button that forgets saved entries.
  *
  * @param {object} props
- * @param {{id: string, title: string, uses: number}} props.entry - History entry
+ * @param {{id: string, title: string, uses: number, isDemo?: boolean}} props.entry - History entry
  * @param {Function} props.onPick - Called with the entry when the row is clicked
  * @param {Function} props.onForget - Called with the entry ID when "×" is clicked
  * @returns {React.ReactNode}
@@ -50421,146 +50445,195 @@ function useSheetSourceForm(isOpen) {
  * <SheetHistoryRow entry={{ id: '1BQvy…', title: '', uses: 1 }} onPick={open} onForget={forget} />
  */
 const SheetHistoryRow = ({ entry, onPick, onForget }) => (
-    <li className="group flex items-center gap-3 px-3 py-2 hover:bg-primary-container/60 cursor-pointer" onClick={() => onPick(entry)}
+    <li className="group flex items-center gap-3 px-3.5 py-2.5 transition-colors hover:bg-primary-container/60 cursor-pointer" onClick={() => onPick(entry)}
         title={formatSheetHistoryLabel(entry)} data-sheet-id={entry.id}>
+        <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-primary-container/50 text-primary">
+            <Icons.Sheet />
+        </span>
         <div className="min-w-0 flex-1">
             <div className={`truncate text-sm ${entry.title ? 'font-semibold text-slate-800' : 'italic text-slate-500'}`}>
                 {entry.title || 'Untitled sheet'}
             </div>
             <div className="truncate font-mono text-[11px] text-slate-500">{entry.id}</div>
         </div>
-        <button type="button" onClick={(e) => { e.stopPropagation(); onForget(entry.id); }}
-            className="shrink-0 rounded-md p-1 text-slate-400 opacity-0 transition-opacity hover:bg-red-50 hover:text-red-600 group-hover:opacity-100"
-            title="Forget this sheet" aria-label={`Forget ${entry.title || entry.id}`}>
-            <Icons.Close />
-        </button>
+        {!entry.isDemo && onForget && (
+            <button type="button" onClick={(e) => { e.stopPropagation(); onForget(entry.id); }}
+                className="shrink-0 rounded-md p-1 text-slate-400 opacity-0 transition-opacity hover:bg-red-50 hover:text-red-600 group-hover:opacity-100"
+                title="Forget this sheet" aria-label={`Forget ${entry.title || entry.id}`}>
+                <Icons.Close />
+            </button>
+        )}
     </li>
 );
 
 /**
- * The recent-sheets dropdown anchored under the textbox.
+ * Always-visible inline list of previously used sheets rendered directly below the
+ * home-screen input box, paired with the "← Back to the current tree" link in its header.
  *
  * @param {object} props
- * @param {Array} props.entries - History entries excluding the sheet already in the input box
+ * @param {Array} props.entries - Previously used sheet entries to display inline
  * @param {Function} props.onPick - Row click handler
  * @param {Function} props.onForget - "×" handler
+ * @param {boolean} [props.hasTree=false] - Whether a tree is currently loaded behind the home screen
+ * @param {Function} [props.onClose] - Handler for "← Back to the current tree"
  * @returns {React.ReactNode|null}
  *
  * @example
- * <SheetHistoryDropdown entries={history} onPick={open} onForget={forget} />
+ * <SheetHistoryDropdown entries={history} onPick={open} onForget={forget} hasTree={true} onClose={closeHome} />
  *
  * @example
  * <SheetHistoryDropdown entries={[]} onPick={open} onForget={forget} /> // renders nothing
  */
-const SheetHistoryDropdown = ({ entries, onPick, onForget }) => {
-    if (!entries || entries.length === 0) return null;
+const SheetHistoryDropdown = ({ entries, onPick, onForget, hasTree = false, onClose }) => {
+    const hasEntries = Boolean(entries && entries.length > 0);
+    if (!hasEntries && !hasTree) return null;
     return (
-        <div data-testid="sheet-history-dropdown" className="absolute left-0 right-0 top-full z-20 mt-1 overflow-hidden rounded-xl border border-slate-200 bg-white shadow-xl">
-            <div className="flex items-center border-b border-slate-100 px-3 py-1.5 text-[11px] uppercase tracking-wide text-slate-400">
-                <span>Sheets you have opened</span>
+        <div data-testid="sheet-history-dropdown" className="mt-5 w-full overflow-hidden rounded-xl border border-slate-200 bg-white/95 shadow-sm">
+            <div className="flex items-center justify-between gap-2 border-b border-slate-100 bg-slate-50/70 px-3.5 py-2">
+                <span className="text-[11px] font-semibold uppercase tracking-wide text-slate-500">
+                    Previously used sheets
+                </span>
+                {hasTree && onClose && (
+                    <button type="button" onClick={onClose} data-testid="back-to-tree-button"
+                        className="text-xs font-semibold text-primary hover:underline">
+                        ← Back to the current tree
+                    </button>
+                )}
             </div>
-            <ul className="custom-scrollbar max-h-72 overflow-y-auto py-1">
-                {entries.map(entry => (
-                    <SheetHistoryRow key={entry.id} entry={entry} onPick={onPick} onForget={onForget} />
-                ))}
-            </ul>
+            {hasEntries && (
+                <ul className="custom-scrollbar max-h-72 divide-y divide-slate-100 overflow-y-auto">
+                    {entries.map(entry => (
+                        <SheetHistoryRow key={entry.id} entry={entry} onPick={onPick} onForget={onForget} />
+                    ))}
+                </ul>
+            )}
         </div>
     );
 };
 
 /**
- * Textbox + history caret + dropdown. Typing marks the form as touched (so a late clipboard
- * read cannot overwrite it); picking a row fills the box and opens that sheet at once.
+ * URL / ID textbox without any pulldown menu. Kept empty unless a Google Sheets URL was
+ * copied from the clipboard; typing marks the form as touched so late clipboard reads
+ * never overwrite user input.
  *
  * @param {object} props
  * @param {object} props.form - Result of useSheetSourceForm()
- * @param {Function} props.onSubmit - Called with the raw text to validate and open
  * @returns {React.ReactNode}
  *
  * @example
- * <SheetSourceInput form={form} onSubmit={handleSubmit} />
+ * <SheetSourceInput form={form} />
  *
  * @example
- * <SheetSourceInput form={useSheetSourceForm(true)} onSubmit={(text) => console.log(text)} />
+ * <SheetSourceInput form={useSheetSourceForm(true)} />
  */
-const SheetSourceInput = ({ form, onSubmit }) => {
-    const containerRef = useRef(null);
-    useSearchContainerDismiss(containerRef, form.isListOpen, form.setIsListOpen);
-    const dropdownEntries = filterSheetHistoryForInput(form.history, form.value);
-    const pickEntry = (entry) => {
-        const url = buildSheetUrlFromId(entry.id);
-        form.markTouched();
-        form.setValue(url);
-        form.setIsListOpen(false);
-        onSubmit(url);
+const SheetSourceInput = ({ form }) => {
+    const isClipboard = form.prefillSource === 'clipboard' && Boolean(form.value);
+    const handleChange = (e) => {
+        if (form.updateInputValue) {
+            form.updateInputValue(e.target.value);
+        } else {
+            form.markTouched();
+            form.setValue(e.target.value);
+        }
     };
     return (
-        <div ref={containerRef} className="relative flex-1">
+        <div className="relative flex-1">
             <input id="sheet-source-input" type="text" value={form.value} autoFocus spellCheck={false} autoComplete="off"
-                onChange={(e) => { form.markTouched(); form.setValue(e.target.value); }}
-                onKeyDown={(e) => { if (e.key === 'Escape') form.setIsListOpen(false); if (e.key === 'ArrowDown' && dropdownEntries.length > 0) form.setIsListOpen(true); }}
+                onChange={handleChange}
                 onFocus={(e) => e.target.select()}
-                placeholder="https://docs.google.com/spreadsheets/d/…  or a spreadsheet ID"
-                className="h-12 w-full rounded-xl border border-slate-300 bg-white pl-4 pr-11 font-mono text-[13px] text-slate-800 shadow-sm outline-none transition focus:border-primary focus:ring-2 focus:ring-primary/30" />
-            {dropdownEntries.length > 0 && (
-                <button type="button" onClick={() => form.setIsListOpen(!form.isListOpen)} aria-label="Show sheets you have opened before"
-                    title="Sheets you have opened before" aria-expanded={form.isListOpen}
-                    className="absolute right-1.5 top-1/2 flex h-9 w-9 -translate-y-1/2 items-center justify-center rounded-lg text-slate-500 hover:bg-slate-100">
-                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><polyline points="6 9 12 15 18 9" /></svg>
-                </button>
-            )}
-            {form.isListOpen && <SheetHistoryDropdown entries={dropdownEntries} onPick={pickEntry} onForget={form.forget} />}
+                placeholder="Paste a Google Sheets URL or spreadsheet ID…"
+                className={`h-12 w-full rounded-xl border bg-white px-4 font-mono text-[13px] text-slate-800 shadow-sm outline-none transition focus:border-primary focus:ring-2 focus:ring-primary/30 ${
+                    isClipboard ? 'border-primary/60 bg-primary-container/10' : 'border-slate-300'
+                }`} />
         </div>
     );
 };
 
 /**
- * The whole form: label + known-sheet-name chip, textbox row with the Open button, prefill
- * hint, and any error (local validation or the import error passed down from the app).
+ * Header row above the home-screen input box: label on the left, plus optional clipboard
+ * indicator badge and known-sheet-title chip on the right.
+ *
+ * @param {object} props
+ * @param {boolean} props.isClipboardPrefill - True when the input value came from the copy buffer
+ * @param {string} props.sheetTitle - Known human title for the spreadsheet in the input box
+ * @returns {React.ReactNode}
+ *
+ * @example
+ * <SheetSourceFormHeader isClipboardPrefill={true} sheetTitle="Ancestry Browser: Demo" />
+ *
+ * @example
+ * <SheetSourceFormHeader isClipboardPrefill={false} sheetTitle="" />
+ */
+const SheetSourceFormHeader = ({ isClipboardPrefill, sheetTitle }) => (
+    <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
+        <label htmlFor="sheet-source-input" className="text-sm font-semibold text-slate-600">
+            Google Sheets link or spreadsheet ID
+        </label>
+        <div className="flex flex-wrap items-center gap-1.5">
+            {isClipboardPrefill && (
+                <span data-testid="clipboard-prefill-badge"
+                    className="inline-flex items-center gap-1 rounded-full border border-amber-300 bg-amber-50 px-2.5 py-0.5 text-xs font-semibold text-amber-800 shadow-sm">
+                    📋 Copied from copy buffer
+                </span>
+            )}
+            {sheetTitle && (
+                <span data-testid="sheet-source-title" title={`Spreadsheet name: ${sheetTitle}`}
+                    className="inline-flex max-w-[260px] items-center gap-1.5 truncate rounded-full border border-slate-200 bg-white/90 px-2.5 py-0.5 text-xs font-semibold text-primary shadow-sm">
+                    <Icons.Sheet /><span className="truncate">{sheetTitle}</span>
+                </span>
+            )}
+        </div>
+    </div>
+);
+
+/**
+ * The whole form: label + clipboard/title chips, textbox row with the Open button, prefill
+ * hint, validation/import error, and the inline list of previously used sheets + back link.
  *
  * @param {object} props
  * @param {object} props.form - Result of useSheetSourceForm()
  * @param {boolean} props.isLoading - Whether an import is in flight
  * @param {string} props.errorMsg - Last import error from the app ('' when none)
  * @param {Function} props.onSubmit - Called with the raw text
+ * @param {boolean} [props.hasTree=false] - Whether a tree is loaded behind the home screen
+ * @param {Function} [props.onClose] - Closes the home overlay and returns to the current tree
  * @returns {React.ReactNode}
  *
  * @example
- * <SheetSourceForm form={form} isLoading={false} errorMsg="" onSubmit={handleSubmit} />
+ * <SheetSourceForm form={form} isLoading={false} errorMsg="" onSubmit={handleSubmit} hasTree={true} onClose={closeHome} />
  *
  * @example
  * <SheetSourceForm form={form} isLoading={true} errorMsg="Invalid Google Sheets URL." onSubmit={handleSubmit} />
  */
-const SheetSourceForm = ({ form, isLoading, errorMsg, onSubmit }) => {
+const SheetSourceForm = ({ form, isLoading, errorMsg, onSubmit, hasTree = false, onClose }) => {
     const sheetTitle = resolveKnownSheetTitle(form.value, form.history);
+    const isClipboardPrefill = form.prefillSource === 'clipboard' && Boolean(form.value);
+    const inlineEntries = resolveHomeScreenSheetList(form.history);
+    const pickEntry = (entry) => {
+        const url = buildSheetUrlFromId(entry.id);
+        form.markTouched();
+        form.setValue(url);
+        onSubmit(url);
+    };
     return (
         <form className="relative z-20 w-full max-w-2xl px-6" onSubmit={(e) => { e.preventDefault(); onSubmit(form.value); }}>
-            <div className="mb-2 flex items-center justify-between gap-2">
-                <label htmlFor="sheet-source-input" className="text-sm font-semibold text-slate-600">
-                    Google Sheets link or spreadsheet ID
-                </label>
-                {sheetTitle && (
-                    <span data-testid="sheet-source-title" title={`Spreadsheet name: ${sheetTitle}`}
-                        className="inline-flex max-w-[60%] items-center gap-1.5 truncate rounded-full border border-slate-200 bg-white/90 px-2.5 py-0.5 text-xs font-semibold text-primary shadow-sm">
-                        <Icons.Sheet /><span className="truncate">{sheetTitle}</span>
-                    </span>
-                )}
-            </div>
+            <SheetSourceFormHeader isClipboardPrefill={isClipboardPrefill} sheetTitle={sheetTitle} />
             <div className="flex gap-2">
-                <SheetSourceInput form={form} onSubmit={onSubmit} />
+                <SheetSourceInput form={form} />
                 <button type="submit" disabled={isLoading} data-doc-key="Open the Google Sheet"
                     className="h-12 shrink-0 rounded-xl bg-primary px-6 text-sm font-semibold text-on-primary shadow-md transition hover:bg-primary-hover disabled:opacity-60">
                     {isLoading ? 'Loading…' : 'Open'}
                 </button>
             </div>
             <div className="mt-2 text-xs text-slate-500" data-prefill-source={form.prefillSource}>
-                {HOME_PREFILL_HINTS[form.prefillSource] || HOME_PREFILL_HINTS.demo}
+                {HOME_PREFILL_HINTS[form.prefillSource] || HOME_PREFILL_HINTS.empty}
             </div>
             {(form.error || errorMsg) && (
                 <div role="alert" className="mt-3 rounded-xl border border-red-200 bg-red-50 px-4 py-2.5 text-sm text-red-700">
                     {form.error || errorMsg}
                 </div>
             )}
+            <SheetHistoryDropdown entries={inlineEntries} onPick={pickEntry} onForget={form.forget} hasTree={hasTree} onClose={onClose} />
         </form>
     );
 };
@@ -50618,7 +50691,7 @@ const HomePrivacyNotice = ({ onClearStoredData }) => (
  *
  * @param {object} props
  * @param {boolean} props.isOpen - Show the overlay
- * @param {boolean} props.hasTree - A tree is loaded (shows the "Back to the tree" link)
+ * @param {boolean} props.hasTree - A tree is loaded (shows the "Back to the current tree" link)
  * @param {boolean} props.isLoading - Import in flight
  * @param {string} props.errorMsg - Last import error ('' when none)
  * @param {Function} props.onSubmit - Called with a canonical sheet URL to open
@@ -50648,12 +50721,7 @@ const SheetSourceHomeScreen = ({ isOpen, hasTree, isLoading, errorMsg, onSubmit,
             style={{ fontFamily: '"Google Sans", system-ui, -apple-system, sans-serif' }}>
             <BrandWatermark size={640} opacity={0.06} />
             <HomeScreenHeader />
-            <SheetSourceForm form={form} isLoading={isLoading} errorMsg={errorMsg} onSubmit={handleSubmit} />
-            {hasTree && (
-                <button type="button" onClick={onClose} className="relative z-10 mt-6 text-sm font-medium text-primary hover:underline">
-                    ← Back to the tree
-                </button>
-            )}
+            <SheetSourceForm form={form} isLoading={isLoading} errorMsg={errorMsg} onSubmit={handleSubmit} hasTree={hasTree} onClose={onClose} />
             <HomePrivacyNotice onClearStoredData={handleClear} />
         </div>
     );

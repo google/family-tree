@@ -419,14 +419,14 @@ if (shouldRunChrome) {
         const DEMO_ID = '1BQvyFoA_-u4MG-r1SRDel93F1TwEaN3I6v6p-kOH8z0';
         const q = (selector) => `document.querySelector('${selector}')`;
 
-        // 1. The home screen comes first: the demo sheet is prefilled, its title chip and radial settings FAB are shown, and NOTHING loads until the user asks.
-        const homeState = JSON.parse(await waitFor('home screen with the demo sheet prefilled, title chip, and radial FAB',
+        // 1. The home screen comes first: the URL input box is empty (no clipboard hit), the inline sheet list is immediately visible below it, and NOTHING loads until the user asks.
+        const homeState = JSON.parse(await waitFor('home screen with empty input box, inline sheet list, and radial FAB',
             `JSON.stringify({ home: !!${q('[data-testid="sheet-source-home"]')}, privacy: !!${q('[data-testid="home-privacy-notice"]')},
                 fab: !!${q('[data-testid="settings-fab-toggle"]')},
-                titleChip: (${q('[data-testid="sheet-source-title"]')} || {}).innerText || '',
+                inlineList: (${q('[data-testid="sheet-history-dropdown"]')} || {}).innerText || '',
                 value: (document.getElementById('sheet-source-input') || {}).value || '', nodes: document.querySelectorAll('.person-node').length })`,
-            (v) => { const s = v && JSON.parse(v); return s && s.home && s.privacy && s.fab && s.titleChip.includes('Ancestry Browser: Demo') && s.value.includes(DEMO_ID) && s.nodes === 0; }));
-        console.log(`  ${GREEN}✓${RESET} Home screen rendered first: demo sheet prefilled with title chip "${homeState.titleChip}", radial FAB visible, no tree loaded yet (${homeState.nodes} nodes).`);
+            (v) => { const s = v && JSON.parse(v); return s && s.home && s.privacy && s.fab && s.value === '' && s.inlineList.includes('Ancestry Browser: Demo') && s.nodes === 0; }));
+        console.log(`  ${GREEN}✓${RESET} Home screen rendered first: URL input box empty, inline sheet list visible ("Ancestry Browser: Demo"), radial FAB visible, no tree loaded yet (${homeState.nodes} nodes).`);
 
         // 2. Open the radial FAB on the home screen -> pick "Colour theme" -> switch to "dark" -> close dialog -> reset to "classic".
         await evaluate(`${q('[data-testid="settings-fab-toggle"]')}.click(); 'clicked'`);
@@ -441,10 +441,9 @@ if (shouldRunChrome) {
         await evaluate(`${q('[data-testid="app-settings-panel"] button[title="Close"]')}.click(); 'clicked'`);
         console.log(`  ${GREEN}✓${RESET} Radial FAB opened Settings (${themeCount} M3 themes); applied "${darkState.theme}" (${darkState.mode}) and persisted cookie.`);
 
-        // 3. Press Open → the demo sheet is fetched from Google and the tree renders. The demo's own tab is a flat
-        //    roster; its `Links` tab leads to the 14-person "Husband's Family" sheet that actually forms the tree.
-        await evaluate(`${q('[data-testid="sheet-source-home"] form button[type="submit"]')}.click(); 'clicked'`);
-        const nodeCount = await waitFor('tree render after pressing Open', "document.querySelectorAll('.person-node').length", (n) => n >= 10, 40, 600);
+        // 3. Click the demo sheet row in the inline list below the input box → the demo sheet is fetched from Google and the tree renders.
+        await evaluate(`${q(`[data-sheet-id="${DEMO_ID}"]`)}.click(); 'clicked'`);
+        const nodeCount = await waitFor('tree render after clicking inline sheet row', "document.querySelectorAll('.person-node').length", (n) => n >= 10, 40, 600);
         console.log(`  ${GREEN}✓${RESET} Headless Chrome E2E verification successful: <App /> mounted cleanly with zero runtime exceptions, rendered ${nodeCount} person nodes.`);
 
         // 4. After a successful load: home screen gone, Home button + radial FAB + watermark mounted, ?id= in the address bar, history cookie written.
@@ -462,25 +461,42 @@ if (shouldRunChrome) {
             (v) => { const s = v && JSON.parse(v); return s && s.popover && s.tail && s.text.includes('Home: Choose a Google Sheet'); }, 10, 200);
         console.log(`  ${GREEN}✓${RESET} Hover help balloon rendered with tail pointer and full title.`);
 
-        // 6. Home button → the chooser returns ("Back to the tree"), the prefilled URL chip shows the learned sheet title "Ancestry Browser: Demo",
-        //    the prefilled sheet is NOT duplicated in the dropdown while filled in the input box, and clearing the input reveals it in the clean dropdown.
+        // 6. Home button → the chooser returns with an empty input box, "← Back to the current tree" alongside the inline list of previously used sheets,
+        //    no pulldown caret, and when a URL is present in the copy buffer (clipboard), it prefills and displays the "Copied from copy buffer" badge.
         await evaluate(`${q('[data-testid="home-button"]')}.click(); 'clicked'`);
-        await waitFor('home screen after the Home button with learned title chip and no duplicate dropdown',
-            `JSON.stringify({ text: (${q('[data-testid="sheet-source-home"]')} || {}).innerText || '', chip: (${q('[data-testid="sheet-source-title"]')} || {}).innerText || '', caret: !!${q('button[aria-label="Show sheets you have opened before"]')} })`,
-            (v) => { const s = v && JSON.parse(v); return s && s.text.includes('Back to the tree') && s.chip.includes('Ancestry Browser: Demo') && !s.caret; }, 10, 300);
+        await waitFor('home screen after Home button with empty input, inline sheet list, and "Back to the current tree" link',
+            `JSON.stringify({
+                value: (document.getElementById('sheet-source-input') || {}).value || '',
+                listText: (${q('[data-testid="sheet-history-dropdown"]')} || {}).innerText || '',
+                backBtn: !!${q('[data-testid="back-to-tree-button"]')},
+                caret: !!${q('button[aria-label="Show sheets you have opened before"]')}
+            })`,
+            (v) => {
+                const s = v && JSON.parse(v);
+                return s && s.value === '' && s.backBtn && !s.caret &&
+                    s.listText.includes('Back to the current tree') &&
+                    s.listText.includes('Ancestry Browser: Demo') &&
+                    s.listText.includes(DEMO_ID);
+            }, 10, 300);
         await evaluate(`(() => {
-            const inp = document.getElementById('sheet-source-input');
-            const setter = Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, 'value').set;
-            setter.call(inp, '');
-            inp.dispatchEvent(new Event('input', { bubbles: true }));
-            return 'cleared';
+            Object.defineProperty(navigator, 'clipboard', {
+                configurable: true,
+                value: { readText: async () => 'https://docs.google.com/spreadsheets/d/${DEMO_ID}/edit' }
+            });
+            window.dispatchEvent(new Event('focus'));
+            return 'clipboard-mocked';
         })()`);
-        await waitFor('caret button after clearing input', `!!${q('button[aria-label="Show sheets you have opened before"]')}`, Boolean, 10, 200);
-        await evaluate(`${q('button[aria-label="Show sheets you have opened before"]')}.click(); 'clicked'`);
-        await waitFor('history dropdown listing "Ancestry Browser: Demo" without use count or "most used first"',
-            `(${q('[data-testid="sheet-history-dropdown"]')} || {}).innerText || ''`,
-            (t) => t.includes(DEMO_ID) && t.includes('Ancestry Browser: Demo') && !t.includes('most used first') && !/×\d+/.test(t), 10, 300);
-        console.log(`  ${GREEN}✓${RESET} Home button reopens the chooser with "Ancestry Browser: Demo" title chip, deduplicated dropdown, and clean history rows.`);
+        await waitFor('clipboard prefill badge and title chip when clipboard holds a sheet URL',
+            `JSON.stringify({
+                value: (document.getElementById('sheet-source-input') || {}).value || '',
+                badge: (${q('[data-testid="clipboard-prefill-badge"]')} || {}).innerText || '',
+                chip: (${q('[data-testid="sheet-source-title"]')} || {}).innerText || ''
+            })`,
+            (v) => {
+                const s = v && JSON.parse(v);
+                return s && s.value.includes(DEMO_ID) && s.badge.includes('Copied from copy buffer') && s.chip.includes('Ancestry Browser: Demo');
+            }, 10, 300);
+        console.log(`  ${GREEN}✓${RESET} Home button reopens chooser with empty input, inline sheet list + "Back to the current tree" link, and clipboard prefill indicator badge.`);
 
         // 7. Navigating to bare http://localhost:8000/ when a sheet is remembered in the cookie skips the home screen and opens the previous view directly.
         await sendCommand('Page.navigate', { url: 'http://localhost:8000/' });

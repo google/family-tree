@@ -593,29 +593,50 @@ async function readClipboardSheetReference() {
 
 /**
  * Decides what the home-screen textbox shows before the user touches it:
- * clipboard sheet → most-used sheet → demo sheet. Never loads anything by itself.
+ * prefilled only when a Google Sheets URL/ID is found in the copy-paste buffer
+ * (clipboard); otherwise kept empty so the user can type, paste, or pick from
+ * the inline list below. Never loads anything by itself.
  *
  * @param {{id: string, url: string}|null} clipboardRef - Result of readClipboardSheetReference()
- * @param {Array<SheetHistoryEntry>} history - Persisted history
- * @returns {{id: string, url: string, source: 'clipboard'|'history'|'demo'}}
+ * @param {Array<SheetHistoryEntry>} [_history] - Persisted history (unused; kept for signature compatibility)
+ * @returns {{id: string, url: string, source: 'clipboard'|'empty'}}
  *
  * @example
  * resolveHomeScreenPrefill(null, []).source;
- * // => 'demo'
+ * // => 'empty'
  *
  * @example
- * resolveHomeScreenPrefill(null, [{ id: '1BQvyFoA_-u4MG-r1SRDel93F1TwEaN3I6v6p-kOH8z0', title: '', uses: 2, lastUsed: 1 }]).source;
- * // => 'history'
+ * resolveHomeScreenPrefill({ id: '1BQvyFoA_-u4MG-r1SRDel93F1TwEaN3I6v6p-kOH8z0', url: 'https://docs.google.com/spreadsheets/d/1BQvyFoA_-u4MG-r1SRDel93F1TwEaN3I6v6p-kOH8z0/edit' }, []).source;
+ * // => 'clipboard'
  */
-function resolveHomeScreenPrefill(clipboardRef, history) {
+function resolveHomeScreenPrefill(clipboardRef, _history) {
     if (clipboardRef && clipboardRef.id) {
         return { id: clipboardRef.id, url: clipboardRef.url || buildSheetUrlFromId(clipboardRef.id), source: 'clipboard' };
     }
-    const mostUsed = resolveMostUsedSheet(history);
-    if (mostUsed) {
-        return { id: mostUsed.id, url: buildSheetUrlFromId(mostUsed.id), source: 'history' };
-    }
-    return { id: DEMO_SHEET_ID, url: DEFAULT_URL, source: 'demo' };
+    return { id: '', url: '', source: 'empty' };
+}
+
+/**
+ * Returns the list of sheets to display inline below the home-screen input box.
+ * Lists all previously opened sheets from history; when history is empty on a
+ * fresh browser, falls back to the built-in demo sheet so a first-time visitor
+ * can still open a sample tree with one click.
+ *
+ * @param {Array<SheetHistoryEntry>} [history=readSheetHistory()] - Ranked history entries
+ * @returns {Array<SheetHistoryEntry>} Non-empty list of sheets to render inline
+ *
+ * @example
+ * resolveHomeScreenSheetList([])[0].id;
+ * // => '1BQvyFoA_-u4MG-r1SRDel93F1TwEaN3I6v6p-kOH8z0'
+ *
+ * @example
+ * resolveHomeScreenSheetList([{ id: '1AbCdEfGhIjKlMnOpQrStUvWxYz0123456789abcdef', title: 'My Family', uses: 2, lastUsed: 1 }]).length;
+ * // => 1
+ */
+function resolveHomeScreenSheetList(history = readSheetHistory()) {
+    const valid = (history || []).filter((entry) => Boolean(entry && entry.id));
+    if (valid.length > 0) return valid;
+    return [{ id: DEMO_SHEET_ID, title: DEMO_SHEET_TITLE, uses: 0, lastUsed: 0, isDemo: true }];
 }
 
 /**
