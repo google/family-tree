@@ -173,91 +173,36 @@ const TopNavIconButton = ({ onClick, title, isActive = false, disabled = false, 
 };
 
 /**
- * Renders toolbar action buttons for standalone HTML export and A4 print export.
- * (Settings moved to the radial FAB in 06_ui/15_SettingsFab.jsx so they are reachable
- * from the home screen too.)
+ * Placeholder for legacy toolbar export buttons (Download, Print, and Settings now live in
+ * the bottom-right radial menu `SettingsRadialFab` in `06_ui/15_SettingsFab.jsx`).
  *
- * @param {object} props
- * @param {boolean} props.isStandalone - Whether running in embedded standalone mode
- * @param {boolean} props.isLoading - Whether tree data is actively loading
- * @param {Function} props.handleExportStandaloneApp - Standalone app export handler
- * @param {boolean} props.isExportingApp - Standalone app export in progress
- * @param {Function} props.handleExportA4Print - A4 print export handler
- * @param {boolean} props.isExportingA4 - A4 export in progress
- * @param {FamilyTree} props.tree - Current genealogy tree model
- * @returns {React.ReactNode}
+ * @returns {null}
  *
  * @example
- * <TopNavImportExportButtons isStandalone={false} isLoading={false} handleExportStandaloneApp={() => {}} isExportingApp={false} handleExportA4Print={() => {}} isExportingA4={false} tree={tree} />
+ * <TopNavImportExportButtons />
  *
  * @example
- * <TopNavImportExportButtons isStandalone={true} isLoading={false} handleExportStandaloneApp={() => {}} isExportingApp={false} handleExportA4Print={() => {}} isExportingA4={false} tree={tree} />
+ * <TopNavImportExportButtons isStandalone={false} />
  */
-const TopNavImportExportButtons = ({
-    isStandalone, isLoading,
-    handleExportStandaloneApp, isExportingApp,
-    handleExportA4Print, isExportingA4, tree
-}) => (
-    <>
-        {!isStandalone && (
-            <TopNavIconButton onClick={handleExportStandaloneApp} disabled={isExportingApp || isLoading} title="Download Standalone Interactive App (.html)">
-                {isExportingApp ? <Icons.Loader /> : <Icons.Download />}
-            </TopNavIconButton>
-        )}
-        <TopNavIconButton onClick={handleExportA4Print} disabled={isExportingA4 || isLoading || !tree?.root} title="Print Tree / Export A4 Landscape SVGs (10pt names)">
-            {isExportingA4 ? <Icons.Loader /> : <Icons.Printer />}
-        </TopNavIconButton>
-    </>
-);
+const TopNavImportExportButtons = () => null;
 
 /**
- * Renders toolbar toggle buttons for Map, AI assistant, Logs drawer, and Search bar.
+ * Renders the top-right Search button (Map, Ask AI, and Logs moved into `SettingsRadialFab`).
  *
  * @param {object} props
- * @param {boolean} props.showMap - Whether map view is active
- * @param {Function} props.onToggleMap - Handler to toggle map view
- * @param {boolean} props.isAILoading - Whether AI query is in flight
- * @param {boolean} props.showAI - Whether AI assistant panel is open
- * @param {Function} props.onToggleAI - Handler to toggle AI assistant
- * @param {boolean} props.isStandalone - Whether running in embedded standalone mode
- * @param {boolean} props.showLogs - Whether error/audit logs overlay is visible
- * @param {Function} props.setShowLogs - Logs visibility setter
- * @param {Function} props.setShowAI - AI assistant visibility setter
  * @param {string} props.searchQuery - Current search query
  * @param {Function} props.handleOpenSearch - Handler to expand search bar
  * @returns {React.ReactNode}
  *
  * @example
- * <TopNavViewToggleButtons showMap={false} onToggleMap={() => {}} isAILoading={false} showAI={false} onToggleAI={() => {}} isStandalone={false} showLogs={false} setShowLogs={() => {}} setShowAI={() => {}} searchQuery="" handleOpenSearch={() => {}} />
+ * <TopNavViewToggleButtons searchQuery="" handleOpenSearch={() => {}} />
  *
  * @example
- * <TopNavViewToggleButtons showMap={true} onToggleMap={() => {}} isAILoading={false} showAI={true} onToggleAI={() => {}} isStandalone={true} showLogs={false} setShowLogs={() => {}} setShowAI={() => {}} searchQuery="Search" handleOpenSearch={() => {}} />
+ * <TopNavViewToggleButtons searchQuery="Search" handleOpenSearch={() => {}} />
  */
-const TopNavViewToggleButtons = ({
-    showMap, onToggleMap, isAILoading, showAI, onToggleAI,
-    isStandalone, showLogs, setShowLogs, setShowAI, searchQuery, handleOpenSearch
-}) => {
-    const aiTheme = isAILoading
-        ? 'bg-gradient-to-r from-blue-500 via-purple-500 to-rose-500 text-white animate-pulse border-transparent shadow-md'
-        : (showAI ? 'bg-blue-100 text-blue-600 border-blue-200' : 'bg-white/95 backdrop-blur-md text-slate-600 hover:bg-slate-100 border-slate-200');
-
-    return (
-        <>
-            <TopNavIconButton onClick={onToggleMap} title={showMap ? "Switch to Family Tree Diagram" : "View Family Locations Map"} isActive={showMap}>
-                <Icons.MapPin />
-            </TopNavIconButton>
-            <TopNavIconButton onClick={onToggleAI} title="Ask AI" customClass={aiTheme}>
-                <Icons.Sparkles />
-            </TopNavIconButton>
-            {!isStandalone && (
-                <TopNavIconButton onClick={() => { setShowLogs(!showLogs); if (!showLogs) setShowAI(false); }} title="View Logs" isActive={showLogs}>
-                    <Icons.Log />
-                </TopNavIconButton>
-            )}
-            <button onClick={handleOpenSearch} className={`h-[44px] w-[44px] rounded-xl flex items-center justify-center transition-colors border shadow-sm shrink-0 cursor-pointer ${searchQuery ? 'bg-blue-100 text-blue-600 border-blue-200 shadow-inner' : 'bg-white/95 backdrop-blur-md text-slate-600 hover:bg-slate-100 border-slate-200'}`} title="Search"><Icons.Search /></button>
-        </>
-    );
-};
+const TopNavViewToggleButtons = ({ searchQuery, handleOpenSearch }) => (
+    <button onClick={handleOpenSearch} className={`h-[44px] w-[44px] rounded-xl flex items-center justify-center transition-colors border shadow-sm shrink-0 cursor-pointer ${searchQuery ? 'bg-blue-100 text-blue-600 border-blue-200 shadow-inner' : 'bg-white/95 backdrop-blur-md text-slate-600 hover:bg-slate-100 border-slate-200'}`} title="Search"><Icons.Search /></button>
+);
 
 /**
  * Top floating toolbar actions (Export, Map, AI, Logs, Search).

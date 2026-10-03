@@ -55,7 +55,7 @@ function useColorTheme() {
  * shell.isHomeOpen; // => false
  */
 function useAppShellPanels(isStandalone) {
-    const [isHomeOpen, setIsHomeOpen] = useState(() => !isStandalone && !hasExplicitSheetQueryParam());
+    const [isHomeOpen, setIsHomeOpen] = useState(() => !isStandalone && !hasInitialSheetToLoad());
     const [isSettingsOpen, setIsSettingsOpen] = useState(false);
     const [settingsTab, setSettingsTab] = useState('theme');
     const openSettings = useCallback((tab = 'theme') => {
@@ -89,7 +89,7 @@ function useAppCoreState() {
     const sidebar = useSidebarResize(360);
     const shell = useAppShellPanels(isStandalone);
     const treeStats = useMemo(() => data.tree.getStats(), [data.tree]);
-    const [sheetUrl, setSheetUrl] = useState(() => (hasExplicitSheetQueryParam() ? resolveInitialSheetUrl() : ''));
+    const [sheetUrl, setSheetUrl] = useState(() => (hasInitialSheetToLoad() ? resolveInitialSheetUrl() : ''));
     return { isStandalone, ...theme, ...data, ...nav, ...panels, ...sidebar, ...shell, treeStats, sheetUrl, setSheetUrl };
 }
 
@@ -368,22 +368,70 @@ function buildZoomProps(core, viewport) {
 }
 
 /**
+ * Dispatches an action chosen from the bottom-right radial menu (`SettingsRadialFab`).
+ *
+ * @param {string} actionId - Chosen action id ('ai'|'map'|'print'|'download'|'logs'|'theme'|'deduction'|'privacy')
+ * @param {object} ctx - Dispatch context (`core`, `layoutExp`, `clearAllStoredData`)
+ *
+ * @example
+ * dispatchRadialFabAction('theme', { core, layoutExp, clearAllStoredData });
+ *
+ * @example
+ * dispatchRadialFabAction('ai', { core, layoutExp, clearAllStoredData });
+ */
+function dispatchRadialFabAction(actionId, { core, layoutExp, clearAllStoredData }) {
+    if (actionId === 'privacy') {
+        if (typeof window === 'undefined' || window.confirm('Clear remembered Google Sheets, deduction settings and colour theme from this browser?')) {
+            clearAllStoredData();
+        }
+        return;
+    }
+    if (actionId === 'ai') {
+        const nextAI = !core.showAI;
+        core.setShowAI(nextAI);
+        if (nextAI) core.setShowLogs(false);
+        return;
+    }
+    if (actionId === 'map') {
+        const nextMap = !core.showMap;
+        core.setShowMap(nextMap);
+        if (nextMap) {
+            core.setIsSidebarVisible(true);
+            core.setActiveFilter(null);
+            core.setFocusId(null);
+        }
+        return;
+    }
+    if (actionId === 'print') { layoutExp.handleExportA4Print(); return; }
+    if (actionId === 'download') { layoutExp.handleExportStandaloneApp(); return; }
+    if (actionId === 'logs') {
+        const nextLogs = !core.showLogs;
+        core.setShowLogs(nextLogs);
+        if (nextLogs) core.setShowAI(false);
+        return;
+    }
+    core.openSettings(actionId);
+}
+
+/**
  * Formats properties for the app-shell overlays: the Home emblem button, the sheet-chooser
  * home screen, the radial settings FAB, and the tabbed settings panel.
  *
  * @param {object} core - Core state slice
+ * @param {object} viewport - Viewport state slice
  * @param {object} focusNav - Focus and navigation handlers (provides handleImport)
+ * @param {object} layoutExp - Layout and export handlers
  * @param {Function} applyDemographicSettingsDraft - Settings-panel Apply handler
  * @returns {object} Props for AppRootView's shell overlays.
  *
  * @example
- * const shellProps = buildShellProps(core, focusNav, applyDraft);
+ * const shellProps = buildShellProps(core, viewport, focusNav, layoutExp, applyDraft);
  * <SheetSourceHomeScreen {...shellProps.homeScreenProps} />
  *
  * @example
- * const { homeButtonProps, settingsPanelProps, settingsFabProps } = buildShellProps(core, focusNav, applyDraft);
+ * const { homeButtonProps, settingsPanelProps, settingsFabProps } = buildShellProps(core, viewport, focusNav, layoutExp, applyDraft);
  */
-function buildShellProps(core, focusNav, applyDemographicSettingsDraft) {
+function buildShellProps(core, viewport, focusNav, layoutExp, applyDemographicSettingsDraft) {
     const openSheet = (url) => {
         core.setIsHomeOpen(false);
         focusNav.handleImport(url);
@@ -391,15 +439,6 @@ function buildShellProps(core, focusNav, applyDemographicSettingsDraft) {
     const clearAllStoredData = () => {
         clearStoredPreferences();
         core.setThemeId(DEFAULT_COLOR_THEME_ID);
-    };
-    const handleFabSelect = (actionId) => {
-        if (actionId === 'privacy') {
-            if (typeof window === 'undefined' || window.confirm('Clear remembered Google Sheets, deduction settings and colour theme from this browser?')) {
-                clearAllStoredData();
-            }
-            return;
-        }
-        core.openSettings(actionId);
     };
     return {
         isHomeOpen: core.isHomeOpen,
@@ -409,7 +448,12 @@ function buildShellProps(core, focusNav, applyDemographicSettingsDraft) {
             errorMsg: core.errorMsg, onSubmit: openSheet, onClose: () => core.setIsHomeOpen(false),
             onClearStoredData: clearAllStoredData
         },
-        settingsFabProps: { onSelect: handleFabSelect },
+        settingsFabProps: {
+            onSelect: (actionId) => dispatchRadialFabAction(actionId, { core, layoutExp, clearAllStoredData }),
+            isHomeOpen: core.isHomeOpen, isStandalone: core.isStandalone, hasTree: Boolean(core.tree?.root),
+            isLoading: core.isLoading, showMap: core.showMap, showAI: core.showAI, showLogs: core.showLogs,
+            isAILoading: viewport.isAILoading, isExportingApp: layoutExp.isExportingApp, isExportingA4: layoutExp.isExportingA4
+        },
         settingsPanelProps: {
             isOpen: core.isSettingsOpen, initialTab: core.settingsTab,
             onClose: () => core.setIsSettingsOpen(false),
@@ -457,7 +501,7 @@ function useAppViewModel() {
         zoomProps: buildZoomProps(core, viewport),
         viewportProps: buildViewportProps(core, viewport, focusNav, layoutExp),
         sidebarProps: buildSidebarProps(core, viewport, focusNav),
-        shellProps: buildShellProps(core, focusNav, applyDemographicSettingsDraft)
+        shellProps: buildShellProps(core, viewport, focusNav, layoutExp, applyDemographicSettingsDraft)
     };
 }
 

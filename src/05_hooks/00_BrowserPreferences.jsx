@@ -15,6 +15,8 @@ const SHEET_HISTORY_COOKIE = 'ft_sheet_history';
 const DEMOGRAPHIC_SETTINGS_COOKIE = 'ft_demographic_settings';
 /** Cookie holding the id of the chosen colour theme (see COLOR_THEMES). */
 const COLOR_THEME_COOKIE = 'ft_color_theme';
+/** Cookie holding the last URL hash view state (p=…&z=…&o=…&v=map) for session restore. */
+const LAST_VIEW_STATE_COOKIE = 'ft_last_view_state';
 /** Preferences survive one year of inactivity; every write refreshes the clock. */
 const PREFERENCE_COOKIE_MAX_AGE_SECONDS = 365 * 24 * 60 * 60;
 /** Browsers cap a single cookie at 4096 bytes; a dozen compact entries stay well below. */
@@ -400,6 +402,27 @@ function resolveMostUsedSheet(entries) {
 }
 
 /**
+ * Picks the most recently opened sheet (highest `lastUsed` timestamp, ties → most uses),
+ * or null for an empty history. Used when reopening the site without `?id=` in the URL.
+ *
+ * @param {Array<SheetHistoryEntry>} entries - History
+ * @returns {SheetHistoryEntry|null}
+ *
+ * @example
+ * resolveLastUsedSheet([{ id: 'a', uses: 5, lastUsed: 10 }, { id: 'b', uses: 1, lastUsed: 99 }]).id;
+ * // => 'b'
+ *
+ * @example
+ * resolveLastUsedSheet([]);
+ * // => null
+ */
+function resolveLastUsedSheet(entries) {
+    const sorted = [...(entries || [])].sort((a, b) =>
+        (b.lastUsed - a.lastUsed) || (b.uses - a.uses) || String(a.id).localeCompare(String(b.id)));
+    return sorted.length > 0 ? sorted[0] : null;
+}
+
+/**
  * Loads the persisted sheet history from the cookie (or its localStorage mirror).
  *
  * @returns {Array<SheetHistoryEntry>} Ranked entries, [] when nothing is stored
@@ -609,6 +632,28 @@ function resolveHomeScreenPrefill(clipboardRef, history) {
 function formatSheetHistoryLabel(entry) {
     const title = ((entry && entry.title) || '').trim() || 'Untitled sheet';
     return `${title} — ${entry.id}`;
+}
+
+/**
+ * Filters out the spreadsheet currently filled in the input box so the history
+ * dropdown only lists alternative sheets rather than duplicating the active value.
+ *
+ * @param {Array<SheetHistoryEntry>} entries - Ranked history entries
+ * @param {string} inputValue - Raw text currently in the input box
+ * @returns {Array<SheetHistoryEntry>} Entries whose ID differs from the input's sheet ID
+ *
+ * @example
+ * filterSheetHistoryForInput([{ id: '1BQvyFoA_-u4MG-r1SRDel93F1TwEaN3I6v6p-kOH8z0', title: 'Demo', uses: 2, lastUsed: 1 }], '1BQvyFoA_-u4MG-r1SRDel93F1TwEaN3I6v6p-kOH8z0');
+ * // => []
+ *
+ * @example
+ * filterSheetHistoryForInput([{ id: '1BQvyFoA_-u4MG-r1SRDel93F1TwEaN3I6v6p-kOH8z0', title: 'Demo', uses: 2, lastUsed: 1 }], '');
+ * // => [{ id: '1BQvyFoA_-u4MG-r1SRDel93F1TwEaN3I6v6p-kOH8z0', title: 'Demo', uses: 2, lastUsed: 1 }]
+ */
+function filterSheetHistoryForInput(entries, inputValue) {
+    const ref = normalizeSheetReference(inputValue);
+    const currentId = ref ? ref.id : '';
+    return (entries || []).filter((entry) => Boolean(entry && entry.id && entry.id !== currentId));
 }
 
 /**
@@ -926,8 +971,63 @@ function applyStoredColorTheme() {
     return applyColorTheme(loadStoredColorThemeId() || DEFAULT_COLOR_THEME_ID);
 }
 
+// ─── Last view state persistence (for resuming previous view on bare URL open) ─
+
 /**
- * The "Clear stored data" action of the GDPR notice: deletes all three preference cookies and
+ * Reads the last saved view-state hash body (without leading `#`), or '' when none is stored.
+ *
+ * @returns {string}
+ *
+ * @example
+ * saveLastViewStateHash('p=Joseph_1920_152&z=0.8');
+ * loadLastViewStateHash(); // => 'p=Joseph_1920_152&z=0.8'
+ *
+ * @example
+ * clearLastViewStateHash();
+ * loadLastViewStateHash(); // => ''
+ */
+function loadLastViewStateHash() {
+    const raw = readPreference(LAST_VIEW_STATE_COOKIE);
+    return typeof raw === 'string' ? raw.replace(/^#/, '').trim() : '';
+}
+
+/**
+ * Persists the latest view-state hash body so reopening the site at its root URL restores
+ * the exact view (focused person, zoom, pan offset, filter, or map mode).
+ *
+ * @param {string} hashBody - Hash body with or without leading `#`
+ * @returns {string} The normalized hash body that was written
+ *
+ * @example
+ * saveLastViewStateHash('#p=Joseph_1920_152&z=0.8');
+ * // => 'p=Joseph_1920_152&z=0.8'
+ *
+ * @example
+ * saveLastViewStateHash('');
+ * // => ''
+ */
+function saveLastViewStateHash(hashBody) {
+    const clean = typeof hashBody === 'string' ? hashBody.replace(/^#/, '').trim().slice(0, 1800) : '';
+    writePreference(LAST_VIEW_STATE_COOKIE, clean);
+    return clean;
+}
+
+/**
+ * Removes the stored view-state hash.
+ *
+ * @example
+ * clearLastViewStateHash();
+ * loadLastViewStateHash(); // => ''
+ *
+ * @example
+ * saveLastViewStateHash('v=map'); clearLastViewStateHash(); readPreference(LAST_VIEW_STATE_COOKIE); // => null
+ */
+function clearLastViewStateHash() {
+    removePreference(LAST_VIEW_STATE_COOKIE);
+}
+
+/**
+ * The "Clear stored data" action of the GDPR notice: deletes all preference cookies and
  * their mirrors, empties the in-memory title registry, restores the shipped model and repaints
  * the Classic theme.
  *
@@ -944,6 +1044,7 @@ function clearStoredPreferences() {
     removePreference(SHEET_HISTORY_COOKIE);
     removePreference(DEMOGRAPHIC_SETTINGS_COOKIE);
     removePreference(COLOR_THEME_COOKIE);
+    removePreference(LAST_VIEW_STATE_COOKIE);
     sheetTitleRegistry.clear();
     FamilyTreeBuilder.resetDemographicSettings();
     applyColorTheme(DEFAULT_COLOR_THEME_ID);

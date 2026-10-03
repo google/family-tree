@@ -200,6 +200,7 @@ try {
     const colorThemesSrc = source.slice(colorThemesStart, colorThemesEnd + colorThemesEndMarker.length);
     const getPersonCardThemeSrc = extractFunction(source, 'getPersonCardTheme');
     const extractSheetIdFromUrlSrc = extractFunction(source, 'extractSheetIdFromUrl');
+    const hasInitialSheetToLoadSrc = extractFunction(source, 'hasInitialSheetToLoad');
     const resolveInitialSheetUrlSrc = extractFunction(source, 'resolveInitialSheetUrl');
     const buttonDocCatalogSrc = 'const BUTTON_DOCUMENTATION_CATALOG = ' + extractBlock(source, '{\n    \'Family Tree Home – choose a Google Sheet\':') + ';';
     const resolveDynamicFilterButtonDocSrc = extractFunction(source, 'resolveDynamicFilterButtonDoc');
@@ -210,6 +211,8 @@ try {
     const buildHoveredButtonDocStateSrc = extractFunction(source, 'buildHoveredButtonDocState');
     const restoreButtonNativeTitleSrc = extractFunction(source, 'restoreButtonNativeTitle');
     const computeRadialMenuOffsetsSrc = extractFunction(source, 'computeRadialMenuOffsets');
+    const resolveRadialFabOffsetsSrc = extractFunction(source, 'resolveRadialFabOffsets');
+    const resolveRadialFabActionsSrc = extractFunction(source, 'resolveRadialFabActions');
     const resolveSettingsPanelTabSrc = extractFunction(source, 'resolveSettingsPanelTab');
     // Pulls a single-line `const NAME = ...;` declaration verbatim, so the harness never
     // restates a constant's value (a retune in App.jsx must not silently diverge from here).
@@ -227,10 +230,11 @@ try {
         extractFrozenArrayConst(source, 'SETTINGS_FAB_ACTIONS'),
         extractConst(source, 'SETTINGS_FAB_TITLE'),
         extractConst(source, 'SETTINGS_FAB_RADIUS'),
+        extractConst(source, 'SETTINGS_FAB_EXPANDED_RADIUS'),
         extractFrozenArrayConst(source, 'SETTINGS_PANEL_TABS')
     ].join('\n');
     const browserPreferencesSrc = [
-        'SHEET_HISTORY_COOKIE', 'DEMOGRAPHIC_SETTINGS_COOKIE', 'COLOR_THEME_COOKIE',
+        'SHEET_HISTORY_COOKIE', 'DEMOGRAPHIC_SETTINGS_COOKIE', 'COLOR_THEME_COOKIE', 'LAST_VIEW_STATE_COOKIE',
         'PREFERENCE_COOKIE_MAX_AGE_SECONDS', 'SHEET_HISTORY_LIMIT', 'SHEET_TITLE_MAX_LENGTH',
         'SHEET_HISTORY_COOKIE_BUDGET', 'DEMO_SHEET_ID', 'DEMO_SHEET_TITLE',
         'SHEET_ID_EXACT_PATTERN', 'sheetTitleRegistry', 'MARRIAGE_AGE_PREVIEW_COHORTS'
@@ -238,14 +242,17 @@ try {
         'parseCookieHeader', 'buildCookieAssignment', 'readCookieValue', 'writeCookieValue',
         'preferenceStorageKey', 'readPreference', 'writePreference', 'removePreference',
         'isValidSheetId', 'rankSheetHistory', 'parseSheetHistoryJson', 'serializeSheetHistory',
-        'mergeSheetHistoryEntry', 'resolveMostUsedSheet', 'readSheetHistory', 'writeSheetHistory',
+        'mergeSheetHistoryEntry', 'resolveMostUsedSheet', 'resolveLastUsedSheet',
+        'filterSheetHistoryForInput', 'readSheetHistory', 'writeSheetHistory',
         'recordSheetUse', 'forgetSheetHistoryEntry', 'buildSheetUrlFromId', 'normalizeSheetReference',
         'isLikelySheetReference', 'resolveHomeScreenPrefill', 'formatSheetHistoryLabel',
         'resolveKnownSheetTitle', 'parseContentDispositionFilename', 'deriveSpreadsheetTitle',
         'rememberSheetTitle', 'getRememberedSheetTitle', 'rememberSheetTitleFromResponse',
         'loadStoredDemographicSettings', 'saveDemographicSettings', 'clearStoredDemographicSettings',
         'applyStoredDemographicSettings', 'loadStoredColorThemeId', 'saveColorThemeId',
-        'clearStoredColorTheme', 'applyStoredColorTheme', 'clearStoredPreferences',
+        'clearStoredColorTheme', 'applyStoredColorTheme',
+        'loadLastViewStateHash', 'saveLastViewStateHash', 'clearLastViewStateHash',
+        'clearStoredPreferences',
         'hasExplicitSheetQueryParam', 'buildSheetDeepLinkUrl', 'syncSheetIdIntoLocation',
         'commitSuccessfulSheetImport', 'suggestNextMarriageAnchor', 'describeMarriageAgePreview'
     ].map(name => extractFunction(source, name))).join('\n');
@@ -258,6 +265,7 @@ try {
         'computeCenterFromAnchorOffset', 'isAnchorInsideViewport', 'pickNearestAnchor',
         'parseViewStatePersonRef', 'pickNearestRowCandidate', 'resolveViewStatePersonId',
         'resolveRestoredSidebarOpen', 'buildCurrentViewState', 'writeViewStateHash',
+        'resolveInitialViewStateHash',
         'applyRestoredFocus', 'resolveRestoredCollapsedIds', 'applyRestoredSelection',
         'resolveRestoredCenter', 'applyRestoredCamera', 'resolveCanvasDisplayMode'
     ].map(name => extractFunction(source, name)).join('\n');
@@ -270,7 +278,7 @@ try {
         getPersonCardTheme, executeBackgroundTreeTransition,
         computeLayoutAnchorShift, computeUpdatedTreeLayout,
         findBestAnchorNode, calculateShiftedCamera,
-        resolveInitialSheetUrl, BUTTON_DOCUMENTATION_CATALOG,
+        hasInitialSheetToLoad, resolveInitialSheetUrl, BUTTON_DOCUMENTATION_CATALOG,
         resolveButtonDocumentation, computeButtonDocPosition,
         buildHoveredButtonDocState, restoreButtonNativeTitle,
         formatCompactNumber, encodeViewStateToken, decodeViewStateToken,
@@ -278,20 +286,24 @@ try {
         encodeViewStateHash, parseViewStateHash, computeViewCenterFromCamera,
         computeCameraFromViewCenter, computeAnchorOffset, computeCenterFromAnchorOffset,
         isAnchorInsideViewport, pickNearestAnchor, resolveViewStatePersonId, resolveRestoredSidebarOpen,
-        buildCurrentViewState, writeViewStateHash, applyRestoredSelection, applyRestoredCamera,
+        buildCurrentViewState, writeViewStateHash, resolveInitialViewStateHash,
+        applyRestoredSelection, applyRestoredCamera,
         resolveCanvasDisplayMode,
         DEFAULT_URL, DEMO_SHEET_ID, DEMO_SHEET_TITLE, SHEET_HISTORY_LIMIT, SHEET_TITLE_MAX_LENGTH,
-        SHEET_HISTORY_COOKIE, DEMOGRAPHIC_SETTINGS_COOKIE, COLOR_THEME_COOKIE,
+        SHEET_HISTORY_COOKIE, DEMOGRAPHIC_SETTINGS_COOKIE, COLOR_THEME_COOKIE, LAST_VIEW_STATE_COOKIE,
         parseCookieHeader, buildCookieAssignment, readPreference, writePreference, removePreference,
         isValidSheetId, rankSheetHistory, parseSheetHistoryJson, serializeSheetHistory,
-        mergeSheetHistoryEntry, resolveMostUsedSheet, readSheetHistory, recordSheetUse,
+        mergeSheetHistoryEntry, resolveMostUsedSheet, resolveLastUsedSheet, filterSheetHistoryForInput,
+        readSheetHistory, recordSheetUse,
         forgetSheetHistoryEntry, buildSheetUrlFromId, normalizeSheetReference, isLikelySheetReference,
         resolveHomeScreenPrefill, formatSheetHistoryLabel, resolveKnownSheetTitle,
         parseContentDispositionFilename, deriveSpreadsheetTitle, rememberSheetTitle,
         getRememberedSheetTitle, rememberSheetTitleFromResponse,
         loadStoredDemographicSettings, saveDemographicSettings, clearStoredDemographicSettings,
         applyStoredDemographicSettings, loadStoredColorThemeId, saveColorThemeId,
-        clearStoredColorTheme, applyStoredColorTheme, clearStoredPreferences,
+        clearStoredColorTheme, applyStoredColorTheme,
+        loadLastViewStateHash, saveLastViewStateHash, clearLastViewStateHash,
+        clearStoredPreferences,
         hasExplicitSheetQueryParam, buildSheetDeepLinkUrl, syncSheetIdIntoLocation,
         commitSuccessfulSheetImport, suggestNextMarriageAnchor, describeMarriageAgePreview,
         cookieJar, fakeLocalStorage, fakeDocElement, extractSheetIdFromUrl,
@@ -300,9 +312,10 @@ try {
         hexToLch, lchToHex, toneHex, contrastRatio, getColorThemeDefinition,
         isKnownColorThemeId, resolveColorTheme, themeFamilyHex, buildThemeCssVariables,
         removeThemeCssVariables, applyColorTheme, describeThemeSwatches,
-        buildTailwindThemeConfigScript, TAILWIND_THEME_CONFIG_SCRIPT,
-        SETTINGS_FAB_ACTIONS, SETTINGS_FAB_TITLE, SETTINGS_FAB_RADIUS, SETTINGS_PANEL_TABS,
-        computeRadialMenuOffsets, resolveSettingsPanelTab, resolveThemeCardDoc
+        buildTailwindThemeConfigScript, TAILWIND_THEME_CONFIG_SCRIPT, shadeChromaMultiplier,
+        SETTINGS_FAB_ACTIONS, SETTINGS_FAB_TITLE, SETTINGS_FAB_RADIUS, SETTINGS_FAB_EXPANDED_RADIUS,
+        SETTINGS_PANEL_TABS, computeRadialMenuOffsets, resolveRadialFabOffsets, resolveRadialFabActions,
+        resolveSettingsPanelTab, resolveThemeCardDoc
     ] = new Function(`
         // Isolated cookie jar + localStorage + documentElement: preference & theme tests must never
         // touch the real browser state, and Stage 3 runs in node where neither exists. Every other
@@ -398,6 +411,7 @@ try {
         ${getPersonCardThemeSrc}
         ${extractConst(source, 'DEFAULT_URL')}
         ${extractSheetIdFromUrlSrc}
+        ${hasInitialSheetToLoadSrc}
         ${resolveInitialSheetUrlSrc}
         ${buttonDocCatalogSrc}
         ${resolveDynamicFilterButtonDocSrc}
@@ -409,6 +423,8 @@ try {
         ${restoreButtonNativeTitleSrc}
         ${settingsFabConstsSrc}
         ${computeRadialMenuOffsetsSrc}
+        ${resolveRadialFabOffsetsSrc}
+        ${resolveRadialFabActionsSrc}
         ${resolveSettingsPanelTabSrc}
         const isStandaloneExportMode = () => false;
         const VIEW_STATE_MIN_SHEET_ID_LENGTH = 20;
@@ -440,7 +456,7 @@ try {
             getPersonCardTheme, executeBackgroundTreeTransition,
             computeLayoutAnchorShift, computeUpdatedTreeLayout,
             findBestAnchorNode, calculateShiftedCamera,
-            resolveInitialSheetUrl, BUTTON_DOCUMENTATION_CATALOG,
+            hasInitialSheetToLoad, resolveInitialSheetUrl, BUTTON_DOCUMENTATION_CATALOG,
             resolveButtonDocumentation, computeButtonDocPosition,
             buildHoveredButtonDocState, restoreButtonNativeTitle,
             formatCompactNumber, encodeViewStateToken, decodeViewStateToken,
@@ -448,20 +464,24 @@ try {
             encodeViewStateHash, parseViewStateHash, computeViewCenterFromCamera,
             computeCameraFromViewCenter, computeAnchorOffset, computeCenterFromAnchorOffset,
             isAnchorInsideViewport, pickNearestAnchor, resolveViewStatePersonId, resolveRestoredSidebarOpen,
-            buildCurrentViewState, writeViewStateHash, applyRestoredSelection, applyRestoredCamera,
+            buildCurrentViewState, writeViewStateHash, resolveInitialViewStateHash,
+            applyRestoredSelection, applyRestoredCamera,
             resolveCanvasDisplayMode,
             DEFAULT_URL, DEMO_SHEET_ID, DEMO_SHEET_TITLE, SHEET_HISTORY_LIMIT, SHEET_TITLE_MAX_LENGTH,
-            SHEET_HISTORY_COOKIE, DEMOGRAPHIC_SETTINGS_COOKIE, COLOR_THEME_COOKIE,
+            SHEET_HISTORY_COOKIE, DEMOGRAPHIC_SETTINGS_COOKIE, COLOR_THEME_COOKIE, LAST_VIEW_STATE_COOKIE,
             parseCookieHeader, buildCookieAssignment, readPreference, writePreference, removePreference,
             isValidSheetId, rankSheetHistory, parseSheetHistoryJson, serializeSheetHistory,
-            mergeSheetHistoryEntry, resolveMostUsedSheet, readSheetHistory, recordSheetUse,
+            mergeSheetHistoryEntry, resolveMostUsedSheet, resolveLastUsedSheet, filterSheetHistoryForInput,
+            readSheetHistory, recordSheetUse,
             forgetSheetHistoryEntry, buildSheetUrlFromId, normalizeSheetReference, isLikelySheetReference,
             resolveHomeScreenPrefill, formatSheetHistoryLabel, resolveKnownSheetTitle,
             parseContentDispositionFilename, deriveSpreadsheetTitle, rememberSheetTitle,
             getRememberedSheetTitle, rememberSheetTitleFromResponse,
             loadStoredDemographicSettings, saveDemographicSettings, clearStoredDemographicSettings,
             applyStoredDemographicSettings, loadStoredColorThemeId, saveColorThemeId,
-            clearStoredColorTheme, applyStoredColorTheme, clearStoredPreferences,
+            clearStoredColorTheme, applyStoredColorTheme,
+            loadLastViewStateHash, saveLastViewStateHash, clearLastViewStateHash,
+            clearStoredPreferences,
             hasExplicitSheetQueryParam, buildSheetDeepLinkUrl, syncSheetIdIntoLocation,
             commitSuccessfulSheetImport, suggestNextMarriageAnchor, describeMarriageAgePreview,
             cookieJar, fakeLocalStorage, fakeDocElement, extractSheetIdFromUrl,
@@ -470,9 +490,10 @@ try {
             hexToLch, lchToHex, toneHex, contrastRatio, getColorThemeDefinition,
             isKnownColorThemeId, resolveColorTheme, themeFamilyHex, buildThemeCssVariables,
             removeThemeCssVariables, applyColorTheme, describeThemeSwatches,
-            buildTailwindThemeConfigScript, TAILWIND_THEME_CONFIG_SCRIPT,
-            SETTINGS_FAB_ACTIONS, SETTINGS_FAB_TITLE, SETTINGS_FAB_RADIUS, SETTINGS_PANEL_TABS,
-            computeRadialMenuOffsets, resolveSettingsPanelTab, resolveThemeCardDoc
+            buildTailwindThemeConfigScript, TAILWIND_THEME_CONFIG_SCRIPT, shadeChromaMultiplier,
+            SETTINGS_FAB_ACTIONS, SETTINGS_FAB_TITLE, SETTINGS_FAB_RADIUS, SETTINGS_FAB_EXPANDED_RADIUS,
+            SETTINGS_PANEL_TABS, computeRadialMenuOffsets, resolveRadialFabOffsets, resolveRadialFabActions,
+            resolveSettingsPanelTab, resolveThemeCardDoc
         ];
     `)();
 
@@ -7437,7 +7458,8 @@ const m3 = tree.all.find(n => n.id === '3');
             assert('Test 126A: Close button is rendered without !isLoading conditional pop-in', appCode.includes('<button \n                            onClick={() => setShowLogs(false)} \n                            className="p-1 rounded-lg text-slate-400 hover:text-slate-600 hover:bg-slate-200/60 transition-colors cursor-pointer"\n                            title="Close Log Panel"\n                        >'));
             assert('Test 126A: Initial/import load displays logs with setShowLogs(true)', appCode.includes('setShowLogs(true);'));
             assert('Test 126A: Auto-dismisses logs after loading and drawing completes', appCode.includes('setTimeout(() => setShowLogs(false), 1500);'));
-            assert('Test 126A: View Logs button in TopNavigation toggles showLogs', appCode.includes('onClick={() => { setShowLogs(!showLogs); if (!showLogs) setShowAI(false); }}'));
+            assert('Test 126A: View Logs action in Radial menu toggles showLogs and closes showAI',
+                /if \(actionId === 'logs'\) \{\s*const nextLogs = !core\.showLogs;\s*core\.setShowLogs\(nextLogs\);\s*if \(nextLogs\) core\.setShowAI\(false\);\s*return;\s*\}/.test(appCode));
         } catch (e) {
             assertEqual('Test 126A execution failed', e.message, '');
         }
@@ -8561,7 +8583,8 @@ const m3 = tree.all.find(n => n.id === '3');
         try {
             assert('Test 140C: App.jsx defines handleExportStandaloneApp', appCode.includes('const handleExportStandaloneApp = useCallback'));
             assert('Test 140C: App.jsx defines buildStandaloneAppHtml static method', appCode.includes('static buildStandaloneAppHtml(appJsx'));
-            assert('Test 140C: Download Standalone App button present in TopNavigation', appCode.includes('title="Download Standalone Interactive App (.html)"'));
+            assert('Test 140C: Download Standalone App action present in Radial menu',
+                SETTINGS_FAB_ACTIONS.some(a => a.id === 'download' && a.title === 'Download Standalone Interactive App (.html)'));
             assert('Test 140C: Generates .html download filename with Interactive_App', appCode.includes('_Interactive_App_${dateStr}.html'));
         } catch (e) {
             assertEqual('Test 140C execution failed', e.message, '');
@@ -8572,8 +8595,10 @@ const m3 = tree.all.find(n => n.id === '3');
     {
         try {
             assert('Test 140D: TopNavigation checks isStandalone flag', appCode.includes("const isStandalone = isStandaloneExportMode();"));
-            assert('Test 140D: Hides import, export, and download buttons in standalone mode', appCode.includes("{!isStandalone && (") && appCode.includes("title=\"Download Standalone Interactive App (.html)\""));
-            assert('Test 140D: Hides view logs button in standalone mode', appCode.includes("{!isStandalone && (\n                                    <button onClick={() => { setShowLogs(!showLogs); if (!showLogs) setShowAI(false); }}") || appCode.includes("title=\"View Logs\""));
+            assert('Test 140D: Hides import, export, and download buttons in standalone mode',
+                !resolveRadialFabActions({ isHomeOpen: false, isStandalone: true }).some(a => a.id === 'download'));
+            assert('Test 140D: Hides view logs button in standalone mode',
+                !resolveRadialFabActions({ isHomeOpen: false, isStandalone: true }).some(a => a.id === 'logs'));
         } catch (e) {
             assertEqual('Test 140D execution failed', e.message, '');
         }
@@ -8637,7 +8662,8 @@ const m3 = tree.all.find(n => n.id === '3');
         try {
             assert('Test 142A: handleExportStandaloneApp embeds selectedId into treeData', appCode.includes('selectedId: focusId || tree.rootId || null'));
             assert('Test 142A: Standalone boot sets focusId to targetSelected', appCode.includes('const targetSelected = embedded.selectedId || initialRoot;') && appCode.includes('setFocusId(targetSelected);'));
-            assert('Test 142A: Standalone boot keeps details panel closed initially', appCode.includes('setIsSidebarVisible(false);\n                            setTimeout(() => centerOnPerson(targetSelected'));
+            assert('Test 142A: Standalone boot keeps details panel closed initially',
+                /setIsSidebarVisible\(false\);\s*setTimeout\(\(\) => centerOnPerson\(targetSelected/.test(appCode));
         } catch (e) {
             assertEqual('Test 142A execution failed', e.message, '');
         }
@@ -14640,8 +14666,10 @@ const m3 = tree.all.find(n => n.id === '3');
                 !/onChange=[^\n]*onSubmit\(/.test(inputBlock));
             assert('Test 210.04: Picking a dropdown row fills the textbox with the canonical URL and opens that sheet at once',
                 /const pickEntry = \(entry\) => \{\s*const url = buildSheetUrlFromId\(entry\.id\);[\s\S]*?form\.setValue\(url\);[\s\S]*?onSubmit\(url\);/.test(inputBlock));
-            assert('Test 210.05: The history caret and dropdown appear only when the cookie history is non-empty',
-                /form\.history\.length > 0 && \(/.test(inputBlock) && /form\.isListOpen && <SheetHistoryDropdown\b/.test(inputBlock));
+            assert('Test 210.05: The history caret and dropdown appear only when filtered dropdownEntries (excluding the current input sheet) are non-empty',
+                /dropdownEntries = filterSheetHistoryForInput\(form\.history, form\.value\)/.test(inputBlock) &&
+                /dropdownEntries\.length > 0 && \(/.test(inputBlock) &&
+                /form\.isListOpen && <SheetHistoryDropdown\b/.test(inputBlock));
 
             const rowBlock = sliceComponent('const SheetHistoryRow = ({');
             assert('Test 210.06: Dropdown rows show the title (or "Untitled sheet") and the bare ID — the rest of the URL is trimmed',
@@ -14686,8 +14714,8 @@ const m3 = tree.all.find(n => n.id === '3');
                 /<BrandWatermark \/>/.test(viewportBlock) && /const BrandWatermark = \(\{ size = \d+, opacity = 0\.0\d+ \}\)/.test(appCode) &&
                 /data-testid="brand-watermark"/.test(appCode) && /pointer-events-none/.test(sliceComponent('const BrandWatermark = ({')));
 
-            const importExportBlock = sliceComponent('const TopNavImportExportButtons = ({');
-            const fabBlock = sliceComponent('const SettingsRadialFab = ({');
+            const importExportBlock = sliceComponent('const TopNavImportExportButtons = ');
+            const fabBlock = sliceComponent('const SettingsRadialFab = (');
             assert('Test 210.16: Both the clipboard "Import Google Sheet" button and the toolbar settings gear are gone from TopNavImportExportButtons; SettingsRadialFab replaces the toolbar gear',
                 !/Import Google Sheet from Clipboard URL/.test(appCode) && !/handleImport/.test(importExportBlock) &&
                 !/onOpenSettings/.test(importExportBlock) && /data-testid="settings-fab"/.test(fabBlock));
@@ -14700,10 +14728,10 @@ const m3 = tree.all.find(n => n.id === '3');
                 !Object.keys(BUTTON_DOCUMENTATION_CATALOG).some(k => /Import Google Sheet/.test(k)));
 
             const initBlock = sliceComponent('function initializeTreeDataset(');
-            assert('Test 210.18: Startup auto-loads a sheet only when the page URL names one (?id=…); otherwise the home screen stays open',
-                /if \(!hasExplicitSheetQueryParam\(\)\) return false;\s*handleImport\(resolveInitialSheetUrl\(\)\);/.test(initBlock));
-            assert('Test 210.19: The app starts with the home screen open unless the URL names a sheet (never in standalone exports)',
-                /useState\(\(\) => !isStandalone && !hasExplicitSheetQueryParam\(\)\)/.test(appCode));
+            assert('Test 210.18: Startup auto-loads a sheet when the page URL names one (?id=…) or when cookie history has a previously opened sheet',
+                /if \(!hasInitialSheetToLoad\(\)\) return false;\s*handleImport\(resolveInitialSheetUrl\(\)\);/.test(initBlock));
+            assert('Test 210.19: The app skips the home screen on startup whenever hasInitialSheetToLoad() is true (never opens home in standalone exports)',
+                /useState\(\(\) => !isStandalone && !hasInitialSheetToLoad\(\)\)/.test(appCode));
             const importHandlerBlock = sliceComponent('function useTreeImportHandler(');
             assert('Test 210.20: A successful import records the sheet in the cookie history and puts ?id= in the address bar; a failed import reopens the home screen with the error',
                 /commitSuccessfulSheetImport\(urlToLoad\)/.test(importHandlerBlock) && /setIsHomeOpen\(true\)/.test(importHandlerBlock));
@@ -14848,16 +14876,18 @@ const m3 = tree.all.find(n => n.id === '3');
             assertEqual('Test 212.05: clearStoredColorTheme() removes the ft_color_theme cookie',
                 cookieJar.has(COLOR_THEME_COOKIE), false);
 
-            // Full clearStoredPreferences wipes sheet history, deduction settings, and colour theme
+            // Full clearStoredPreferences wipes sheet history, deduction settings, colour theme, and last view state
             recordSheetUse(DEMO_SHEET_ID, DEMO_SHEET_TITLE);
             saveDemographicSettings({ ...FamilyTreeBuilder.getDemographicSettings(), siblingAgeGap: 4 });
             saveColorThemeId('midnight');
+            saveLastViewStateHash('sel:2~5&z:1.25');
             applyColorTheme('midnight');
             clearStoredPreferences();
-            assertEqual('Test 212.06: clearStoredPreferences() clears all 3 cookies and restores the classic theme on document.documentElement',
+            assertEqual('Test 212.06: clearStoredPreferences() clears all 4 cookies (history, deduction, theme, last view state) and restores the classic theme on document.documentElement',
                 [cookieJar.has(SHEET_HISTORY_COOKIE), cookieJar.has(DEMOGRAPHIC_SETTINGS_COOKIE),
-                 cookieJar.has(COLOR_THEME_COOKIE), fakeDocElement.getAttribute('data-theme')].join('|'),
-                'false|false|false|classic');
+                 cookieJar.has(COLOR_THEME_COOKIE), cookieJar.has(LAST_VIEW_STATE_COOKIE),
+                 fakeDocElement.getAttribute('data-theme')].join('|'),
+                'false|false|false|false|classic');
         } catch (e) {
             assertEqual('Test 212 execution failed', e.message, '');
         } finally {
@@ -14907,12 +14937,12 @@ const m3 = tree.all.find(n => n.id === '3');
             const offsets = computeRadialMenuOffsets(3, 84);
             assertEqual('Test 213.07: computeRadialMenuOffsets(3, 84) places 3 satellite buttons at 90° (0,-84), 135° (-59,-59), and 180° (-84,0)',
                 offsets.map(o => `${o.x},${o.y}`).join(' | '), '0,-84 | -59,-59 | -84,0');
-            assertEqual('Test 213.08: SETTINGS_FAB_ACTIONS exposes theme, deduction, and privacy satellite actions',
-                SETTINGS_FAB_ACTIONS.map(a => a.id).join(','), 'theme,deduction,privacy');
+            assertEqual('Test 213.08: SETTINGS_FAB_ACTIONS exposes all 8 actions (ai,map,print,download,logs,theme,deduction,privacy)',
+                SETTINGS_FAB_ACTIONS.map(a => a.id).join(','), 'ai,map,print,download,logs,theme,deduction,privacy');
             assertEqual('Test 213.09: resolveSettingsPanelTab maps "deduction" to "deduction" and everything else to "theme"',
                 [resolveSettingsPanelTab('deduction').id, resolveSettingsPanelTab('theme').id, resolveSettingsPanelTab('unknown').id].join('|'),
                 'deduction|theme|theme');
-            const fabCompBlock = sliceComponent('const SettingsRadialFab = ({');
+            const fabCompBlock = sliceComponent('const SettingsRadialFab = (');
             assert('Test 213.10: SettingsRadialFab is fixed at bottom-6 right-6 z-[80] (above the z-50 home screen) and renders data-testid="settings-fab-toggle"',
                 /fixed bottom-6 right-6 z-\[80\]/.test(fabCompBlock) && /data-testid="settings-fab-toggle"/.test(fabCompBlock));
 
@@ -14946,6 +14976,132 @@ const m3 = tree.all.find(n => n.id === '3');
                 Boolean(themeDoc && themeDoc.title === 'Colour theme: Earthy & Warm' && themeDoc.examples.length >= 2));
         } catch (e) {
             assertEqual('Test 213 execution failed', e.message, '');
+        }
+    }
+
+    // ══════════════════════════════════════════════════════════════════════════
+    //  214. Dropdown Deduplication, Dark Card Lightness, Radial Menu & Resume Last View
+    // ══════════════════════════════════════════════════════════════════════════
+    {
+        section('214. Dropdown Deduplication, Dark Card Lightness, Radial Menu & Resume Last View');
+        try {
+            cookieJar.clear();
+            fakeLocalStorage.clear();
+
+            const sliceComponent = (marker) => {
+                const start = appCode.indexOf(marker);
+                const end = appCode.indexOf('/**', start + marker.length);
+                return start === -1 ? '' : appCode.slice(start, end === -1 ? start + 4000 : end);
+            };
+
+            // 1. Dropdown excludes the sheet/ID already filled in the input box & drops view counts / "most used first"
+            const otherId = '1OtherSheetIdForDropdownDeduplicationTest001';
+            const twoEntries = [
+                { id: DEMO_SHEET_ID, title: DEMO_SHEET_TITLE, uses: 5, lastUsed: 200 },
+                { id: otherId, title: 'Second Family', uses: 2, lastUsed: 100 }
+            ];
+            const filteredByUrl = filterSheetHistoryForInput(twoEntries, buildSheetUrlFromId(DEMO_SHEET_ID));
+            assertEqual('Test 214.01: filterSheetHistoryForInput removes the entry matching a full Google Sheet URL in the input box',
+                filteredByUrl.map(e => e.id).join(','), otherId);
+            const filteredByBareId = filterSheetHistoryForInput(twoEntries, DEMO_SHEET_ID);
+            assertEqual('Test 214.02: filterSheetHistoryForInput removes the entry matching a bare Sheet ID in the input box',
+                filteredByBareId.map(e => e.id).join(','), otherId);
+            const filteredSingle = filterSheetHistoryForInput([twoEntries[0]], DEMO_SHEET_ID);
+            assertEqual('Test 214.03: filterSheetHistoryForInput returns an empty list when the only history entry is already in the input box',
+                filteredSingle.length, 0);
+            const filteredUnmatched = filterSheetHistoryForInput(twoEntries, 'not-a-sheet-id');
+            assertEqual('Test 214.04: filterSheetHistoryForInput keeps all entries when the input text does not resolve to a valid sheet ID',
+                filteredUnmatched.length, 2);
+
+            const rowBlock = sliceComponent('const SheetHistoryRow = ({');
+            const dropdownBlock = sliceComponent('const SheetHistoryDropdown = ({');
+            assert('Test 214.05: SheetHistoryRow no longer renders the ×N view count pill and SheetHistoryDropdown no longer renders "most used first"',
+                !/entry\.uses/.test(rowBlock) && !/most used first/.test(dropdownBlock));
+
+            // 2. Dark themes have lighter, less-saturated profile cards (shade 100) while preserving WCAG AA contrast with 950 text
+            assertEqual('Test 214.06: shadeChromaMultiplier desaturates dark-theme card surfaces (0.34 at shade <= 300) and keeps light-theme chroma at 1',
+                [shadeChromaMultiplier('sky', 100, true), shadeChromaMultiplier('rose', 100, true),
+                 shadeChromaMultiplier('slate', 100, true), shadeChromaMultiplier('sky', 100, false)].join('|'),
+                '0.34|0.34|0.35|1');
+
+            for (const darkThemeId of ['dark', 'midnight', 'solarized-dark']) {
+                const res = resolveColorTheme(darkThemeId);
+                for (const fam of ['sky', 'rose', 'slate']) {
+                    const cardBg = themeFamilyHex(res, fam, 100);
+                    const cardBorder = themeFamilyHex(res, fam, 300);
+                    const cardText = themeFamilyHex(res, fam, fam === 'slate' ? 900 : 950);
+                    const lch = hexToLch(cardBg);
+                    assert(`Test 214.07 (${darkThemeId} / ${fam}): profile card shade-100 is visibly lighter (L* >= 22), desaturated (C* <= 28), and maintains >= 7:1 contrast with card text`,
+                        lch.l >= 22 && lch.c <= 28 && contrastRatio(cardBg, cardText) >= 7 && contrastRatio(cardBg, cardBorder) >= 1.15);
+                }
+            }
+
+            // 3. Top-right toolbar retains only Search + NavigationHistoryButtons; Radial menu holds all 8 actions
+            const viewToggleBlock = sliceComponent('const TopNavViewToggleButtons = ({');
+            const inactiveToolbarBlock = sliceComponent('const TopNavigationInactiveToolbar = ({');
+            assert('Test 214.08: TopNavViewToggleButtons renders only the Search button; Ask AI, Map, Print, Download, and Logs are moved out of the top-right toolbar',
+                /title="Search"/.test(viewToggleBlock) &&
+                !/Ask AI/.test(viewToggleBlock) && !/View Family Locations Map/.test(viewToggleBlock) &&
+                !/Print Tree/.test(viewToggleBlock) && !/Download Standalone/.test(viewToggleBlock) && !/View Logs/.test(viewToggleBlock) &&
+                /<NavigationHistoryButtons\b/.test(inactiveToolbarBlock));
+
+            const homeActions = resolveRadialFabActions({ isHomeOpen: true, showMap: false, showLogs: false, isStandalone: false });
+            assertEqual('Test 214.09: On the home screen, resolveRadialFabActions exposes only theme,deduction,privacy',
+                homeActions.map(a => a.id).join(','), 'theme,deduction,privacy');
+            const treeActions = resolveRadialFabActions({ isHomeOpen: false, showMap: false, showLogs: false, isStandalone: false });
+            assertEqual('Test 214.10: On the tree view, resolveRadialFabActions exposes all 8 actions (ai,map,print,download,logs,theme,deduction,privacy)',
+                treeActions.map(a => a.id).join(','), 'ai,map,print,download,logs,theme,deduction,privacy');
+            const mapOpenActions = resolveRadialFabActions({ isHomeOpen: false, showMap: true, showLogs: true, isStandalone: false });
+            const mapItem = mapOpenActions.find(a => a.id === 'map');
+            const logsItem = mapOpenActions.find(a => a.id === 'logs');
+            assert('Test 214.11: resolveRadialFabActions flips the map title to "Switch to Family Tree Diagram" when map is open and marks map/logs active',
+                Boolean(mapItem && mapItem.isActive && mapItem.title === 'Switch to Family Tree Diagram' && logsItem && logsItem.isActive));
+            const standaloneActions = resolveRadialFabActions({ isHomeOpen: false, showMap: false, showLogs: false, isStandalone: true });
+            assertEqual('Test 214.12: In standalone export mode, download and logs are omitted from the Radial menu',
+                standaloneActions.map(a => a.id).join(','), 'ai,map,print,theme,deduction,privacy');
+
+            const offsets8 = resolveRadialFabOffsets(8);
+            const minPairDist = offsets8.reduce((minD, a, i) => {
+                for (let j = i + 1; j < offsets8.length; j++) {
+                    const d = Math.hypot(a.x - offsets8[j].x, a.y - offsets8[j].y);
+                    if (d < minD) minD = d;
+                }
+                return minD;
+            }, Infinity);
+            assert('Test 214.13: resolveRadialFabOffsets(8) uses SETTINGS_FAB_EXPANDED_RADIUS so all 8 44px satellite buttons have >= 40px center spacing (no overlap)',
+                offsets8.length === 8 && Math.abs(offsets8[0].y + SETTINGS_FAB_EXPANDED_RADIUS) <= 2 && minPairDist >= 40);
+
+            // 4. Startup resumes the last opened sheet + last view state hash when opened without ?id=
+            cookieJar.clear();
+            fakeLocalStorage.clear();
+            assertEqual('Test 214.14: With no URL query and empty cookie history, hasInitialSheetToLoad is false (first-time visitor sees home screen)',
+                hasInitialSheetToLoad('', []), false);
+
+            const olderSheet = '1OlderMostUsedSheetIdForStartupResumeTest01';
+            const newerSheet = '1NewerLastUsedSheetIdForStartupResumeTest02';
+            const resumeHistory = [
+                { id: olderSheet, title: 'Older Frequent Sheet', uses: 10, lastUsed: 1000 },
+                { id: newerSheet, title: 'Newer Recent Sheet', uses: 1, lastUsed: 5000 }
+            ];
+            assertEqual('Test 214.15: resolveLastUsedSheet picks the sheet with the highest lastUsed timestamp even when another entry has higher uses',
+                resolveLastUsedSheet(resumeHistory).id, newerSheet);
+            assertEqual('Test 214.16: When opened without ?id= in the URL, hasInitialSheetToLoad is true and resolveInitialSheetUrl returns the last-used sheet URL',
+                [hasInitialSheetToLoad('', resumeHistory), resolveInitialSheetUrl('', resumeHistory)].join('|'),
+                'true|' + buildSheetUrlFromId(newerSheet));
+
+            saveLastViewStateHash('#sel:2~5&z:1.25&c:120,-80');
+            assertEqual('Test 214.17: saveLastViewStateHash strips any leading "#" and loadLastViewStateHash reads it back',
+                loadLastViewStateHash(), 'sel:2~5&z:1.25&c:120,-80');
+            assertEqual('Test 214.18: resolveInitialViewStateHash prefers an explicit URL hash when present and falls back to the stored cookie hash when URL has neither hash nor ?id=',
+                [resolveInitialViewStateHash('#sel:9~9', '?id=' + newerSheet),
+                 resolveInitialViewStateHash('', ''),
+                 resolveInitialViewStateHash('', '?id=' + olderSheet)].join('|'),
+                '#sel:9~9|sel:2~5&z:1.25&c:120,-80|');
+        } catch (e) {
+            assertEqual('Test 214 execution failed', e.message, '');
+        } finally {
+            cookieJar.clear();
+            fakeLocalStorage.clear();
         }
     }
 

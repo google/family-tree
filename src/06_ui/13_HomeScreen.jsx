@@ -127,9 +127,6 @@ const SheetHistoryRow = ({ entry, onPick, onForget }) => (
             </div>
             <div className="truncate font-mono text-[11px] text-slate-500">{entry.id}</div>
         </div>
-        <span className="shrink-0 rounded-full bg-slate-100 px-2 py-0.5 text-[11px] text-slate-500" title={`Opened ${entry.uses} time${entry.uses === 1 ? '' : 's'}`}>
-            ×{entry.uses}
-        </span>
         <button type="button" onClick={(e) => { e.stopPropagation(); onForget(entry.id); }}
             className="shrink-0 rounded-md p-1 text-slate-400 opacity-0 transition-opacity hover:bg-red-50 hover:text-red-600 group-hover:opacity-100"
             title="Forget this sheet" aria-label={`Forget ${entry.title || entry.id}`}>
@@ -142,7 +139,7 @@ const SheetHistoryRow = ({ entry, onPick, onForget }) => (
  * The recent-sheets dropdown anchored under the textbox.
  *
  * @param {object} props
- * @param {Array} props.entries - Ranked history entries (most used first)
+ * @param {Array} props.entries - History entries excluding the sheet already in the input box
  * @param {Function} props.onPick - Row click handler
  * @param {Function} props.onForget - "×" handler
  * @returns {React.ReactNode|null}
@@ -157,9 +154,8 @@ const SheetHistoryDropdown = ({ entries, onPick, onForget }) => {
     if (!entries || entries.length === 0) return null;
     return (
         <div data-testid="sheet-history-dropdown" className="absolute left-0 right-0 top-full z-20 mt-1 overflow-hidden rounded-xl border border-slate-200 bg-white shadow-xl">
-            <div className="flex items-center justify-between border-b border-slate-100 px-3 py-1.5 text-[11px] uppercase tracking-wide text-slate-400">
+            <div className="flex items-center border-b border-slate-100 px-3 py-1.5 text-[11px] uppercase tracking-wide text-slate-400">
                 <span>Sheets you have opened</span>
-                <span>most used first</span>
             </div>
             <ul className="custom-scrollbar max-h-72 overflow-y-auto py-1">
                 {entries.map(entry => (
@@ -188,6 +184,7 @@ const SheetHistoryDropdown = ({ entries, onPick, onForget }) => {
 const SheetSourceInput = ({ form, onSubmit }) => {
     const containerRef = useRef(null);
     useSearchContainerDismiss(containerRef, form.isListOpen, form.setIsListOpen);
+    const dropdownEntries = filterSheetHistoryForInput(form.history, form.value);
     const pickEntry = (entry) => {
         const url = buildSheetUrlFromId(entry.id);
         form.markTouched();
@@ -199,18 +196,18 @@ const SheetSourceInput = ({ form, onSubmit }) => {
         <div ref={containerRef} className="relative flex-1">
             <input id="sheet-source-input" type="text" value={form.value} autoFocus spellCheck={false} autoComplete="off"
                 onChange={(e) => { form.markTouched(); form.setValue(e.target.value); }}
-                onKeyDown={(e) => { if (e.key === 'Escape') form.setIsListOpen(false); if (e.key === 'ArrowDown') form.setIsListOpen(true); }}
+                onKeyDown={(e) => { if (e.key === 'Escape') form.setIsListOpen(false); if (e.key === 'ArrowDown' && dropdownEntries.length > 0) form.setIsListOpen(true); }}
                 onFocus={(e) => e.target.select()}
                 placeholder="https://docs.google.com/spreadsheets/d/…  or a spreadsheet ID"
                 className="h-12 w-full rounded-xl border border-slate-300 bg-white pl-4 pr-11 font-mono text-[13px] text-slate-800 shadow-sm outline-none transition focus:border-primary focus:ring-2 focus:ring-primary/30" />
-            {form.history.length > 0 && (
+            {dropdownEntries.length > 0 && (
                 <button type="button" onClick={() => form.setIsListOpen(!form.isListOpen)} aria-label="Show sheets you have opened before"
                     title="Sheets you have opened before" aria-expanded={form.isListOpen}
                     className="absolute right-1.5 top-1/2 flex h-9 w-9 -translate-y-1/2 items-center justify-center rounded-lg text-slate-500 hover:bg-slate-100">
                     <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><polyline points="6 9 12 15 18 9" /></svg>
                 </button>
             )}
-            {form.isListOpen && <SheetHistoryDropdown entries={form.history} onPick={pickEntry} onForget={form.forget} />}
+            {form.isListOpen && <SheetHistoryDropdown entries={dropdownEntries} onPick={pickEntry} onForget={form.forget} />}
         </div>
     );
 };
@@ -235,7 +232,7 @@ const SheetSourceInput = ({ form, onSubmit }) => {
 const SheetSourceForm = ({ form, isLoading, errorMsg, onSubmit }) => {
     const sheetTitle = resolveKnownSheetTitle(form.value, form.history);
     return (
-        <form className="relative z-10 w-full max-w-2xl px-6" onSubmit={(e) => { e.preventDefault(); onSubmit(form.value); }}>
+        <form className="relative z-20 w-full max-w-2xl px-6" onSubmit={(e) => { e.preventDefault(); onSubmit(form.value); }}>
             <div className="mb-2 flex items-center justify-between gap-2">
                 <label htmlFor="sheet-source-input" className="text-sm font-semibold text-slate-600">
                     Google Sheets link or spreadsheet ID

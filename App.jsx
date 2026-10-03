@@ -1424,7 +1424,7 @@ const TAILWIND_FAMILY_SEEDS = {
 /** CIELAB lightness ("tone") per Tailwind shade – `light` mirrors Tailwind's own ramp, `dark` inverts it. */
 const TAILWIND_SHADE_TONES = {
     light: { 50: 98, 100: 96, 200: 92, 300: 85, 400: 67, 500: 49, 600: 37, 700: 28, 800: 17, 900: 10, 950: 4, white: 100 },
-    dark: { 50: 12, 100: 17, 200: 24, 300: 34, 400: 48, 500: 60, 600: 72, 700: 80, 800: 87, 900: 93, 950: 97, white: 6 }
+    dark: { 50: 15, 100: 27, 200: 34, 300: 43, 400: 53, 500: 63, 600: 74, 700: 83, 800: 89, 900: 94, 950: 98, white: 6 }
 };
 
 /** Material 3 colour-role tones (https://m3.material.io/styles/color/static/baseline). */
@@ -1724,7 +1724,7 @@ function solarizedNeutralScale(mode) {
     const [base03, base02, base01, base00, base0, base1, base2, base3] = ['#002b36', '#073642', '#586e75', '#657b83', '#839496', '#93a1a1', '#eee8d5', '#fdf6e3'];
     if (mode === 'dark') {
         return {
-            white: base03, 50: base02, 100: mixHex(base02, base01, 0.25), 200: mixHex(base02, base01, 0.6), 300: base01,
+            white: base03, 50: base02, 100: mixHex(base02, base01, 0.45), 200: mixHex(base02, base01, 0.75), 300: base01,
             400: base00, 500: base0, 600: base1, 700: mixHex(base1, base2, 0.5), 800: base2, 900: base3, 950: '#fffbf0'
         };
     }
@@ -1811,7 +1811,7 @@ const COLOR_THEMES = [
         id: 'midnight', name: 'Midnight Black', mode: 'dark',
         blurb: 'True-black surfaces for OLED screens with muted, high-legibility accents.',
         seeds: { ...CLASSIC_FOREST_SEEDS, neutral: '#6b7280' },
-        shadeTones: { white: 0, 50: 4, 100: 9, 200: 18 },
+        shadeTones: { white: 0, 50: 10, 100: 23, 200: 30, 300: 39 },
         roleTones: { surface: 0, surfaceDim: 0, surfaceContainerLowest: 0, surfaceContainerLow: 4, surfaceContainer: 8, surfaceContainerHigh: 12, surfaceContainerHighest: 17, surfaceBright: 22 }
     },
     {
@@ -1904,6 +1904,26 @@ function buildThemeRoles(seeds, roleTones) {
 }
 
 /**
+ * Returns the chroma multiplier for a Tailwind shade in a theme: in dark themes (`isDark`),
+ * profile-card fills (`50..300`) and text (`800..950`) are softened so cards read as calm,
+ * muted pastel surfaces rather than oversaturated neon blocks.
+ *
+ * @example shadeChromaMultiplier('sky', 100, true)  // → 0.34
+ * @example shadeChromaMultiplier('sky', 100, false) // → 1
+ * @param {string} family Tailwind family name
+ * @param {number} shade Tailwind shade number
+ * @param {boolean} isDark Whether the theme is a dark theme
+ * @returns {number}
+ */
+function shadeChromaMultiplier(family, shade, isDark) {
+    if (!isDark) return 1;
+    if (TAILWIND_FAMILY_SEEDS[family] === 'neutral') return 0.35;
+    if (shade <= 300) return 0.34;
+    if (shade <= 700) return 0.55;
+    return 0.45;
+}
+
+/**
  * Generates the 22 Tailwind family ramps (+ `white`) from the seeds, honouring explicit overrides.
  *
  * @example buildThemeFamilies(CLASSIC_FOREST_SEEDS, TAILWIND_SHADE_TONES.light).sky[100] // → a very light blue
@@ -1915,6 +1935,7 @@ function buildThemeRoles(seeds, roleTones) {
  */
 function buildThemeFamilies(seeds, tones, overrides) {
     const families = {};
+    const isDark = Number(tones && tones.white) < 50;
     for (const family of TAILWIND_THEME_FAMILIES) {
         if (overrides && overrides[family]) {
             families[family] = { ...overrides[family] };
@@ -1922,7 +1943,9 @@ function buildThemeFamilies(seeds, tones, overrides) {
         }
         const seed = seeds[TAILWIND_FAMILY_SEEDS[family]] || seeds.neutral;
         families[family] = {};
-        for (const shade of TAILWIND_SHADES) families[family][shade] = toneHex(seed, tones[shade]);
+        for (const shade of TAILWIND_SHADES) {
+            families[family][shade] = toneHex(seed, tones[shade], shadeChromaMultiplier(family, shade, isDark));
+        }
     }
     families.white = (overrides && overrides.white) || toneHex(seeds.neutral, tones.white, 0.15);
     return families;
@@ -24913,6 +24936,8 @@ const SHEET_HISTORY_COOKIE = 'ft_sheet_history';
 const DEMOGRAPHIC_SETTINGS_COOKIE = 'ft_demographic_settings';
 /** Cookie holding the id of the chosen colour theme (see COLOR_THEMES). */
 const COLOR_THEME_COOKIE = 'ft_color_theme';
+/** Cookie holding the last URL hash view state (p=…&z=…&o=…&v=map) for session restore. */
+const LAST_VIEW_STATE_COOKIE = 'ft_last_view_state';
 /** Preferences survive one year of inactivity; every write refreshes the clock. */
 const PREFERENCE_COOKIE_MAX_AGE_SECONDS = 365 * 24 * 60 * 60;
 /** Browsers cap a single cookie at 4096 bytes; a dozen compact entries stay well below. */
@@ -25298,6 +25323,27 @@ function resolveMostUsedSheet(entries) {
 }
 
 /**
+ * Picks the most recently opened sheet (highest `lastUsed` timestamp, ties → most uses),
+ * or null for an empty history. Used when reopening the site without `?id=` in the URL.
+ *
+ * @param {Array<SheetHistoryEntry>} entries - History
+ * @returns {SheetHistoryEntry|null}
+ *
+ * @example
+ * resolveLastUsedSheet([{ id: 'a', uses: 5, lastUsed: 10 }, { id: 'b', uses: 1, lastUsed: 99 }]).id;
+ * // => 'b'
+ *
+ * @example
+ * resolveLastUsedSheet([]);
+ * // => null
+ */
+function resolveLastUsedSheet(entries) {
+    const sorted = [...(entries || [])].sort((a, b) =>
+        (b.lastUsed - a.lastUsed) || (b.uses - a.uses) || String(a.id).localeCompare(String(b.id)));
+    return sorted.length > 0 ? sorted[0] : null;
+}
+
+/**
  * Loads the persisted sheet history from the cookie (or its localStorage mirror).
  *
  * @returns {Array<SheetHistoryEntry>} Ranked entries, [] when nothing is stored
@@ -25507,6 +25553,28 @@ function resolveHomeScreenPrefill(clipboardRef, history) {
 function formatSheetHistoryLabel(entry) {
     const title = ((entry && entry.title) || '').trim() || 'Untitled sheet';
     return `${title} — ${entry.id}`;
+}
+
+/**
+ * Filters out the spreadsheet currently filled in the input box so the history
+ * dropdown only lists alternative sheets rather than duplicating the active value.
+ *
+ * @param {Array<SheetHistoryEntry>} entries - Ranked history entries
+ * @param {string} inputValue - Raw text currently in the input box
+ * @returns {Array<SheetHistoryEntry>} Entries whose ID differs from the input's sheet ID
+ *
+ * @example
+ * filterSheetHistoryForInput([{ id: '1BQvyFoA_-u4MG-r1SRDel93F1TwEaN3I6v6p-kOH8z0', title: 'Demo', uses: 2, lastUsed: 1 }], '1BQvyFoA_-u4MG-r1SRDel93F1TwEaN3I6v6p-kOH8z0');
+ * // => []
+ *
+ * @example
+ * filterSheetHistoryForInput([{ id: '1BQvyFoA_-u4MG-r1SRDel93F1TwEaN3I6v6p-kOH8z0', title: 'Demo', uses: 2, lastUsed: 1 }], '');
+ * // => [{ id: '1BQvyFoA_-u4MG-r1SRDel93F1TwEaN3I6v6p-kOH8z0', title: 'Demo', uses: 2, lastUsed: 1 }]
+ */
+function filterSheetHistoryForInput(entries, inputValue) {
+    const ref = normalizeSheetReference(inputValue);
+    const currentId = ref ? ref.id : '';
+    return (entries || []).filter((entry) => Boolean(entry && entry.id && entry.id !== currentId));
 }
 
 /**
@@ -25824,8 +25892,63 @@ function applyStoredColorTheme() {
     return applyColorTheme(loadStoredColorThemeId() || DEFAULT_COLOR_THEME_ID);
 }
 
+// ─── Last view state persistence (for resuming previous view on bare URL open) ─
+
 /**
- * The "Clear stored data" action of the GDPR notice: deletes all three preference cookies and
+ * Reads the last saved view-state hash body (without leading `#`), or '' when none is stored.
+ *
+ * @returns {string}
+ *
+ * @example
+ * saveLastViewStateHash('p=Joseph_1920_152&z=0.8');
+ * loadLastViewStateHash(); // => 'p=Joseph_1920_152&z=0.8'
+ *
+ * @example
+ * clearLastViewStateHash();
+ * loadLastViewStateHash(); // => ''
+ */
+function loadLastViewStateHash() {
+    const raw = readPreference(LAST_VIEW_STATE_COOKIE);
+    return typeof raw === 'string' ? raw.replace(/^#/, '').trim() : '';
+}
+
+/**
+ * Persists the latest view-state hash body so reopening the site at its root URL restores
+ * the exact view (focused person, zoom, pan offset, filter, or map mode).
+ *
+ * @param {string} hashBody - Hash body with or without leading `#`
+ * @returns {string} The normalized hash body that was written
+ *
+ * @example
+ * saveLastViewStateHash('#p=Joseph_1920_152&z=0.8');
+ * // => 'p=Joseph_1920_152&z=0.8'
+ *
+ * @example
+ * saveLastViewStateHash('');
+ * // => ''
+ */
+function saveLastViewStateHash(hashBody) {
+    const clean = typeof hashBody === 'string' ? hashBody.replace(/^#/, '').trim().slice(0, 1800) : '';
+    writePreference(LAST_VIEW_STATE_COOKIE, clean);
+    return clean;
+}
+
+/**
+ * Removes the stored view-state hash.
+ *
+ * @example
+ * clearLastViewStateHash();
+ * loadLastViewStateHash(); // => ''
+ *
+ * @example
+ * saveLastViewStateHash('v=map'); clearLastViewStateHash(); readPreference(LAST_VIEW_STATE_COOKIE); // => null
+ */
+function clearLastViewStateHash() {
+    removePreference(LAST_VIEW_STATE_COOKIE);
+}
+
+/**
+ * The "Clear stored data" action of the GDPR notice: deletes all preference cookies and
  * their mirrors, empties the in-memory title registry, restores the shipped model and repaints
  * the Classic theme.
  *
@@ -25842,6 +25965,7 @@ function clearStoredPreferences() {
     removePreference(SHEET_HISTORY_COOKIE);
     removePreference(DEMOGRAPHIC_SETTINGS_COOKIE);
     removePreference(COLOR_THEME_COOKIE);
+    removePreference(LAST_VIEW_STATE_COOKIE);
     sheetTitleRegistry.clear();
     FamilyTreeBuilder.resetDemographicSettings();
     applyColorTheme(DEFAULT_COLOR_THEME_ID);
@@ -42407,91 +42531,36 @@ const TopNavIconButton = ({ onClick, title, isActive = false, disabled = false, 
 };
 
 /**
- * Renders toolbar action buttons for standalone HTML export and A4 print export.
- * (Settings moved to the radial FAB in 06_ui/15_SettingsFab.jsx so they are reachable
- * from the home screen too.)
+ * Placeholder for legacy toolbar export buttons (Download, Print, and Settings now live in
+ * the bottom-right radial menu `SettingsRadialFab` in `06_ui/15_SettingsFab.jsx`).
  *
- * @param {object} props
- * @param {boolean} props.isStandalone - Whether running in embedded standalone mode
- * @param {boolean} props.isLoading - Whether tree data is actively loading
- * @param {Function} props.handleExportStandaloneApp - Standalone app export handler
- * @param {boolean} props.isExportingApp - Standalone app export in progress
- * @param {Function} props.handleExportA4Print - A4 print export handler
- * @param {boolean} props.isExportingA4 - A4 export in progress
- * @param {FamilyTree} props.tree - Current genealogy tree model
- * @returns {React.ReactNode}
+ * @returns {null}
  *
  * @example
- * <TopNavImportExportButtons isStandalone={false} isLoading={false} handleExportStandaloneApp={() => {}} isExportingApp={false} handleExportA4Print={() => {}} isExportingA4={false} tree={tree} />
+ * <TopNavImportExportButtons />
  *
  * @example
- * <TopNavImportExportButtons isStandalone={true} isLoading={false} handleExportStandaloneApp={() => {}} isExportingApp={false} handleExportA4Print={() => {}} isExportingA4={false} tree={tree} />
+ * <TopNavImportExportButtons isStandalone={false} />
  */
-const TopNavImportExportButtons = ({
-    isStandalone, isLoading,
-    handleExportStandaloneApp, isExportingApp,
-    handleExportA4Print, isExportingA4, tree
-}) => (
-    <>
-        {!isStandalone && (
-            <TopNavIconButton onClick={handleExportStandaloneApp} disabled={isExportingApp || isLoading} title="Download Standalone Interactive App (.html)">
-                {isExportingApp ? <Icons.Loader /> : <Icons.Download />}
-            </TopNavIconButton>
-        )}
-        <TopNavIconButton onClick={handleExportA4Print} disabled={isExportingA4 || isLoading || !tree?.root} title="Print Tree / Export A4 Landscape SVGs (10pt names)">
-            {isExportingA4 ? <Icons.Loader /> : <Icons.Printer />}
-        </TopNavIconButton>
-    </>
-);
+const TopNavImportExportButtons = () => null;
 
 /**
- * Renders toolbar toggle buttons for Map, AI assistant, Logs drawer, and Search bar.
+ * Renders the top-right Search button (Map, Ask AI, and Logs moved into `SettingsRadialFab`).
  *
  * @param {object} props
- * @param {boolean} props.showMap - Whether map view is active
- * @param {Function} props.onToggleMap - Handler to toggle map view
- * @param {boolean} props.isAILoading - Whether AI query is in flight
- * @param {boolean} props.showAI - Whether AI assistant panel is open
- * @param {Function} props.onToggleAI - Handler to toggle AI assistant
- * @param {boolean} props.isStandalone - Whether running in embedded standalone mode
- * @param {boolean} props.showLogs - Whether error/audit logs overlay is visible
- * @param {Function} props.setShowLogs - Logs visibility setter
- * @param {Function} props.setShowAI - AI assistant visibility setter
  * @param {string} props.searchQuery - Current search query
  * @param {Function} props.handleOpenSearch - Handler to expand search bar
  * @returns {React.ReactNode}
  *
  * @example
- * <TopNavViewToggleButtons showMap={false} onToggleMap={() => {}} isAILoading={false} showAI={false} onToggleAI={() => {}} isStandalone={false} showLogs={false} setShowLogs={() => {}} setShowAI={() => {}} searchQuery="" handleOpenSearch={() => {}} />
+ * <TopNavViewToggleButtons searchQuery="" handleOpenSearch={() => {}} />
  *
  * @example
- * <TopNavViewToggleButtons showMap={true} onToggleMap={() => {}} isAILoading={false} showAI={true} onToggleAI={() => {}} isStandalone={true} showLogs={false} setShowLogs={() => {}} setShowAI={() => {}} searchQuery="Search" handleOpenSearch={() => {}} />
+ * <TopNavViewToggleButtons searchQuery="Search" handleOpenSearch={() => {}} />
  */
-const TopNavViewToggleButtons = ({
-    showMap, onToggleMap, isAILoading, showAI, onToggleAI,
-    isStandalone, showLogs, setShowLogs, setShowAI, searchQuery, handleOpenSearch
-}) => {
-    const aiTheme = isAILoading
-        ? 'bg-gradient-to-r from-blue-500 via-purple-500 to-rose-500 text-white animate-pulse border-transparent shadow-md'
-        : (showAI ? 'bg-blue-100 text-blue-600 border-blue-200' : 'bg-white/95 backdrop-blur-md text-slate-600 hover:bg-slate-100 border-slate-200');
-
-    return (
-        <>
-            <TopNavIconButton onClick={onToggleMap} title={showMap ? "Switch to Family Tree Diagram" : "View Family Locations Map"} isActive={showMap}>
-                <Icons.MapPin />
-            </TopNavIconButton>
-            <TopNavIconButton onClick={onToggleAI} title="Ask AI" customClass={aiTheme}>
-                <Icons.Sparkles />
-            </TopNavIconButton>
-            {!isStandalone && (
-                <TopNavIconButton onClick={() => { setShowLogs(!showLogs); if (!showLogs) setShowAI(false); }} title="View Logs" isActive={showLogs}>
-                    <Icons.Log />
-                </TopNavIconButton>
-            )}
-            <button onClick={handleOpenSearch} className={`h-[44px] w-[44px] rounded-xl flex items-center justify-center transition-colors border shadow-sm shrink-0 cursor-pointer ${searchQuery ? 'bg-blue-100 text-blue-600 border-blue-200 shadow-inner' : 'bg-white/95 backdrop-blur-md text-slate-600 hover:bg-slate-100 border-slate-200'}`} title="Search"><Icons.Search /></button>
-        </>
-    );
-};
+const TopNavViewToggleButtons = ({ searchQuery, handleOpenSearch }) => (
+    <button onClick={handleOpenSearch} className={`h-[44px] w-[44px] rounded-xl flex items-center justify-center transition-colors border shadow-sm shrink-0 cursor-pointer ${searchQuery ? 'bg-blue-100 text-blue-600 border-blue-200 shadow-inner' : 'bg-white/95 backdrop-blur-md text-slate-600 hover:bg-slate-100 border-slate-200'}`} title="Search"><Icons.Search /></button>
+);
 
 /**
  * Top floating toolbar actions (Export, Map, AI, Logs, Search).
@@ -46999,21 +47068,22 @@ function useAppPanels(isLoading) {
  *
 /**
  * Resolves the initial spreadsheet URL from URL search parameters ('id', 'sheet', 'url', 'sheetId'),
- * falling back to DEFAULT_URL if no query parameter is provided.
+ * falling back to the most recently opened sheet in browser history, and finally to DEFAULT_URL.
  *
  * @param {string|null} [searchString=null] - Optional search query string override
+ * @param {Array<SheetHistoryEntry>} [history=readSheetHistory()] - Persisted sheet history
  * @returns {string} Fully qualified Google Sheets URL to load
  *
  * @example
  * // Given URL: https://google.github.io/family-tree/?id=1ZDpcz2ACmG63dUjHLfoHZSW7-dG51FbzaJVcqHYdkEI
- * resolveInitialSheetUrl('?id=1ZDpcz2ACmG63dUjHLfoHZSW7-dG51FbzaJVcqHYdkEI');
+ * resolveInitialSheetUrl('?id=1ZDpcz2ACmG63dUjHLfoHZSW7-dG51FbzaJVcqHYdkEI', []);
  * // => 'https://docs.google.com/spreadsheets/d/1ZDpcz2ACmG63dUjHLfoHZSW7-dG51FbzaJVcqHYdkEI/edit'
  *
  * @example
- * resolveInitialSheetUrl('');
+ * resolveInitialSheetUrl('', []);
  * // => DEFAULT_URL
  */
-function resolveInitialSheetUrl(searchString = null) {
+function resolveInitialSheetUrl(searchString = null, history = readSheetHistory()) {
     try {
         const query = searchString !== null
             ? searchString
@@ -47024,23 +47094,20 @@ function resolveInitialSheetUrl(searchString = null) {
             if (rawParam && rawParam.trim()) {
                 const trimmed = rawParam.trim();
                 const sheetId = extractSheetIdFromUrl(trimmed);
-                if (sheetId) {
-                    return `https://docs.google.com/spreadsheets/d/${sheetId}/edit`;
-                }
-                if (trimmed.startsWith('http')) {
-                    return trimmed;
-                }
+                if (sheetId) return `https://docs.google.com/spreadsheets/d/${sheetId}/edit`;
+                if (trimmed.startsWith('http')) return trimmed;
             }
         }
     } catch (err) {
         console.warn('Could not parse URL search parameters for spreadsheet ID:', err);
     }
-    return DEFAULT_URL;
+    const lastUsed = resolveLastUsedSheet(history);
+    return lastUsed ? buildSheetUrlFromId(lastUsed.id) : DEFAULT_URL;
 }
 
 /**
  * Whether the page URL names a spreadsheet explicitly (`?id=`, `?sheet=`, `?url=` or
- * `?sheetId=`). Only then does the app auto-load on startup; otherwise the home screen asks.
+ * `?sheetId=`).
  *
  * @param {string|null} [searchString=null] - Optional search query override
  * @returns {boolean}
@@ -47065,6 +47132,27 @@ function hasExplicitSheetQueryParam(searchString = null) {
     } catch (err) {
         return false;
     }
+}
+
+/**
+ * Whether the app should automatically open a spreadsheet on startup instead of stopping on the
+ * home screen: true when the URL names a sheet (`?id=…`) OR the browser has a previously opened
+ * sheet in its history.
+ *
+ * @param {string|null} [searchString=null] - Optional search query override
+ * @param {Array<SheetHistoryEntry>} [history=readSheetHistory()] - Persisted sheet history
+ * @returns {boolean}
+ *
+ * @example
+ * hasInitialSheetToLoad('?id=1BQvyFoA_-u4MG-r1SRDel93F1TwEaN3I6v6p-kOH8z0', []);
+ * // => true
+ *
+ * @example
+ * hasInitialSheetToLoad('', [{ id: '1BQvyFoA_-u4MG-r1SRDel93F1TwEaN3I6v6p-kOH8z0', title: 'Demo', uses: 1, lastUsed: 1 }]);
+ * // => true
+ */
+function hasInitialSheetToLoad(searchString = null, history = readSheetHistory()) {
+    return hasExplicitSheetQueryParam(searchString) || Boolean(resolveLastUsedSheet(history));
 }
 
 /**
@@ -47175,14 +47263,14 @@ function initializeTreeDataset({
         if (targetSelected) {
             setFocusId(targetSelected);
             setIsSidebarVisible(false);
-                            setTimeout(() => centerOnPerson(targetSelected, 0.70), 200);
+            setTimeout(() => centerOnPerson(targetSelected, 0.70), 200);
         }
         appendLog(`⚡ Loaded ${embedded.rows.length} profiles directly from embedded dataset.`, 'success');
         return true; // Completely avoid fetching Google Sheets
     }
 
-    // No sheet named in the URL: leave the home screen open and let the user choose.
-    if (!hasExplicitSheetQueryParam()) return false;
+    // Resume the explicit URL sheet or the previously opened sheet from history; only stop on the home screen if none exists.
+    if (!hasInitialSheetToLoad()) return false;
     handleImport(resolveInitialSheetUrl());
     return false;
 }
@@ -49301,6 +49389,7 @@ function buildCurrentViewState({ focusId, isSidebarVisible, activeFilter, showMa
  * // => false when the URL already has no hash
  */
 function writeViewStateHash(hashBody) {
+    saveLastViewStateHash(hashBody);
     if (typeof window === 'undefined' || !window.history || !window.location) return false;
     const target = hashBody ? `#${hashBody}` : '';
     if ((window.location.hash || '') === target) return false;
@@ -49612,8 +49701,36 @@ function captureAndWriteViewState(p) {
 }
 
 /**
+ * Picks the view-state hash to restore on startup: an explicit `#…` hash in the URL always wins;
+ * when the URL has no hash (e.g. opening `https://google.github.io/family-tree/` or `localhost:8000/`),
+ * falls back to the last view-state hash saved in browser preferences unless a sheet was explicitly
+ * requested via `?id=` without a hash.
+ *
+ * @param {string|null} [locationHash=null] - `window.location.hash` override
+ * @param {string|null} [searchString=null] - `window.location.search` override
+ * @param {string} [storedHash=loadLastViewStateHash()] - Saved hash body from preferences
+ * @returns {string} Hash string to pass to `parseViewStateHash`
+ *
+ * @example
+ * resolveInitialViewStateHash('#p=Joseph_1920_152', '', 'v=map');
+ * // => '#p=Joseph_1920_152'
+ *
+ * @example
+ * resolveInitialViewStateHash('', '', 'p=Joseph_1920_152&z=0.8');
+ * // => 'p=Joseph_1920_152&z=0.8'
+ */
+function resolveInitialViewStateHash(locationHash = null, searchString = null, storedHash = loadLastViewStateHash()) {
+    const rawHash = locationHash !== null
+        ? String(locationHash)
+        : (typeof window !== 'undefined' && window.location ? String(window.location.hash || '') : '');
+    if (rawHash.replace(/^#/, '').trim()) return rawHash;
+    if (hasExplicitSheetQueryParam(searchString)) return '';
+    return storedHash || '';
+}
+
+/**
  * Keeps the browser URL in sync with the current view (Google-Maps style) and restores the view
- * from the URL on startup. Mount once from the application view model.
+ * from the URL (or the last saved view state) on startup. Mount once from the application view model.
  *
  * @param {Object} params - Live application state and handlers.
  * @param {FamilyTree} params.tree - Loaded tree.
@@ -49656,7 +49773,7 @@ function useUrlViewStateSync(params) {
     const phaseRef = useRef({ done: false, writable: false });
     const initialStateRef = useRef(null);
     if (initialStateRef.current === null) {
-        initialStateRef.current = parseViewStateHash(typeof window !== 'undefined' && window.location ? window.location.hash : '');
+        initialStateRef.current = parseViewStateHash(resolveInitialViewStateHash());
     }
     const writeNow = useCallback(() => captureAndWriteViewState(latest.current), []);
     const onComplete = useCallback(() => {
@@ -49799,9 +49916,6 @@ const SheetHistoryRow = ({ entry, onPick, onForget }) => (
             </div>
             <div className="truncate font-mono text-[11px] text-slate-500">{entry.id}</div>
         </div>
-        <span className="shrink-0 rounded-full bg-slate-100 px-2 py-0.5 text-[11px] text-slate-500" title={`Opened ${entry.uses} time${entry.uses === 1 ? '' : 's'}`}>
-            ×{entry.uses}
-        </span>
         <button type="button" onClick={(e) => { e.stopPropagation(); onForget(entry.id); }}
             className="shrink-0 rounded-md p-1 text-slate-400 opacity-0 transition-opacity hover:bg-red-50 hover:text-red-600 group-hover:opacity-100"
             title="Forget this sheet" aria-label={`Forget ${entry.title || entry.id}`}>
@@ -49814,7 +49928,7 @@ const SheetHistoryRow = ({ entry, onPick, onForget }) => (
  * The recent-sheets dropdown anchored under the textbox.
  *
  * @param {object} props
- * @param {Array} props.entries - Ranked history entries (most used first)
+ * @param {Array} props.entries - History entries excluding the sheet already in the input box
  * @param {Function} props.onPick - Row click handler
  * @param {Function} props.onForget - "×" handler
  * @returns {React.ReactNode|null}
@@ -49829,9 +49943,8 @@ const SheetHistoryDropdown = ({ entries, onPick, onForget }) => {
     if (!entries || entries.length === 0) return null;
     return (
         <div data-testid="sheet-history-dropdown" className="absolute left-0 right-0 top-full z-20 mt-1 overflow-hidden rounded-xl border border-slate-200 bg-white shadow-xl">
-            <div className="flex items-center justify-between border-b border-slate-100 px-3 py-1.5 text-[11px] uppercase tracking-wide text-slate-400">
+            <div className="flex items-center border-b border-slate-100 px-3 py-1.5 text-[11px] uppercase tracking-wide text-slate-400">
                 <span>Sheets you have opened</span>
-                <span>most used first</span>
             </div>
             <ul className="custom-scrollbar max-h-72 overflow-y-auto py-1">
                 {entries.map(entry => (
@@ -49860,6 +49973,7 @@ const SheetHistoryDropdown = ({ entries, onPick, onForget }) => {
 const SheetSourceInput = ({ form, onSubmit }) => {
     const containerRef = useRef(null);
     useSearchContainerDismiss(containerRef, form.isListOpen, form.setIsListOpen);
+    const dropdownEntries = filterSheetHistoryForInput(form.history, form.value);
     const pickEntry = (entry) => {
         const url = buildSheetUrlFromId(entry.id);
         form.markTouched();
@@ -49871,18 +49985,18 @@ const SheetSourceInput = ({ form, onSubmit }) => {
         <div ref={containerRef} className="relative flex-1">
             <input id="sheet-source-input" type="text" value={form.value} autoFocus spellCheck={false} autoComplete="off"
                 onChange={(e) => { form.markTouched(); form.setValue(e.target.value); }}
-                onKeyDown={(e) => { if (e.key === 'Escape') form.setIsListOpen(false); if (e.key === 'ArrowDown') form.setIsListOpen(true); }}
+                onKeyDown={(e) => { if (e.key === 'Escape') form.setIsListOpen(false); if (e.key === 'ArrowDown' && dropdownEntries.length > 0) form.setIsListOpen(true); }}
                 onFocus={(e) => e.target.select()}
                 placeholder="https://docs.google.com/spreadsheets/d/…  or a spreadsheet ID"
                 className="h-12 w-full rounded-xl border border-slate-300 bg-white pl-4 pr-11 font-mono text-[13px] text-slate-800 shadow-sm outline-none transition focus:border-primary focus:ring-2 focus:ring-primary/30" />
-            {form.history.length > 0 && (
+            {dropdownEntries.length > 0 && (
                 <button type="button" onClick={() => form.setIsListOpen(!form.isListOpen)} aria-label="Show sheets you have opened before"
                     title="Sheets you have opened before" aria-expanded={form.isListOpen}
                     className="absolute right-1.5 top-1/2 flex h-9 w-9 -translate-y-1/2 items-center justify-center rounded-lg text-slate-500 hover:bg-slate-100">
                     <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><polyline points="6 9 12 15 18 9" /></svg>
                 </button>
             )}
-            {form.isListOpen && <SheetHistoryDropdown entries={form.history} onPick={pickEntry} onForget={form.forget} />}
+            {form.isListOpen && <SheetHistoryDropdown entries={dropdownEntries} onPick={pickEntry} onForget={form.forget} />}
         </div>
     );
 };
@@ -49907,7 +50021,7 @@ const SheetSourceInput = ({ form, onSubmit }) => {
 const SheetSourceForm = ({ form, isLoading, errorMsg, onSubmit }) => {
     const sheetTitle = resolveKnownSheetTitle(form.value, form.history);
     return (
-        <form className="relative z-10 w-full max-w-2xl px-6" onSubmit={(e) => { e.preventDefault(); onSubmit(form.value); }}>
+        <form className="relative z-20 w-full max-w-2xl px-6" onSubmit={(e) => { e.preventDefault(); onSubmit(form.value); }}>
             <div className="mb-2 flex items-center justify-between gap-2">
                 <label htmlFor="sheet-source-input" className="text-sm font-semibold text-slate-600">
                     Google Sheets link or spreadsheet ID
@@ -50655,16 +50769,21 @@ function useDemographicSettingsApply({ sheetUrl, setTree, appendLog, fetchFromUr
 }
 
 // ============================================================================
-// MODULE 6.15: SETTINGS RADIAL FAB
+// MODULE 6.15: SETTINGS & ACTIONS RADIAL FAB
 //
 // A floating action button pinned to the bottom-right corner (visible on the home
-// screen AND over the tree) that fans out three actions in a quarter circle:
-// colour theme, deduction rules and "clear stored data". It replaces the toolbar
-// gear so settings are reachable before any sheet is loaded.
+// screen AND over the tree) that fans out all floating tool & settings actions in a
+// quarter-circle arc: Ask AI, Locations Map, Print Tree, Download App, View Logs,
+// Colour Theme, Deduction Rules, and Clear Stored Data.
 // ============================================================================
 
-/** The actions of the radial menu, in fan order (first = straight up, last = straight left). */
+/** The actions of the radial menu, in fan order (first = top of arc, last = left of arc). */
 const SETTINGS_FAB_ACTIONS = Object.freeze([
+    { id: 'ai', label: 'Ask AI', title: 'Ask AI', icon: 'Sparkles', treeOnly: true },
+    { id: 'map', label: 'Locations map', title: 'View Family Locations Map', icon: 'MapPin', treeOnly: true },
+    { id: 'print', label: 'Print tree', title: 'Print Tree / Export A4 Landscape SVGs (10pt names)', icon: 'Printer', treeOnly: true },
+    { id: 'download', label: 'Download app', title: 'Download Standalone Interactive App (.html)', icon: 'Download', treeOnly: true, standaloneHidden: true },
+    { id: 'logs', label: 'View logs', title: 'View Logs', icon: 'Log', treeOnly: true, standaloneHidden: true },
     { id: 'theme', label: 'Colour theme', title: 'Colour theme (Material 3 palettes)', icon: 'Palette' },
     { id: 'deduction', label: 'Deduction rules', title: 'Deduction Settings (marriage age by birth cohort)', icon: 'Sliders' },
     { id: 'privacy', label: 'Clear stored data', title: 'Clear stored data (cookies & local storage)', icon: 'Eraser' },
@@ -50673,8 +50792,11 @@ const SETTINGS_FAB_ACTIONS = Object.freeze([
 /** Tooltip of the main FAB button (also the key of its documentation card). */
 const SETTINGS_FAB_TITLE = 'Settings: theme, deduction rules, stored data';
 
-/** Distance (px) from the FAB centre to each action centre. */
+/** Distance (px) from the FAB centre to each action centre for a compact 3-item fan. */
 const SETTINGS_FAB_RADIUS = 84;
+
+/** Distance (px) from the FAB centre to each action centre when all tree actions are shown. */
+const SETTINGS_FAB_EXPANDED_RADIUS = 188;
 
 /**
  * Evenly spreads `count` items along an arc and returns their pixel offsets from the hub.
@@ -50713,6 +50835,62 @@ function computeRadialMenuOffsets(count, radius = SETTINGS_FAB_RADIUS, startDeg 
 }
 
 /**
+ * Chooses the arc radius and angle span for `count` radial items so neither buttons nor the
+ * viewport edges collide when the full 8-item toolbar is expanded.
+ *
+ * @param {number} count - Number of visible radial items
+ * @returns {Array<{x: number, y: number}>} Offsets from the hub centre
+ *
+ * @example
+ * resolveRadialFabOffsets(3);
+ * // => [{ x: 0, y: -84 }, { x: -59, y: -59 }, { x: -84, y: 0 }]
+ *
+ * @example
+ * resolveRadialFabOffsets(8).length;
+ * // => 8
+ */
+function resolveRadialFabOffsets(count) {
+    if (count <= 3) return computeRadialMenuOffsets(count, SETTINGS_FAB_RADIUS, 90, 180);
+    return computeRadialMenuOffsets(count, SETTINGS_FAB_EXPANDED_RADIUS, 83, 187);
+}
+
+/**
+ * Resolves the visible radial menu actions and their live status (active / busy / disabled)
+ * for the current screen state.
+ *
+ * @param {object} [state={}] - Current application state
+ * @returns {Array<object>} Action descriptors ready to render
+ *
+ * @example
+ * resolveRadialFabActions({ isHomeOpen: true }).map(a => a.id);
+ * // => ['theme', 'deduction', 'privacy']
+ *
+ * @example
+ * resolveRadialFabActions({ isHomeOpen: false, isStandalone: false, hasTree: true }).map(a => a.id);
+ * // => ['ai', 'map', 'print', 'download', 'logs', 'theme', 'deduction', 'privacy']
+ */
+function resolveRadialFabActions(state = {}) {
+    const { isHomeOpen = false, isStandalone = false, hasTree = true, isLoading = false,
+        showMap = false, showAI = false, showLogs = false, isAILoading = false,
+        isExportingApp = false, isExportingA4 = false } = state;
+    return SETTINGS_FAB_ACTIONS.filter((a) => {
+        if (isHomeOpen && a.treeOnly) return false;
+        if (isStandalone && a.standaloneHidden) return false;
+        return true;
+    }).map((a) => {
+        if (a.id === 'map') {
+            return { ...a, isActive: Boolean(showMap), label: showMap ? 'Tree diagram' : 'Locations map',
+                title: showMap ? 'Switch to Family Tree Diagram' : 'View Family Locations Map' };
+        }
+        if (a.id === 'ai') return { ...a, isActive: Boolean(showAI), isBusy: Boolean(isAILoading) };
+        if (a.id === 'logs') return { ...a, isActive: Boolean(showLogs) };
+        if (a.id === 'print') return { ...a, isBusy: Boolean(isExportingA4), disabled: Boolean(isExportingA4 || isLoading || !hasTree) };
+        if (a.id === 'download') return { ...a, isBusy: Boolean(isExportingApp), disabled: Boolean(isExportingApp || isLoading || !hasTree) };
+        return a;
+    });
+}
+
+/**
  * Open/close state of the radial menu: toggled by the hub button, closed by Escape, by the
  * invisible backdrop, or after an action is chosen.
  *
@@ -50740,67 +50918,85 @@ function useRadialFabState() {
 }
 
 /**
- * One satellite button of the radial menu with its label chip. Collapsed into the hub when the
- * menu is closed; slides out along its offset (staggered) when open.
+ * One satellite button of the radial menu. Collapsed into the hub when the menu is closed;
+ * slides out along its offset (staggered) when open.
  *
  * @param {object} props
- * @param {{id: string, label: string, title: string, icon: string}} props.action - Action definition
+ * @param {{id: string, label: string, title: string, icon: string, isActive?: boolean, isBusy?: boolean, disabled?: boolean}} props.action - Action definition
  * @param {{x: number, y: number}} props.offset - Position relative to the hub centre
  * @param {number} props.index - Position in the fan (drives the stagger delay)
+ * @param {number} [props.total=3] - Total number of visible actions
  * @param {boolean} props.isOpen - Whether the menu is expanded
  * @param {Function} props.onSelect - Called with the action id
  * @returns {React.ReactNode}
  *
  * @example
- * <RadialFabAction action={SETTINGS_FAB_ACTIONS[0]} offset={{ x: 0, y: -84 }} index={0} isOpen={true} onSelect={openSettings} />
+ * <RadialFabAction action={SETTINGS_FAB_ACTIONS[0]} offset={{ x: 0, y: -84 }} index={0} total={3} isOpen={true} onSelect={openSettings} />
  *
  * @example
- * <RadialFabAction action={SETTINGS_FAB_ACTIONS[2]} offset={{ x: -84, y: 0 }} index={2} isOpen={false} onSelect={() => {}} />
+ * <RadialFabAction action={SETTINGS_FAB_ACTIONS[2]} offset={{ x: -84, y: 0 }} index={2} total={3} isOpen={false} onSelect={() => {}} />
  */
-const RadialFabAction = ({ action, offset, index, isOpen, onSelect }) => {
-    const Icon = Icons[action.icon] || Icons.Settings;
+const RadialFabAction = ({ action, offset, index, total = 3, isOpen, onSelect }) => {
+    const Icon = action.isBusy ? Icons.Loader : (Icons[action.icon] || Icons.Settings);
     const style = {
         transform: isOpen ? `translate(${offset.x}px, ${offset.y}px) scale(1)` : 'translate(0px, 0px) scale(0.4)',
-        transitionDelay: `${isOpen ? index * 40 : (2 - index) * 30}ms`,
+        transitionDelay: `${isOpen ? index * 30 : Math.max(0, total - 1 - index) * 20}ms`,
     };
+    const toneCls = action.isActive
+        ? 'border-primary bg-primary-container text-on-primary-container'
+        : 'border-outline-variant bg-surface-container-lowest text-primary hover:bg-primary-container';
     return (
-        <div className={`absolute left-1/2 top-1/2 -ml-6 -mt-6 transition-all duration-200 ease-out ${isOpen ? 'opacity-100' : 'pointer-events-none opacity-0'}`} style={style}>
+        <div className={`absolute left-1/2 top-1/2 -ml-[22px] -mt-[22px] transition-all duration-200 ease-out ${isOpen ? 'opacity-100' : 'pointer-events-none opacity-0'}`} style={style}>
             <button type="button" role="menuitem" tabIndex={isOpen ? 0 : -1} title={action.title} data-testid={`settings-fab-${action.id}`}
-                onClick={() => onSelect(action.id)}
-                className="flex h-12 w-12 items-center justify-center rounded-full border border-outline-variant bg-surface-container-lowest text-primary shadow-lg transition-colors hover:bg-primary-container">
+                disabled={Boolean(action.disabled)} onClick={() => onSelect(action.id)}
+                className={`flex h-11 w-11 items-center justify-center rounded-full border shadow-lg transition-colors disabled:opacity-50 ${toneCls}`}>
                 <Icon />
             </button>
-            <span aria-hidden="true" className={`pointer-events-none absolute right-full mr-2 whitespace-nowrap rounded-full bg-inverse-surface px-2.5 py-1 text-xs font-semibold text-inverse-on-surface shadow ${index === 0 ? 'top-0 -translate-y-1.5' : 'top-1/2 -translate-y-1/2'}`}>
-                {action.label}
-            </span>
+            {total <= 3 && (
+                <span aria-hidden="true" className={`pointer-events-none absolute right-full mr-2 whitespace-nowrap rounded-full bg-inverse-surface px-2.5 py-1 text-xs font-semibold text-inverse-on-surface shadow ${index === 0 ? 'top-0 -translate-y-1.5' : 'top-1/2 -translate-y-1/2'}`}>
+                    {action.label}
+                </span>
+            )}
         </div>
     );
 };
 
 /**
- * The settings hub: a round primary button whose gear rotates when the quarter-circle menu
- * opens. Always mounted (home screen and tree view alike).
+ * The settings & tools hub: a round primary button whose gear rotates when the quarter-circle
+ * menu opens. Always mounted (home screen and tree view alike).
  *
  * @param {object} props
- * @param {Function} props.onSelect - Receives 'theme' | 'deduction' | 'privacy'
+ * @param {Function} props.onSelect - Receives action id ('ai'|'map'|'print'|'download'|'logs'|'theme'|'deduction'|'privacy')
+ * @param {boolean} [props.isHomeOpen=false] - Whether the home screen is currently open
+ * @param {boolean} [props.isStandalone=false] - Whether running in standalone export mode
+ * @param {boolean} [props.hasTree=true] - Whether a tree dataset is loaded
+ * @param {boolean} [props.isLoading=false] - Whether a sheet import is in flight
+ * @param {boolean} [props.showMap=false] - Whether locations map view is active
+ * @param {boolean} [props.showAI=false] - Whether AI assistant drawer is open
+ * @param {boolean} [props.showLogs=false] - Whether logs drawer is open
+ * @param {boolean} [props.isAILoading=false] - Whether AI assistant is processing
+ * @param {boolean} [props.isExportingApp=false] - Whether standalone HTML export is running
+ * @param {boolean} [props.isExportingA4=false] - Whether A4 print export is running
  * @returns {React.ReactNode}
  *
  * @example
  * <SettingsRadialFab onSelect={(id) => id === 'privacy' ? clearData() : openSettings(id)} />
  *
  * @example
- * <SettingsRadialFab onSelect={console.log} />
+ * <SettingsRadialFab onSelect={console.log} isHomeOpen={false} hasTree={true} />
  */
-const SettingsRadialFab = ({ onSelect }) => {
+const SettingsRadialFab = (props) => {
+    const { onSelect } = props;
     const { isOpen, toggle, close } = useRadialFabState();
-    const offsets = computeRadialMenuOffsets(SETTINGS_FAB_ACTIONS.length);
+    const actions = resolveRadialFabActions(props);
+    const offsets = resolveRadialFabOffsets(actions.length);
     const select = (id) => { close(); onSelect(id); };
     return (
         <>
             {isOpen && <div className="fixed inset-0 z-[79]" onPointerDown={close} aria-hidden="true" />}
             <div data-testid="settings-fab" className="fixed bottom-6 right-6 z-[80] h-14 w-14" role="menu" aria-label="Settings">
-                {SETTINGS_FAB_ACTIONS.map((action, index) => (
-                    <RadialFabAction key={action.id} action={action} offset={offsets[index]} index={index} isOpen={isOpen} onSelect={select} />
+                {actions.map((action, index) => (
+                    <RadialFabAction key={action.id} action={action} offset={offsets[index]} index={index} total={actions.length} isOpen={isOpen} onSelect={select} />
                 ))}
                 <button type="button" onClick={toggle} title={SETTINGS_FAB_TITLE} aria-expanded={isOpen} aria-haspopup="menu" data-testid="settings-fab-toggle"
                     className="relative flex h-14 w-14 items-center justify-center rounded-full bg-primary text-on-primary shadow-xl ring-4 ring-primary/15 transition-colors hover:bg-primary-hover focus:outline-none focus-visible:ring-primary/40">
@@ -50868,7 +51064,7 @@ function useColorTheme() {
  * shell.isHomeOpen; // => false
  */
 function useAppShellPanels(isStandalone) {
-    const [isHomeOpen, setIsHomeOpen] = useState(() => !isStandalone && !hasExplicitSheetQueryParam());
+    const [isHomeOpen, setIsHomeOpen] = useState(() => !isStandalone && !hasInitialSheetToLoad());
     const [isSettingsOpen, setIsSettingsOpen] = useState(false);
     const [settingsTab, setSettingsTab] = useState('theme');
     const openSettings = useCallback((tab = 'theme') => {
@@ -50902,7 +51098,7 @@ function useAppCoreState() {
     const sidebar = useSidebarResize(360);
     const shell = useAppShellPanels(isStandalone);
     const treeStats = useMemo(() => data.tree.getStats(), [data.tree]);
-    const [sheetUrl, setSheetUrl] = useState(() => (hasExplicitSheetQueryParam() ? resolveInitialSheetUrl() : ''));
+    const [sheetUrl, setSheetUrl] = useState(() => (hasInitialSheetToLoad() ? resolveInitialSheetUrl() : ''));
     return { isStandalone, ...theme, ...data, ...nav, ...panels, ...sidebar, ...shell, treeStats, sheetUrl, setSheetUrl };
 }
 
@@ -51181,22 +51377,70 @@ function buildZoomProps(core, viewport) {
 }
 
 /**
+ * Dispatches an action chosen from the bottom-right radial menu (`SettingsRadialFab`).
+ *
+ * @param {string} actionId - Chosen action id ('ai'|'map'|'print'|'download'|'logs'|'theme'|'deduction'|'privacy')
+ * @param {object} ctx - Dispatch context (`core`, `layoutExp`, `clearAllStoredData`)
+ *
+ * @example
+ * dispatchRadialFabAction('theme', { core, layoutExp, clearAllStoredData });
+ *
+ * @example
+ * dispatchRadialFabAction('ai', { core, layoutExp, clearAllStoredData });
+ */
+function dispatchRadialFabAction(actionId, { core, layoutExp, clearAllStoredData }) {
+    if (actionId === 'privacy') {
+        if (typeof window === 'undefined' || window.confirm('Clear remembered Google Sheets, deduction settings and colour theme from this browser?')) {
+            clearAllStoredData();
+        }
+        return;
+    }
+    if (actionId === 'ai') {
+        const nextAI = !core.showAI;
+        core.setShowAI(nextAI);
+        if (nextAI) core.setShowLogs(false);
+        return;
+    }
+    if (actionId === 'map') {
+        const nextMap = !core.showMap;
+        core.setShowMap(nextMap);
+        if (nextMap) {
+            core.setIsSidebarVisible(true);
+            core.setActiveFilter(null);
+            core.setFocusId(null);
+        }
+        return;
+    }
+    if (actionId === 'print') { layoutExp.handleExportA4Print(); return; }
+    if (actionId === 'download') { layoutExp.handleExportStandaloneApp(); return; }
+    if (actionId === 'logs') {
+        const nextLogs = !core.showLogs;
+        core.setShowLogs(nextLogs);
+        if (nextLogs) core.setShowAI(false);
+        return;
+    }
+    core.openSettings(actionId);
+}
+
+/**
  * Formats properties for the app-shell overlays: the Home emblem button, the sheet-chooser
  * home screen, the radial settings FAB, and the tabbed settings panel.
  *
  * @param {object} core - Core state slice
+ * @param {object} viewport - Viewport state slice
  * @param {object} focusNav - Focus and navigation handlers (provides handleImport)
+ * @param {object} layoutExp - Layout and export handlers
  * @param {Function} applyDemographicSettingsDraft - Settings-panel Apply handler
  * @returns {object} Props for AppRootView's shell overlays.
  *
  * @example
- * const shellProps = buildShellProps(core, focusNav, applyDraft);
+ * const shellProps = buildShellProps(core, viewport, focusNav, layoutExp, applyDraft);
  * <SheetSourceHomeScreen {...shellProps.homeScreenProps} />
  *
  * @example
- * const { homeButtonProps, settingsPanelProps, settingsFabProps } = buildShellProps(core, focusNav, applyDraft);
+ * const { homeButtonProps, settingsPanelProps, settingsFabProps } = buildShellProps(core, viewport, focusNav, layoutExp, applyDraft);
  */
-function buildShellProps(core, focusNav, applyDemographicSettingsDraft) {
+function buildShellProps(core, viewport, focusNav, layoutExp, applyDemographicSettingsDraft) {
     const openSheet = (url) => {
         core.setIsHomeOpen(false);
         focusNav.handleImport(url);
@@ -51204,15 +51448,6 @@ function buildShellProps(core, focusNav, applyDemographicSettingsDraft) {
     const clearAllStoredData = () => {
         clearStoredPreferences();
         core.setThemeId(DEFAULT_COLOR_THEME_ID);
-    };
-    const handleFabSelect = (actionId) => {
-        if (actionId === 'privacy') {
-            if (typeof window === 'undefined' || window.confirm('Clear remembered Google Sheets, deduction settings and colour theme from this browser?')) {
-                clearAllStoredData();
-            }
-            return;
-        }
-        core.openSettings(actionId);
     };
     return {
         isHomeOpen: core.isHomeOpen,
@@ -51222,7 +51457,12 @@ function buildShellProps(core, focusNav, applyDemographicSettingsDraft) {
             errorMsg: core.errorMsg, onSubmit: openSheet, onClose: () => core.setIsHomeOpen(false),
             onClearStoredData: clearAllStoredData
         },
-        settingsFabProps: { onSelect: handleFabSelect },
+        settingsFabProps: {
+            onSelect: (actionId) => dispatchRadialFabAction(actionId, { core, layoutExp, clearAllStoredData }),
+            isHomeOpen: core.isHomeOpen, isStandalone: core.isStandalone, hasTree: Boolean(core.tree?.root),
+            isLoading: core.isLoading, showMap: core.showMap, showAI: core.showAI, showLogs: core.showLogs,
+            isAILoading: viewport.isAILoading, isExportingApp: layoutExp.isExportingApp, isExportingA4: layoutExp.isExportingA4
+        },
         settingsPanelProps: {
             isOpen: core.isSettingsOpen, initialTab: core.settingsTab,
             onClose: () => core.setIsSettingsOpen(false),
@@ -51270,7 +51510,7 @@ function useAppViewModel() {
         zoomProps: buildZoomProps(core, viewport),
         viewportProps: buildViewportProps(core, viewport, focusNav, layoutExp),
         sidebarProps: buildSidebarProps(core, viewport, focusNav),
-        shellProps: buildShellProps(core, focusNav, applyDemographicSettingsDraft)
+        shellProps: buildShellProps(core, viewport, focusNav, layoutExp, applyDemographicSettingsDraft)
     };
 }
 

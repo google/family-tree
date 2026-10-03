@@ -462,15 +462,32 @@ if (shouldRunChrome) {
             (v) => { const s = v && JSON.parse(v); return s && s.popover && s.tail && s.text.includes('Home: Choose a Google Sheet'); }, 10, 200);
         console.log(`  ${GREEN}✓${RESET} Hover help balloon rendered with tail pointer and full title.`);
 
-        // 6. Home button → the chooser returns ("Back to the tree"), the prefilled URL chip shows the learned sheet title "Ancestry Browser: Demo", and the dropdown lists it.
+        // 6. Home button → the chooser returns ("Back to the tree"), the prefilled URL chip shows the learned sheet title "Ancestry Browser: Demo",
+        //    the prefilled sheet is NOT duplicated in the dropdown while filled in the input box, and clearing the input reveals it in the clean dropdown.
         await evaluate(`${q('[data-testid="home-button"]')}.click(); 'clicked'`);
-        await waitFor('home screen after the Home button with learned title chip',
-            `JSON.stringify({ text: (${q('[data-testid="sheet-source-home"]')} || {}).innerText || '', chip: (${q('[data-testid="sheet-source-title"]')} || {}).innerText || '' })`,
-            (v) => { const s = v && JSON.parse(v); return s && s.text.includes('Back to the tree') && s.chip.includes('Ancestry Browser: Demo'); }, 10, 300);
+        await waitFor('home screen after the Home button with learned title chip and no duplicate dropdown',
+            `JSON.stringify({ text: (${q('[data-testid="sheet-source-home"]')} || {}).innerText || '', chip: (${q('[data-testid="sheet-source-title"]')} || {}).innerText || '', caret: !!${q('button[aria-label="Show sheets you have opened before"]')} })`,
+            (v) => { const s = v && JSON.parse(v); return s && s.text.includes('Back to the tree') && s.chip.includes('Ancestry Browser: Demo') && !s.caret; }, 10, 300);
+        await evaluate(`(() => {
+            const inp = document.getElementById('sheet-source-input');
+            const setter = Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, 'value').set;
+            setter.call(inp, '');
+            inp.dispatchEvent(new Event('input', { bubbles: true }));
+            return 'cleared';
+        })()`);
+        await waitFor('caret button after clearing input', `!!${q('button[aria-label="Show sheets you have opened before"]')}`, Boolean, 10, 200);
         await evaluate(`${q('button[aria-label="Show sheets you have opened before"]')}.click(); 'clicked'`);
-        await waitFor('history dropdown listing "Ancestry Browser: Demo"', `(${q('[data-testid="sheet-history-dropdown"]')} || {}).innerText || ''`,
-            (t) => t.includes(DEMO_ID) && t.includes('Ancestry Browser: Demo'), 10, 300);
-        console.log(`  ${GREEN}✓${RESET} Home button reopens the chooser with "Ancestry Browser: Demo" title chip and history dropdown.`);
+        await waitFor('history dropdown listing "Ancestry Browser: Demo" without use count or "most used first"',
+            `(${q('[data-testid="sheet-history-dropdown"]')} || {}).innerText || ''`,
+            (t) => t.includes(DEMO_ID) && t.includes('Ancestry Browser: Demo') && !t.includes('most used first') && !/×\d+/.test(t), 10, 300);
+        console.log(`  ${GREEN}✓${RESET} Home button reopens the chooser with "Ancestry Browser: Demo" title chip, deduplicated dropdown, and clean history rows.`);
+
+        // 7. Navigating to bare http://localhost:8000/ when a sheet is remembered in the cookie skips the home screen and opens the previous view directly.
+        await sendCommand('Page.navigate', { url: 'http://localhost:8000/' });
+        const resumedNodes = await waitFor('direct resume of previous tree view on bare URL',
+            `JSON.stringify({ home: !!${q('[data-testid="sheet-source-home"]')}, nodes: document.querySelectorAll('.person-node').length })`,
+            (v) => { const s = v && JSON.parse(v); return s && !s.home && s.nodes >= 10; }, 40, 600);
+        console.log(`  ${GREEN}✓${RESET} Bare URL startup resumed previous sheet view directly (${JSON.parse(resumedNodes).nodes} nodes, home screen skipped).`);
 
         ws.close();
     } finally {

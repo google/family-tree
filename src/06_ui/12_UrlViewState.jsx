@@ -801,6 +801,7 @@ function buildCurrentViewState({ focusId, isSidebarVisible, activeFilter, showMa
  * // => false when the URL already has no hash
  */
 function writeViewStateHash(hashBody) {
+    saveLastViewStateHash(hashBody);
     if (typeof window === 'undefined' || !window.history || !window.location) return false;
     const target = hashBody ? `#${hashBody}` : '';
     if ((window.location.hash || '') === target) return false;
@@ -1112,8 +1113,36 @@ function captureAndWriteViewState(p) {
 }
 
 /**
+ * Picks the view-state hash to restore on startup: an explicit `#…` hash in the URL always wins;
+ * when the URL has no hash (e.g. opening `https://google.github.io/family-tree/` or `localhost:8000/`),
+ * falls back to the last view-state hash saved in browser preferences unless a sheet was explicitly
+ * requested via `?id=` without a hash.
+ *
+ * @param {string|null} [locationHash=null] - `window.location.hash` override
+ * @param {string|null} [searchString=null] - `window.location.search` override
+ * @param {string} [storedHash=loadLastViewStateHash()] - Saved hash body from preferences
+ * @returns {string} Hash string to pass to `parseViewStateHash`
+ *
+ * @example
+ * resolveInitialViewStateHash('#p=Joseph_1920_152', '', 'v=map');
+ * // => '#p=Joseph_1920_152'
+ *
+ * @example
+ * resolveInitialViewStateHash('', '', 'p=Joseph_1920_152&z=0.8');
+ * // => 'p=Joseph_1920_152&z=0.8'
+ */
+function resolveInitialViewStateHash(locationHash = null, searchString = null, storedHash = loadLastViewStateHash()) {
+    const rawHash = locationHash !== null
+        ? String(locationHash)
+        : (typeof window !== 'undefined' && window.location ? String(window.location.hash || '') : '');
+    if (rawHash.replace(/^#/, '').trim()) return rawHash;
+    if (hasExplicitSheetQueryParam(searchString)) return '';
+    return storedHash || '';
+}
+
+/**
  * Keeps the browser URL in sync with the current view (Google-Maps style) and restores the view
- * from the URL on startup. Mount once from the application view model.
+ * from the URL (or the last saved view state) on startup. Mount once from the application view model.
  *
  * @param {Object} params - Live application state and handlers.
  * @param {FamilyTree} params.tree - Loaded tree.
@@ -1156,7 +1185,7 @@ function useUrlViewStateSync(params) {
     const phaseRef = useRef({ done: false, writable: false });
     const initialStateRef = useRef(null);
     if (initialStateRef.current === null) {
-        initialStateRef.current = parseViewStateHash(typeof window !== 'undefined' && window.location ? window.location.hash : '');
+        initialStateRef.current = parseViewStateHash(resolveInitialViewStateHash());
     }
     const writeNow = useCallback(() => captureAndWriteViewState(latest.current), []);
     const onComplete = useCallback(() => {

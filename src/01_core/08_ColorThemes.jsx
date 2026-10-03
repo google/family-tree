@@ -57,7 +57,7 @@ const TAILWIND_FAMILY_SEEDS = {
 /** CIELAB lightness ("tone") per Tailwind shade – `light` mirrors Tailwind's own ramp, `dark` inverts it. */
 const TAILWIND_SHADE_TONES = {
     light: { 50: 98, 100: 96, 200: 92, 300: 85, 400: 67, 500: 49, 600: 37, 700: 28, 800: 17, 900: 10, 950: 4, white: 100 },
-    dark: { 50: 12, 100: 17, 200: 24, 300: 34, 400: 48, 500: 60, 600: 72, 700: 80, 800: 87, 900: 93, 950: 97, white: 6 }
+    dark: { 50: 15, 100: 27, 200: 34, 300: 43, 400: 53, 500: 63, 600: 74, 700: 83, 800: 89, 900: 94, 950: 98, white: 6 }
 };
 
 /** Material 3 colour-role tones (https://m3.material.io/styles/color/static/baseline). */
@@ -357,7 +357,7 @@ function solarizedNeutralScale(mode) {
     const [base03, base02, base01, base00, base0, base1, base2, base3] = ['#002b36', '#073642', '#586e75', '#657b83', '#839496', '#93a1a1', '#eee8d5', '#fdf6e3'];
     if (mode === 'dark') {
         return {
-            white: base03, 50: base02, 100: mixHex(base02, base01, 0.25), 200: mixHex(base02, base01, 0.6), 300: base01,
+            white: base03, 50: base02, 100: mixHex(base02, base01, 0.45), 200: mixHex(base02, base01, 0.75), 300: base01,
             400: base00, 500: base0, 600: base1, 700: mixHex(base1, base2, 0.5), 800: base2, 900: base3, 950: '#fffbf0'
         };
     }
@@ -444,7 +444,7 @@ const COLOR_THEMES = [
         id: 'midnight', name: 'Midnight Black', mode: 'dark',
         blurb: 'True-black surfaces for OLED screens with muted, high-legibility accents.',
         seeds: { ...CLASSIC_FOREST_SEEDS, neutral: '#6b7280' },
-        shadeTones: { white: 0, 50: 4, 100: 9, 200: 18 },
+        shadeTones: { white: 0, 50: 10, 100: 23, 200: 30, 300: 39 },
         roleTones: { surface: 0, surfaceDim: 0, surfaceContainerLowest: 0, surfaceContainerLow: 4, surfaceContainer: 8, surfaceContainerHigh: 12, surfaceContainerHighest: 17, surfaceBright: 22 }
     },
     {
@@ -537,6 +537,26 @@ function buildThemeRoles(seeds, roleTones) {
 }
 
 /**
+ * Returns the chroma multiplier for a Tailwind shade in a theme: in dark themes (`isDark`),
+ * profile-card fills (`50..300`) and text (`800..950`) are softened so cards read as calm,
+ * muted pastel surfaces rather than oversaturated neon blocks.
+ *
+ * @example shadeChromaMultiplier('sky', 100, true)  // → 0.34
+ * @example shadeChromaMultiplier('sky', 100, false) // → 1
+ * @param {string} family Tailwind family name
+ * @param {number} shade Tailwind shade number
+ * @param {boolean} isDark Whether the theme is a dark theme
+ * @returns {number}
+ */
+function shadeChromaMultiplier(family, shade, isDark) {
+    if (!isDark) return 1;
+    if (TAILWIND_FAMILY_SEEDS[family] === 'neutral') return 0.35;
+    if (shade <= 300) return 0.34;
+    if (shade <= 700) return 0.55;
+    return 0.45;
+}
+
+/**
  * Generates the 22 Tailwind family ramps (+ `white`) from the seeds, honouring explicit overrides.
  *
  * @example buildThemeFamilies(CLASSIC_FOREST_SEEDS, TAILWIND_SHADE_TONES.light).sky[100] // → a very light blue
@@ -548,6 +568,7 @@ function buildThemeRoles(seeds, roleTones) {
  */
 function buildThemeFamilies(seeds, tones, overrides) {
     const families = {};
+    const isDark = Number(tones && tones.white) < 50;
     for (const family of TAILWIND_THEME_FAMILIES) {
         if (overrides && overrides[family]) {
             families[family] = { ...overrides[family] };
@@ -555,7 +576,9 @@ function buildThemeFamilies(seeds, tones, overrides) {
         }
         const seed = seeds[TAILWIND_FAMILY_SEEDS[family]] || seeds.neutral;
         families[family] = {};
-        for (const shade of TAILWIND_SHADES) families[family][shade] = toneHex(seed, tones[shade]);
+        for (const shade of TAILWIND_SHADES) {
+            families[family][shade] = toneHex(seed, tones[shade], shadeChromaMultiplier(family, shade, isDark));
+        }
     }
     families.white = (overrides && overrides.white) || toneHex(seeds.neutral, tones.white, 0.15);
     return families;

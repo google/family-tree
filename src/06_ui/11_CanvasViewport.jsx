@@ -3019,21 +3019,22 @@ function useAppPanels(isLoading) {
  *
 /**
  * Resolves the initial spreadsheet URL from URL search parameters ('id', 'sheet', 'url', 'sheetId'),
- * falling back to DEFAULT_URL if no query parameter is provided.
+ * falling back to the most recently opened sheet in browser history, and finally to DEFAULT_URL.
  *
  * @param {string|null} [searchString=null] - Optional search query string override
+ * @param {Array<SheetHistoryEntry>} [history=readSheetHistory()] - Persisted sheet history
  * @returns {string} Fully qualified Google Sheets URL to load
  *
  * @example
  * // Given URL: https://google.github.io/family-tree/?id=1ZDpcz2ACmG63dUjHLfoHZSW7-dG51FbzaJVcqHYdkEI
- * resolveInitialSheetUrl('?id=1ZDpcz2ACmG63dUjHLfoHZSW7-dG51FbzaJVcqHYdkEI');
+ * resolveInitialSheetUrl('?id=1ZDpcz2ACmG63dUjHLfoHZSW7-dG51FbzaJVcqHYdkEI', []);
  * // => 'https://docs.google.com/spreadsheets/d/1ZDpcz2ACmG63dUjHLfoHZSW7-dG51FbzaJVcqHYdkEI/edit'
  *
  * @example
- * resolveInitialSheetUrl('');
+ * resolveInitialSheetUrl('', []);
  * // => DEFAULT_URL
  */
-function resolveInitialSheetUrl(searchString = null) {
+function resolveInitialSheetUrl(searchString = null, history = readSheetHistory()) {
     try {
         const query = searchString !== null
             ? searchString
@@ -3044,23 +3045,20 @@ function resolveInitialSheetUrl(searchString = null) {
             if (rawParam && rawParam.trim()) {
                 const trimmed = rawParam.trim();
                 const sheetId = extractSheetIdFromUrl(trimmed);
-                if (sheetId) {
-                    return `https://docs.google.com/spreadsheets/d/${sheetId}/edit`;
-                }
-                if (trimmed.startsWith('http')) {
-                    return trimmed;
-                }
+                if (sheetId) return `https://docs.google.com/spreadsheets/d/${sheetId}/edit`;
+                if (trimmed.startsWith('http')) return trimmed;
             }
         }
     } catch (err) {
         console.warn('Could not parse URL search parameters for spreadsheet ID:', err);
     }
-    return DEFAULT_URL;
+    const lastUsed = resolveLastUsedSheet(history);
+    return lastUsed ? buildSheetUrlFromId(lastUsed.id) : DEFAULT_URL;
 }
 
 /**
  * Whether the page URL names a spreadsheet explicitly (`?id=`, `?sheet=`, `?url=` or
- * `?sheetId=`). Only then does the app auto-load on startup; otherwise the home screen asks.
+ * `?sheetId=`).
  *
  * @param {string|null} [searchString=null] - Optional search query override
  * @returns {boolean}
@@ -3085,6 +3083,27 @@ function hasExplicitSheetQueryParam(searchString = null) {
     } catch (err) {
         return false;
     }
+}
+
+/**
+ * Whether the app should automatically open a spreadsheet on startup instead of stopping on the
+ * home screen: true when the URL names a sheet (`?id=…`) OR the browser has a previously opened
+ * sheet in its history.
+ *
+ * @param {string|null} [searchString=null] - Optional search query override
+ * @param {Array<SheetHistoryEntry>} [history=readSheetHistory()] - Persisted sheet history
+ * @returns {boolean}
+ *
+ * @example
+ * hasInitialSheetToLoad('?id=1BQvyFoA_-u4MG-r1SRDel93F1TwEaN3I6v6p-kOH8z0', []);
+ * // => true
+ *
+ * @example
+ * hasInitialSheetToLoad('', [{ id: '1BQvyFoA_-u4MG-r1SRDel93F1TwEaN3I6v6p-kOH8z0', title: 'Demo', uses: 1, lastUsed: 1 }]);
+ * // => true
+ */
+function hasInitialSheetToLoad(searchString = null, history = readSheetHistory()) {
+    return hasExplicitSheetQueryParam(searchString) || Boolean(resolveLastUsedSheet(history));
 }
 
 /**
@@ -3195,14 +3214,14 @@ function initializeTreeDataset({
         if (targetSelected) {
             setFocusId(targetSelected);
             setIsSidebarVisible(false);
-                            setTimeout(() => centerOnPerson(targetSelected, 0.70), 200);
+            setTimeout(() => centerOnPerson(targetSelected, 0.70), 200);
         }
         appendLog(`⚡ Loaded ${embedded.rows.length} profiles directly from embedded dataset.`, 'success');
         return true; // Completely avoid fetching Google Sheets
     }
 
-    // No sheet named in the URL: leave the home screen open and let the user choose.
-    if (!hasExplicitSheetQueryParam()) return false;
+    // Resume the explicit URL sheet or the previously opened sheet from history; only stop on the home screen if none exists.
+    if (!hasInitialSheetToLoad()) return false;
     handleImport(resolveInitialSheetUrl());
     return false;
 }
