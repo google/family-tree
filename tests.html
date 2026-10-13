@@ -241,7 +241,7 @@ try {
         extractFrozenArrayConst(source, 'SETTINGS_PANEL_TABS')
     ].join('\n');
     const browserPreferencesSrc = [
-        'SHEET_HISTORY_COOKIE', 'DEMOGRAPHIC_SETTINGS_COOKIE', 'COLOR_THEME_COOKIE', 'LAST_VIEW_STATE_COOKIE', 'GEO_CACHE_COOKIE',
+        'SHEET_HISTORY_COOKIE', 'DEMOGRAPHIC_SETTINGS_COOKIE', 'LAST_VIEW_STATE_COOKIE', 'GEO_CACHE_COOKIE',
         'PREFERENCE_COOKIE_MAX_AGE_SECONDS', 'SHEET_HISTORY_LIMIT', 'SHEET_TITLE_MAX_LENGTH',
         'SHEET_HISTORY_COOKIE_BUDGET', 'GEO_CACHE_COOKIE_BUDGET', 'DEMO_SHEET_ID', 'DEMO_SHEET_TITLE',
         'SHEET_ID_EXACT_PATTERN', 'sheetTitleRegistry', 'geoLocationMemoryCache', 'MARRIAGE_AGE_PREVIEW_COHORTS'
@@ -287,6 +287,17 @@ try {
         extractFunction(source, 'processPointerMove'),
         extractFunction(source, 'processPointerUp')
     ].join('\n');
+    // Sibling bus-bar fold toggle (Section 217) and phone-layout helpers (Section 218).
+    const siblingBarSrc = [
+        extractConst(source, 'SIBLING_BAR_HIT_PX'),
+        extractConst(source, 'COMPACT_VIEWPORT_MAX_WIDTH'),
+        extractConst(source, 'TIMELINE_GUTTER_WIDTH'),
+        extractConst(source, 'TIMELINE_GUTTER_COMPACT_WIDTH'),
+        extractConst(source, 'BOTTOM_DOCK_HEIGHT')
+    ].concat([
+        'withSetMembers', 'planSiblingBarToggle', 'isSiblingBarFolded', 'describeSiblingBarAction',
+        'isCompactViewportWidth', 'resolveTimelineGutterWidth', 'resolveDockedSidebarWidth', 'resolveSidebarDockLayout'
+    ].map(name => extractFunction(source, name))).join('\n');
     const urlViewStateSrc = [
         'formatCompactNumber', 'encodeViewStateToken', 'decodeViewStateToken',
         'collectViewStateSheetIds', 'compactViewStateSheetIds', 'expandViewStateSheetIds', 'encodePersonIdToken',
@@ -351,7 +362,11 @@ try {
         PRE_GEOCODED_LOCATIONS, resolveLocationCoords,
         parseNominatimGeoResult, cacheResolvedGeoLocation, hydrateCachedGeoLocations,
         findUnresolvedTreePlaces, fetchPublicGeoLocation, _buildMapMarkerHtml,
-        processPointerDown, processPointerMove, processPointerUp
+        processPointerDown, processPointerMove, processPointerUp,
+        withSetMembers, planSiblingBarToggle, isSiblingBarFolded, describeSiblingBarAction,
+        isCompactViewportWidth, resolveTimelineGutterWidth, resolveDockedSidebarWidth, resolveSidebarDockLayout,
+        TAILWIND_FALLBACK_THEME_ID, buildThemeBootScript, THEME_BOOT_SCRIPT, preferenceStorageKey, shouldIgnorePointerDown, BOTTOM_DOCK_HEIGHT,
+        TIMELINE_GUTTER_WIDTH, TIMELINE_GUTTER_COMPACT_WIDTH, SIBLING_BAR_HIT_PX, COMPACT_VIEWPORT_MAX_WIDTH
     ] = new Function(`
         // Isolated cookie jar + localStorage + documentElement: preference & theme tests must never
         // touch the real browser state, and Stage 3 runs in node where neither exists. Every other
@@ -449,6 +464,7 @@ try {
         ${backgroundGeocoderSrc}
         ${buildMapMarkerHtmlSrc}
         ${pointerControlsSrc}
+        ${siblingBarSrc}
         ${matchesPlaceFilterSrc}
         ${matchesPersonSearchSrc}
         ${matchesPersonFilterSrc}
@@ -542,7 +558,11 @@ try {
             PRE_GEOCODED_LOCATIONS, resolveLocationCoords,
             parseNominatimGeoResult, cacheResolvedGeoLocation, hydrateCachedGeoLocations,
             findUnresolvedTreePlaces, fetchPublicGeoLocation, _buildMapMarkerHtml,
-            processPointerDown, processPointerMove, processPointerUp
+            processPointerDown, processPointerMove, processPointerUp,
+            withSetMembers, planSiblingBarToggle, isSiblingBarFolded, describeSiblingBarAction,
+            isCompactViewportWidth, resolveTimelineGutterWidth, resolveDockedSidebarWidth, resolveSidebarDockLayout,
+            TAILWIND_FALLBACK_THEME_ID, buildThemeBootScript, THEME_BOOT_SCRIPT, preferenceStorageKey, shouldIgnorePointerDown, BOTTOM_DOCK_HEIGHT,
+        TIMELINE_GUTTER_WIDTH, TIMELINE_GUTTER_COMPACT_WIDTH, SIBLING_BAR_HIT_PX, COMPACT_VIEWPORT_MAX_WIDTH
         ];
     `)();
 
@@ -7300,8 +7320,10 @@ const m3 = tree.all.find(n => n.id === '3');
     // 122B: Code contract verification in App.jsx
     {
         try {
-            assert('Test 122B: TopNavigation uses (isSidebarVisible || isSearchActive) for width', appCode.includes('(isSidebarVisible || isSearchActive) ? `${sidebarWidth}px` : \'auto\''));
-            assert('Test 122B: TopNavigation uses (isSidebarVisible || isSearchActive) for px-6 padding', appCode.includes('(isSidebarVisible || isSearchActive) ? \'px-6\' : \'pr-4\''));
+            assert('Test 122B: TopNavigation right panel takes the sidebar width whenever the sidebar OR the search bar is open (desktop), and the full width on phones',
+                /const isDocked = isSidebarVisible \|\| isSearchActive;/.test(appCode) &&
+                appCode.includes("isCompactViewport ? (isDocked ? '100%' : 'auto') : (isDocked ? `${sidebarWidth}px` : 'auto')"));
+            assert('Test 122B: TopNavigation uses the docked state for its px-6 padding (px-4 on phones)', appCode.includes("isDocked ? (isCompactViewport ? 'px-4' : 'px-6') : 'pr-4'"));
             assert('Test 122B: Hardcoded 360px width condition in search container is eliminated', !appCode.includes('(isSearchActive ? \'360px\' : \'auto\')'));
         } catch (e) {
             assertEqual('Test 122B execution failed', e.message, '');
@@ -8723,8 +8745,10 @@ const m3 = tree.all.find(n => n.id === '3');
         try {
             assert('Test 142B: Family Tree top banner is hidden in standalone mode', appCode.includes('{!isStandalone && (\n                <div className="flex items-center pointer-events-auto ml-16">'));
             assert('Test 142B: Generation left side panel (TimelineLabels) is hidden in standalone mode', appCode.includes('!isStandalone && <TimelineLabels'));
-            assert('Test 142B: TimelineGrid adjusts padding in standalone mode', appCode.includes("isStandalone ? 'pl-4' : 'pl-12'"));
-            assert('Test 142B: useCanvasControls TIMELINE_WIDTH is 0 in standalone mode', appCode.includes('const TIMELINE_WIDTH = isStandalone ? 0 : 48;'));
+            assert('Test 142B: TimelineGrid starts its grid lines after the timeline gutter (16px in standalone mode, where there is no gutter)', appCode.includes("paddingLeft: isStandalone ? 16 : gutterWidth"));
+            assertEqual('Test 142B: The timeline gutter the camera keeps clear is 0 in standalone mode, 48px on desktop and 32px on phones',
+                [resolveTimelineGutterWidth({ isStandalone: true, isCompact: false }), resolveTimelineGutterWidth({ isStandalone: false, isCompact: false }),
+                 resolveTimelineGutterWidth({ isStandalone: false, isCompact: true })].join('|'), '0|48|32');
         } catch (e) {
             assertEqual('Test 142B execution failed', e.message, '');
         }
@@ -10576,12 +10600,22 @@ const m3 = tree.all.find(n => n.id === '3');
                 appCode.includes('TimelineLabels.GENERATIONS = HISTORICAL_GENERATION_COHORTS'));
 
             assert('Test 172.12: _isPlausibleParent refers to GENERATIONAL_GAPS and BIOLOGICAL_BOUNDS',
-                appCode.includes('FamilyTreeBuilder.GENERATIONAL_GAPS?.MIN_PARENTAL_AGE') &&
-                appCode.includes('FamilyTreeBuilder.BIOLOGICAL_BOUNDS?.MAX_MOTHER_CHILDBIRTH_AGE'));
+                FamilyTreeBuilder.prototype._isPlausibleParent({ yob: 1985 }, { yob: 1960, gender: 'F' }, 'mom') &&
+                !FamilyTreeBuilder.prototype._isPlausibleParent({ yob: 1965 }, { yob: 1960, gender: 'F' }, 'mom') &&
+                !FamilyTreeBuilder.prototype._isPlausibleParent({ yob: 1985 }, { yob: 1920, gender: 'F' }, 'mom'));
 
             assert('Test 172.13: DemographicProfile declared and assigned at module level',
                 appCode.includes('let DemographicProfile;') &&
                 appCode.includes('DemographicProfile = FamilyTreeBuilder.DemographicProfile;'));
+
+            assert('Test 172.14: Anna Rose is classified as female, not male via -ose suffix, while Paulose remains male',
+                !FamilyTreeBuilder._isMaleName('Anna Rose') &&
+                FamilyTreeBuilder._isFemaleName('Anna Rose') &&
+                FamilyTreeBuilder._isMaleName('Paulose'));
+
+            assert('Test 172.15: _isNodeLikelyFemale returns false when node.gender is explicitly M',
+                !FamilyTreeBuilder._isNodeLikelyFemale({ name: 'Mary Brother', gender: 'M' }) &&
+                !FamilyTreeBuilder._isNodeLikelyFemale({ name: 'Pauly', gender: 'M', spouse: 'Paulose' }));
         } catch (e) {
             assertEqual('Test 172 execution failed', e.message, '');
         }
@@ -11126,7 +11160,8 @@ const m3 = tree.all.find(n => n.id === '3');
             assert('Test 177.27: App.jsx checks currentYear - effectiveYob > 100 in Person',
                 codeToAudit.includes('currentYear - effectiveYob > 100'));
             assert('Test 177.28: App.jsx checks age > 100 in _createAutoGhostPartner',
-                codeToAudit.includes('currentYear - g._inferredYob > 100'));
+                Person.inferCentenarianDeath(1900, 2026) === 1990 &&
+                Person.inferCentenarianDeath(1950, 2026) === null);
             assert('Test 177.29: App.jsx invokes inferDeaths on Object.values(this.nodeMap) after mergeDisconnectedRoots',
                 codeToAudit.includes('this.inferDeaths(Object.values(this.nodeMap))'));
         } catch (e) {
@@ -14869,9 +14904,22 @@ const m3 = tree.all.find(n => n.id === '3');
                 resolveColorTheme('solarized-light').families.white, '#fdf6e3');
             assertEqual('Test 211.11: Solarized Dark uses Schoonover base03 #002b36 canvas',
                 resolveColorTheme('solarized-dark').families.white, '#002b36');
-            assertEqual('Test 211.12: Retired theme IDs ("ocean", "lavender", "midnight") return false from isKnownColorThemeId and fall back to classic',
+            assertEqual('Test 211.12: Retired theme IDs ("ocean", "lavender", "midnight") return false from isKnownColorThemeId and fall back to the default theme',
                 [isKnownColorThemeId('ocean'), isKnownColorThemeId('lavender'), isKnownColorThemeId('midnight'), getColorThemeDefinition('midnight').id].join('|'),
-                'false|false|false|classic');
+                'false|false|false|' + DEFAULT_COLOR_THEME_ID);
+            assertEqual('Test 211.12b: Solarized Dark is the default theme, while the stamped Tailwind fallbacks stay pinned to Classic (the stock palette)',
+                [DEFAULT_COLOR_THEME_ID, TAILWIND_FALLBACK_THEME_ID, TAILWIND_THEME_CONFIG_SCRIPT.includes("'primary': 'rgb(var(--md-sys-color-primary, 92 124 51)")].join('|'),
+                'solarized-dark|classic|true');
+            const bootScript = buildThemeBootScript();
+            assert('Test 211.12c: THEME_BOOT_SCRIPT pre-paints every theme\'s canvas (base03 for Solarized Dark) from the ft_color_theme cookie or its localStorage mirror, defaulting to Solarized Dark',
+                bootScript === THEME_BOOT_SCRIPT &&
+                COLOR_THEMES.every(t => bootScript.includes(`'${t.id}':['${rgbTriplet(themeFamilyHex(resolveColorTheme(t.id), 'white'))}','${resolveColorTheme(t.id).mode}']`)) &&
+                bootScript.includes(`${COLOR_THEME_COOKIE}=([^;]*)`) &&
+                bootScript.includes(`'${preferenceStorageKey(COLOR_THEME_COOKIE)}'`) &&
+                bootScript.includes(`canvases['${DEFAULT_COLOR_THEME_ID}']`) &&
+                bootScript.includes("'solarized-dark':['0 43 54','dark']"));
+            assert('Test 211.12d: The standalone export embeds the theme boot script after the Tailwind config',
+                FamilyTreeBuilder._getStandaloneTailwindConfig().indexOf(THEME_BOOT_SCRIPT) > FamilyTreeBuilder._getStandaloneTailwindConfig().indexOf('tailwind.config ='));
 
             // DOM application & cleanup on fakeDocElement
             fakeDocElement._clear();
@@ -14910,8 +14958,8 @@ const m3 = tree.all.find(n => n.id === '3');
             fakeLocalStorage.clear();
             fakeDocElement._clear();
 
-            assertEqual('Test 212.01: loadStoredColorThemeId returns null when no cookie is stored, and applyStoredColorTheme falls back to "classic"',
-                [loadStoredColorThemeId(), applyStoredColorTheme().id].join('|'), '|classic');
+            assertEqual('Test 212.01: loadStoredColorThemeId returns null when no cookie is stored, and applyStoredColorTheme falls back to the default theme (Solarized Dark)',
+                [loadStoredColorThemeId(), applyStoredColorTheme().id].join('|'), '|' + DEFAULT_COLOR_THEME_ID);
             saveColorThemeId('earthy');
             assertEqual('Test 212.02: saveColorThemeId("earthy") persists to cookie and loadStoredColorThemeId reads it back',
                 [cookieJar.get(COLOR_THEME_COOKIE), loadStoredColorThemeId()].join('|'), 'earthy|earthy');
@@ -14938,11 +14986,11 @@ const m3 = tree.all.find(n => n.id === '3');
             saveCachedGeoLocation('Edappilly', { coords: [10.025, 76.308], country: 'India', state: 'Kerala', district: 'Ernakulam' });
             applyColorTheme('dark');
             clearStoredPreferences();
-            assertEqual('Test 212.06: clearStoredPreferences() clears all 5 cookies (history, deduction, theme, last view state, geo cache) and restores the classic theme on document.documentElement',
+            assertEqual('Test 212.06: clearStoredPreferences() clears all 5 cookies (history, deduction, theme, last view state, geo cache) and restores the default theme on document.documentElement',
                 [cookieJar.has(SHEET_HISTORY_COOKIE), cookieJar.has(DEMOGRAPHIC_SETTINGS_COOKIE),
                  cookieJar.has(COLOR_THEME_COOKIE), cookieJar.has(LAST_VIEW_STATE_COOKIE),
                  cookieJar.has(GEO_CACHE_COOKIE), fakeDocElement.getAttribute('data-theme')].join('|'),
-                'false|false|false|false|false|classic');
+                'false|false|false|false|false|' + DEFAULT_COLOR_THEME_ID);
         } catch (e) {
             assertEqual('Test 212 execution failed', e.message, '');
         } finally {
@@ -15363,6 +15411,176 @@ const m3 = tree.all.find(n => n.id === '3');
                 !/<SheetHistoryDropdown/.test(inputBlock));
         } catch (e) {
             assertEqual('Test 216 execution failed', e.message, '');
+        }
+    }
+
+    // ══════════════════════════════════════════════════════════════════════════
+    //  217. Clickable Sibling Bus-Bar: Fold Every Branch on a Row & Zoom to Fit
+    // ══════════════════════════════════════════════════════════════════════════
+    {
+        section('217. Clickable Sibling Bus-Bar: Fold Every Branch on a Row & Zoom to Fit');
+        try {
+            // Parent with three children; Jomon and Deepu have three children each, Minu has none,
+            // so the open row is far wider than the folded one.
+            const rows217 = [
+                { _sourceId: 's1', _sheetRow: 1, Name: 'Babu', Gender: 'M', 'Year of Birth': '1955', Spouse: 'Celine' },
+                { _sourceId: 's1', _sheetRow: 2, Name: 'Celine', Gender: 'F', 'Year of Birth': '1960', Spouse: 'Babu' },
+                { _sourceId: 's1', _sheetRow: 3, Name: 'Jomon', Gender: 'M', Father: 'Babu', Mother: 'Celine', 'Year of Birth': '1985' },
+                { _sourceId: 's1', _sheetRow: 4, Name: 'Minu', Gender: 'F', Father: 'Babu', Mother: 'Celine', 'Year of Birth': '1988' },
+                { _sourceId: 's1', _sheetRow: 5, Name: 'Deepu', Gender: 'M', Father: 'Babu', Mother: 'Celine', 'Year of Birth': '1990' },
+                { _sourceId: 's1', _sheetRow: 6, Name: 'Eileen', Gender: 'F', Father: 'Jomon', 'Year of Birth': '2012' },
+                { _sourceId: 's1', _sheetRow: 7, Name: 'Edwin', Gender: 'M', Father: 'Jomon', 'Year of Birth': '2014' },
+                { _sourceId: 's1', _sheetRow: 8, Name: 'Elsa', Gender: 'F', Father: 'Jomon', 'Year of Birth': '2016' },
+                { _sourceId: 's1', _sheetRow: 9, Name: 'Fiona', Gender: 'F', Father: 'Deepu', 'Year of Birth': '2016' },
+                { _sourceId: 's1', _sheetRow: 10, Name: 'Felix', Gender: 'M', Father: 'Deepu', 'Year of Birth': '2018' },
+                { _sourceId: 's1', _sheetRow: 11, Name: 'Freya', Gender: 'F', Father: 'Deepu', 'Year of Birth': '2020' }
+            ];
+            const tree217 = buildTree(rows217);
+            const idOf = (name) => tree217.all.find(n => n.name === name).id;
+            // ppy 8 = the app's native pixels-per-year floor (computeDynamicPpy), so generations do not overlap.
+            const layoutFor = (collapsed) => flattenTreeLayout(layoutSubtree(tree217.root, tree217, {
+                collapsedNodes: collapsed, visibleNodes: tree217.getVisibleNodes(collapsed),
+                rootNodeYob: tree217.getStats().rootNodeYob, ppy: 8
+            }, new Set()));
+
+            // 1. The bus-bar under Babu/Celine is tagged with its geometry and the siblings it joins.
+            const open = layoutFor(new Set());
+            const bars = open.paths.filter(p => p.type === 'bus-bar');
+            const rowBar = bars.find(p => p.bar && p.bar.siblingIds.includes(idOf('Minu')));
+            assert('Test 217.01: Every bus-bar carries a `bar` descriptor and the parents\' bar joins Jomon, Minu, Deepu in layout order',
+                bars.length > 0 && bars.every(p => p.bar && Array.isArray(p.bar.siblingIds)) &&
+                rowBar.bar.siblingIds.join(',') === [idOf('Jomon'), idOf('Minu'), idOf('Deepu')].join(','));
+            assertEqual('Test 217.02: Only the siblings with children of their own are foldable (Minu is childless)',
+                rowBar.bar.foldableIds.join(','), [idOf('Jomon'), idOf('Deepu')].join(','));
+            const barNums = rowBar.d.match(/-?\d+(?:\.\d+)?/g).map(Number);
+            const xs = barNums.filter((_, i) => i % 2 === 0), ys = barNums.filter((_, i) => i % 2 === 1);
+            assert('Test 217.03: The bar descriptor spans the drawn path horizontally (x1/x2 = leftmost/rightmost drop) at the bus-bar altitude (y = min y of the path)',
+                rowBar.bar.x1 === Math.min(...xs) && rowBar.bar.x2 === Math.max(...xs) && rowBar.bar.y === Math.min(...ys) &&
+                [idOf('Babu'), idOf('Celine')].includes(rowBar.bar.parentId));
+            const jomonCard = open.nodes.find(n => n.person.id === idOf('Jomon'));
+            const deepuCard = open.nodes.find(n => n.person.id === idOf('Deepu'));
+            const parentCard = open.nodes.find(n => n.person.id === rowBar.bar.parentId);
+            assert('Test 217.04: The bar\'s horizontal run sits strictly between the parents\' card bottom and the sibling cards\' top, so its hit stroke never covers a card',
+                rowBar.bar.y < jomonCard.y && rowBar.bar.y < deepuCard.y && rowBar.bar.y >= parentCard.y + 76);
+
+            // 2. Folded state: collapsing the foldable siblings keeps all three siblings AND the bar on screen.
+            const foldedSet = new Set(rowBar.bar.foldableIds);
+            const folded = layoutFor(foldedSet);
+            const foldedBar = folded.paths.find(p => p.type === 'bus-bar' && p.bar.siblingIds.includes(idOf('Minu')));
+            assert('Test 217.05: After folding, Jomon, Minu and Deepu stay visible, their children are hidden, and the bar still lists the same foldable siblings',
+                ['Jomon', 'Minu', 'Deepu'].every(n => folded.nodes.some(c => c.person.id === idOf(n))) &&
+                ['Eileen', 'Fiona'].every(n => !folded.nodes.some(c => c.person.id === idOf(n))) &&
+                foldedBar.bar.foldableIds.join(',') === rowBar.bar.foldableIds.join(','));
+            assert('Test 217.06: The folded row is narrower than the open row (the whole point of the fold)',
+                folded.width < open.width);
+            assertEqual('Test 217.07: isSiblingBarFolded is false while any foldable sibling is open, true once all are collapsed, and never true for a childless row',
+                [isSiblingBarFolded(rowBar.bar, new Set()), isSiblingBarFolded(rowBar.bar, new Set([idOf('Jomon')])),
+                 isSiblingBarFolded(rowBar.bar, foldedSet), isSiblingBarFolded({ foldableIds: [] }, new Set())].join('|'),
+                'false|false|true|false');
+
+            // 3. The toggle plan: fold remembers the camera; unfold restores exactly what the fold added.
+            const cam0 = { x: -2853, y: 38.4, z: 0.26 };
+            const cam1 = { x: 10, y: 20, z: 0.8 };
+            const foldPlan = planSiblingBarToggle(rowBar.bar, new Set([idOf('Deepu')]), null, cam0);
+            assertEqual('Test 217.08: First click on a partly-open row FOLDS only the still-open siblings and remembers the current camera',
+                [foldPlan.action, foldPlan.ids.join(','), JSON.stringify(foldPlan.camera)].join('|'),
+                `fold|${idOf('Jomon')}|${JSON.stringify(cam0)}`);
+            const unfoldPlan = planSiblingBarToggle(rowBar.bar, foldedSet, { addedIds: foldPlan.ids, camera: foldPlan.camera }, cam1);
+            assertEqual('Test 217.09: Second click UNFOLDS exactly the sibling the fold collapsed (Deepu, collapsed by hand before, stays collapsed) and restores the pre-fold camera',
+                [unfoldPlan.action, unfoldPlan.ids.join(','), JSON.stringify(unfoldPlan.camera)].join('|'),
+                `unfold|${idOf('Jomon')}|${JSON.stringify(cam0)}`);
+            const manualPlan = planSiblingBarToggle(rowBar.bar, foldedSet, null, cam1);
+            assertEqual('Test 217.10: With no remembered fold (row collapsed by hand or restored from a shared URL) a click re-opens every foldable sibling and leaves the camera alone',
+                [manualPlan.action, manualPlan.ids.join(','), String(manualPlan.camera)].join('|'), `unfold|${rowBar.bar.foldableIds.join(',')}|null`);
+            const refoldPlan = planSiblingBarToggle(rowBar.bar, new Set([idOf('Deepu')]), { addedIds: [idOf('Jomon'), idOf('Deepu')], camera: cam0 }, cam1);
+            assertEqual('Test 217.11: Re-folding a row the user partly re-opened keeps the ORIGINAL camera and the union of added ids, so the next unfold still returns to the first view',
+                [refoldPlan.action, refoldPlan.ids.slice().sort().join(','), JSON.stringify(refoldPlan.camera)].join('|'),
+                `fold|${[idOf('Jomon'), idOf('Deepu')].sort().join(',')}|${JSON.stringify(cam0)}`);
+            assertEqual('Test 217.12: Applying the plans through withSetMembers round-trips the collapsed set (fold adds, unfold removes, untouched ids survive)',
+                [...withSetMembers(withSetMembers(new Set(['keep']), foldPlan.ids, true), unfoldPlan.ids, false)].join(','), 'keep');
+
+            // 4. Tooltips and the click target.
+            assertEqual('Test 217.13: Tooltip explains both directions of the toggle',
+                [describeSiblingBarAction(2, false), describeSiblingBarAction(1, true)].join('|'),
+                'Collapse all 2 sibling branches and zoom to fit the siblings|Expand the collapsed sibling branch and return to the previous view');
+            const svgBlock = (() => { const s = appCode.indexOf('const SiblingBusBar = React.memo('); return appCode.slice(s, appCode.indexOf('\n});', s)); })();
+            assert('Test 217.14: The hit stroke is an `interactive-element` (so pointer-down never starts a canvas drag), sized in SCREEN pixels via --camera-z, and clicks stop propagating to the card/canvas handlers',
+                /className="interactive-element sibling-bar-hit cursor-pointer"/.test(svgBlock) &&
+                svgBlock.includes("strokeWidth: `calc(${SIBLING_BAR_HIT_PX}px / var(--camera-z, 1))`") &&
+                /pointerEvents: 'stroke'/.test(svgBlock) &&
+                /onPointerDown=\{\(e\) => e\.stopPropagation\(\)\}/.test(svgBlock) &&
+                /e\.stopPropagation\(\); onToggle\(bar\);/.test(svgBlock) &&
+                shouldIgnorePointerDown({ button: 0, pointerType: 'mouse', target: { closest: (sel) => sel === '.interactive-element' ? {} : null } }, 0) === true);
+            assert('Test 217.15: The zoomed canvas layer publishes --camera-z and useSiblingBarFold frames the siblings only after the collapsed layout is committed (useLayoutEffect on collapsedNodes)',
+                appCode.includes("transformOrigin: '0 0', '--camera-z': camera.z") &&
+                /useLayoutEffect\(\(\) => \{\s*if \(!pendingFrameIdsRef\.current\) return;[\s\S]*?framePeople\(ids, SIBLING_BAR_FRAME_OPTIONS\);\s*\}, \[collapsedNodes, framePeople\]\);/.test(appCode));
+        } catch (e) {
+            assertEqual('Test 217 execution failed', e.message, '');
+        }
+    }
+
+    // ══════════════════════════════════════════════════════════════════════════
+    //  218. Phone Layout: Bottom-Docked Details Panel, Narrow Timeline Gutter & Touch Targets
+    // ══════════════════════════════════════════════════════════════════════════
+    {
+        section('218. Phone Layout: Bottom-Docked Details Panel, Narrow Timeline Gutter & Touch Targets');
+        try {
+            assertEqual('Test 218.01: Viewports up to 639px wide (portrait phones) get the compact layout; 640px (Tailwind sm) and up do not',
+                [isCompactViewportWidth(390), isCompactViewportWidth(639), isCompactViewportWidth(640), isCompactViewportWidth(1280)].join('|'),
+                'true|true|false|false');
+            assertEqual('Test 218.02: The details panel reserves its width beside the canvas on desktop but none on phones (it docks below instead)',
+                [resolveDockedSidebarWidth(360, false), resolveDockedSidebarWidth(360, true)].join('|'), '360|0');
+            // Regression: a docked width of 0 used to be treated as "unset" (`sidebarWidth || 360`), shrinking the
+            // framing viewport to 30px on a 390px phone and zooming the folded siblings out to z=0.14.
+            const viewportDims = new Function('window', extractFunction(appCode, 'resolveViewportDimensions') +
+                '; return [resolveViewportDimensions({ container: { clientWidth: 390, clientHeight: 380 }, isSidebarOpen: true, sidebarWidth: 0 }),' +
+                ' resolveViewportDimensions({ container: { clientWidth: 920, clientHeight: 800 }, isSidebarOpen: true, sidebarWidth: 360 })];')({ innerWidth: 1280, innerHeight: 800 });
+            assertEqual('Test 218.02b: resolveViewportDimensions keeps the full window width for a 0px (bottom-docked) sidebar and subtracts a real width on desktop',
+                JSON.stringify(viewportDims), JSON.stringify([{ contW: 1280, contH: 380 }, { contW: 920, contH: 800 }]));
+            assertEqual('Test 218.03: Desktop dock: right-hand column of the configured width; hidden → 0px wide',
+                JSON.stringify([resolveSidebarDockLayout({ dockBottom: false, isVisible: true, sidebarWidth: 420 }),
+                                resolveSidebarDockLayout({ dockBottom: false, isVisible: false, sidebarWidth: 420 }).style]),
+                JSON.stringify([{ className: 'border-l', style: { width: '420px' } }, { width: 0 }]));
+            assertEqual('Test 218.04: Phone dock: full-width bottom sheet 55vh tall; hidden → 0px tall',
+                JSON.stringify([resolveSidebarDockLayout({ dockBottom: true, isVisible: true, sidebarWidth: 420 }),
+                                resolveSidebarDockLayout({ dockBottom: true, isVisible: false, sidebarWidth: 420 }).style]),
+                JSON.stringify([{ className: 'w-full border-t rounded-t-2xl', style: { height: BOTTOM_DOCK_HEIGHT } }, { height: 0 }]));
+            assertEqual('Test 218.05: Timeline gutter: 48px desktop, 32px (year labels only) on phones, 0 in standalone exports',
+                [resolveTimelineGutterWidth({ isStandalone: false, isCompact: false }), resolveTimelineGutterWidth({ isStandalone: false, isCompact: true }),
+                 resolveTimelineGutterWidth({ isStandalone: true, isCompact: false }), TIMELINE_GUTTER_WIDTH, TIMELINE_GUTTER_COMPACT_WIDTH].join('|'),
+                '48|32|0|48|32');
+            // Camera math consumes the same gutter helper (so framing/fit never assume the 48px desktop gutter on phones).
+            assert('Test 218.06: Fit-to-screen, camera bounds and people framing all derive the gutter from resolveTimelineGutterWidth()',
+                /const timelineWidth = resolveTimelineGutterWidth\(\);\s*const usableContW = Math\.max\(100, contW - timelineWidth\);/.test(appCode) &&
+                appCode.includes('return computeCameraBounds({ treeW, treeH, contW, contH, z, timelineWidth: resolveTimelineGutterWidth() });') &&
+                appCode.includes('box, contW: effectiveContW, contH, preferredZ, timelineWidth: resolveTimelineGutterWidth(),'));
+            // Shell wiring: stacked layout, docked width for the camera, dvh-safe height, 44px touch targets.
+            const appRootBlock = (() => { const s = appCode.indexOf('const AppRootView = ('); return appCode.slice(s, appCode.indexOf('\n);', s)); })();
+            assert('Test 218.07: AppRootView stacks canvas over the details panel on phones (flex-col) and sizes itself with 100dvh (100vh fallback)',
+                appRootBlock.includes("app-shell flex ${isCompactViewport ? 'flex-col' : ''} w-screen") &&
+                appCode.includes('.app-shell { height: 100vh; height: 100dvh; }'));
+            const coreBlock = (() => { const s = appCode.indexOf('function useAppCoreState()'); return appCode.slice(s, appCode.indexOf('\n}', s)); })();
+            assert('Test 218.08: useAppCoreState derives isCompactViewport (matchMedia-backed), the docked sidebar width and the gutter width, and the view model feeds the DOCKED width to the camera and the map',
+                /const isCompactViewport = useCompactViewport\(\);/.test(coreBlock) &&
+                /const dockedSidebarWidth = resolveDockedSidebarWidth\(sidebar\.sidebarWidth, isCompactViewport\);/.test(coreBlock) &&
+                /const timelineGutterWidth = resolveTimelineGutterWidth\(\{ isStandalone, isCompact: isCompactViewport \}\);/.test(coreBlock) &&
+                appCode.includes('isAnySidebarOpen: core.isAnySidebarOpen, sidebarWidth: core.dockedSidebarWidth,') &&
+                appCode.includes('sidebarWidth: core.dockedSidebarWidth, isAnySidebarOpen: core.isAnySidebarOpen,') &&
+                appCode.includes('dockBottom: core.isCompactViewport,'));
+            assert('Test 218.09: PersonSidebar hides its width-resize handle when docked at the bottom and TopNavigation gets the compact flag',
+                appCode.includes('{isVisible && !dockBottom && <SidebarResizeHandle onResizeStart={onResizeStart} />}') &&
+                appCode.includes('isCompactViewport: core.isCompactViewport,'));
+            const zoomBlock = (() => { const s = appCode.indexOf('const ZoomControls = ('); return appCode.slice(s, appCode.indexOf('\n};', s)); })();
+            assertEqual('Test 218.10: All four zoom buttons use p-3 below the sm breakpoint (44px touch targets) and p-2 on desktop',
+                (zoomBlock.match(/className="p-3 sm:p-2 /g) || []).length, 4);
+            assert('Test 218.11: TimelineLabels drops the era bands below the 48px gutter and keeps the year labels; TimelineGrid lines start after the gutter',
+                appCode.includes('const showEraBands = gutterWidth >= 48;') &&
+                appCode.includes('{showEraBands && GENERATIONS.map(gen => {') &&
+                appCode.includes("paddingLeft: isStandalone ? 16 : gutterWidth"));
+            assert('Test 218.12: Buttons/links/inputs opt out of the 300ms double-tap zoom delay (touch-action: manipulation)',
+                appCode.includes('.app-shell button, .app-shell a, .app-shell input { touch-action: manipulation; }'));
+        } catch (e) {
+            assertEqual('Test 218 execution failed', e.message, '');
         }
     }
 

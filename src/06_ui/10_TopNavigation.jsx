@@ -822,11 +822,14 @@ function useTopNavigationHandlers({ showMap, setShowMap, setIsSidebarVisible, se
 
 /**
  * Right-aligned container panel in top navigation housing search bar or compact toolbar.
+ * On desktop it is as wide as the details sidebar it sits above; on phones (`isCompactViewport`)
+ * the sidebar docks below the canvas, so the panel spans the full width instead.
  *
  * @param {object} props
  * @param {boolean} props.isSearchActive - Whether omni-search is currently expanded
  * @param {boolean} props.isSidebarVisible - Whether details sidebar is open
  * @param {number} props.sidebarWidth - Configured sidebar width in pixels
+ * @param {boolean} [props.isCompactViewport=false] - Phone layout
  * @param {React.ReactNode} props.activeSearchBar - Rendered active search bar element
  * @param {React.ReactNode} props.inactiveToolbar - Rendered inactive toolbar element
  * @returns {React.ReactNode}
@@ -835,16 +838,20 @@ function useTopNavigationHandlers({ showMap, setShowMap, setIsSidebarVisible, se
  * <TopNavigationRightPanel isSearchActive={false} isSidebarVisible={true} sidebarWidth={360} activeSearchBar={null} inactiveToolbar={<div>Toolbar</div>} />
  *
  * @example
- * <TopNavigationRightPanel isSearchActive={true} isSidebarVisible={false} sidebarWidth={360} activeSearchBar={<div>Search</div>} inactiveToolbar={null} />
+ * <TopNavigationRightPanel isSearchActive={true} isSidebarVisible={false} sidebarWidth={360} isCompactViewport={true} activeSearchBar={<div>Search</div>} inactiveToolbar={null} />
  */
-const TopNavigationRightPanel = ({ isSearchActive, isSidebarVisible, sidebarWidth, activeSearchBar, inactiveToolbar }) => (
-    <div 
-        className={`flex flex-col gap-3 items-end pointer-events-auto ${(isSidebarVisible || isSearchActive) ? 'px-6' : 'pr-4'}`}
-        style={{ width: (isSidebarVisible || isSearchActive) ? `${sidebarWidth}px` : 'auto' }}
-    >
-        {isSearchActive ? activeSearchBar : inactiveToolbar}
-    </div>
-);
+const TopNavigationRightPanel = ({ isSearchActive, isSidebarVisible, sidebarWidth, isCompactViewport = false, activeSearchBar, inactiveToolbar }) => {
+    const isDocked = isSidebarVisible || isSearchActive;
+    const width = isCompactViewport ? (isDocked ? '100%' : 'auto') : (isDocked ? `${sidebarWidth}px` : 'auto');
+    return (
+        <div 
+            className={`flex flex-col gap-3 items-end pointer-events-auto ${isDocked ? (isCompactViewport ? 'px-4' : 'px-6') : 'pr-4'}`}
+            style={{ width }}
+        >
+            {isSearchActive ? activeSearchBar : inactiveToolbar}
+        </div>
+    );
+};
 
 /**
  * Main navigation row containing right-side interactive toolbars.
@@ -856,6 +863,7 @@ const TopNavigationRightPanel = ({ isSearchActive, isSidebarVisible, sidebarWidt
  * @param {boolean} props.isSearchActive - Whether omni search input is expanded.
  * @param {boolean} props.isSidebarVisible - Whether details sidebar is open.
  * @param {number} [props.sidebarWidth=360] - Width of details sidebar in pixels.
+ * @param {boolean} [props.isCompactViewport=false] - Phone layout (full-width right panel).
  * @param {Object} props.activeProps - Props for active search bar.
  * @param {Object} props.inactiveProps - Props for inactive navigation toolbar.
  * @returns {React.ReactElement}
@@ -867,7 +875,7 @@ const TopNavigationRightPanel = ({ isSearchActive, isSidebarVisible, sidebarWidt
  * <TopNavigationMainBar isStandalone={true} showLogs={true} isLoading={true} isSearchActive={true} isSidebarVisible={true} activeProps={{}} inactiveProps={{}} />
  */
 const TopNavigationMainBar = ({
-    isStandalone, showLogs, isLoading, isSearchActive, isSidebarVisible, sidebarWidth, activeProps, inactiveProps
+    isStandalone, showLogs, isLoading, isSearchActive, isSidebarVisible, sidebarWidth, isCompactViewport, activeProps, inactiveProps
 }) => (
     <div className="flex justify-between items-start">
         {!isStandalone && (
@@ -876,7 +884,7 @@ const TopNavigationMainBar = ({
         )}
         {!showLogs && !isLoading && (
             <TopNavigationRightPanel
-                isSearchActive={isSearchActive} isSidebarVisible={isSidebarVisible} sidebarWidth={sidebarWidth}
+                isSearchActive={isSearchActive} isSidebarVisible={isSidebarVisible} sidebarWidth={sidebarWidth} isCompactViewport={isCompactViewport}
                 activeSearchBar={<TopNavigationActiveSearchBar {...activeProps} />}
                 inactiveToolbar={<TopNavigationInactiveToolbar {...inactiveProps} />}
             />
@@ -975,7 +983,7 @@ const TopNavigation = (props) => {
         showAI, setShowAI, canGoBack, canGoForward, onGoBack, onGoForward, isAILoading, handleExportImage, isExporting,
         handleExportStandaloneApp, isExportingApp, handleExportA4Print, isExportingA4,
         showMap, setShowMap, onAiSubmitQuery, omniSelectedIndex, setOmniSelectedIndex,
-        setIsSidebarVisible = () => {}, setActiveFilter = () => {}
+        setIsSidebarVisible = () => {}, setActiveFilter = () => {}, isCompactViewport = false
     } = props;
     const isStandalone = isStandaloneExportMode();
     const setFocusId = handleSetFocusId;
@@ -991,7 +999,7 @@ const TopNavigation = (props) => {
         <div className="absolute top-4 left-0 right-0 z-50 flex flex-col gap-3 pointer-events-none">
             <TopNavigationMainBar
                 isStandalone={isStandalone} showLogs={showLogs} isLoading={isLoading}
-                isSearchActive={isSearchActive} isSidebarVisible={isSidebarVisible} sidebarWidth={sidebarWidth}
+                isSearchActive={isSearchActive} isSidebarVisible={isSidebarVisible} sidebarWidth={sidebarWidth} isCompactViewport={isCompactViewport}
                 activeProps={activeProps} inactiveProps={inactiveProps}
             />
             <TopNavigationErrorBanner errorMsg={errorMsg} onClear={() => setErrorMsg('')} />
@@ -1033,7 +1041,7 @@ const BUTTON_DOCUMENTATION_CATALOG = {
         summary: 'Opens the **Appearance** tab of Settings: ten **Material 3 tonal palettes** — `Classic Forest`, `Soft Pastels`, `Earthy & Warm`, `Ocean Breeze`, `Lavender Dusk`, `Solarized Light`, `Dark Forest`, `Midnight Black`, `Solarized Dark` and `High Contrast`. Picking a card applies it **instantly** and stores it in the `ft_color_theme` cookie.',
         examples: [
             { label: 'Solarized', detail: 'Choose **Solarized Light** for the cream base3 canvas by day and **Solarized Dark** for the teal base03 canvas at night.' },
-            { label: 'Back to Default', detail: 'Click **Reset to Classic** in the footer; the cookie keeps `classic` so the next visit starts there.' }
+            { label: 'Back to Default', detail: 'Click **Reset to Solarized Dark** in the footer; the cookie keeps `solarized-dark` (the default) so the next visit starts there.' }
         ]
     },
     'Clear stored data (cookies & local storage)': {
@@ -1385,7 +1393,7 @@ function resolveThemeCardDoc(name) {
         title: `Colour theme: ${theme.name}`, badge: `Appearance • ${theme.mode === 'dark' ? 'Dark' : 'Light'} palette`,
         summary: `${theme.blurb} Clicking applies the **${theme.name}** palette **instantly** to every screen and remembers it in the \`ft_color_theme\` cookie on this device.`,
         examples: [
-            { label: 'Try It', detail: `Click the card; the canvas, person cards and buttons repaint at once. Pick **Classic Forest** (or **Reset to Classic**) to go back.` },
+            { label: 'Try It', detail: `Click the card; the canvas, person cards and buttons repaint at once. Pick **Solarized Dark** (or **Reset to Solarized Dark**) to go back to the default.` },
             { label: 'Material 3', detail: 'Every theme is a tonal palette generated from a few seed colours, so text keeps its contrast on the new surfaces.' }
         ]
     };

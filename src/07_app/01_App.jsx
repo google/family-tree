@@ -90,7 +90,15 @@ function useAppCoreState() {
     const shell = useAppShellPanels(isStandalone);
     const treeStats = useMemo(() => data.tree.getStats(), [data.tree]);
     const [sheetUrl, setSheetUrl] = useState(() => (hasInitialSheetToLoad() ? resolveInitialSheetUrl() : ''));
-    return { isStandalone, ...theme, ...data, ...nav, ...panels, ...sidebar, ...shell, treeStats, sheetUrl, setSheetUrl };
+    // Phone layout: the details panel docks BELOW the canvas, so it reserves no width beside it
+    // and the timeline gutter narrows to year labels only.
+    const isCompactViewport = useCompactViewport();
+    const dockedSidebarWidth = resolveDockedSidebarWidth(sidebar.sidebarWidth, isCompactViewport);
+    const timelineGutterWidth = resolveTimelineGutterWidth({ isStandalone, isCompact: isCompactViewport });
+    return {
+        isStandalone, ...theme, ...data, ...nav, ...panels, ...sidebar, ...shell, treeStats, sheetUrl, setSheetUrl,
+        isCompactViewport, dockedSidebarWidth, timelineGutterWidth
+    };
 }
 
 /**
@@ -229,7 +237,8 @@ function useAppLayoutAndExports(params) {
         tree: params.tree, activeFilter: params.activeFilter, focusId: params.focusId,
         aiHighlightedIds: params.aiHighlightedIds, rootNodeYob: params.treeStats.rootNodeYob,
         visibleNodes: params.visibleNodes, collapsedNodes: params.collapsedNodes,
-        toggleCollapse: params.toggleCollapse, ppy: params.ppy, siblingGap: params.siblingGap,
+        toggleCollapse: params.toggleCollapse, toggleSiblingBar: params.toggleSiblingBar,
+        ppy: params.ppy, siblingGap: params.siblingGap,
         handleSetFocusId: params.handleSetFocusId
     });
 
@@ -272,6 +281,7 @@ function useAppLayoutAndExports(params) {
 function buildTopNavProps(core, viewport, focusNav, layoutExp) {
     return {
         tree: core.tree, isSidebarVisible: core.isAnySidebarOpen, sidebarWidth: core.sidebarWidth,
+        isCompactViewport: core.isCompactViewport,
         isResizing: core.isResizingSidebar, sheetUrl: core.sheetUrl, setSheetUrl: core.setSheetUrl,
         isLoading: core.isLoading, searchQuery: viewport.searchQuery,
         setSearchQuery: viewport.setSearchQuery, handleSetFocusId: focusNav.handleSetFocusId,
@@ -310,10 +320,11 @@ function buildViewportProps(core, viewport, focusNav, layoutExp) {
         handlePointerUp: viewport.handlePointerUp, handleWheel: viewport.handleWheel, tree: core.tree,
         activeFilter: core.activeFilter, handleFilterBy: focusNav.handleFilterBy,
         handleExportMapCSV: layoutExp.handleExportMapCSV, setShowMap: core.setShowMap,
-        sidebarWidth: core.sidebarWidth, isAnySidebarOpen: core.isAnySidebarOpen,
+        sidebarWidth: core.dockedSidebarWidth, isAnySidebarOpen: core.isAnySidebarOpen,
         isStandalone: core.isStandalone, dynamicYears: viewport.dynamicYears, treeStats: core.treeStats,
         camera: viewport.camera, ppy: viewport.ppy, isShifting: viewport.isShifting,
-        treeRef: viewport.treeRef, layoutConfig: layoutExp.layoutConfig, isLoading: core.isLoading
+        treeRef: viewport.treeRef, layoutConfig: layoutExp.layoutConfig, isLoading: core.isLoading,
+        timelineGutterWidth: core.timelineGutterWidth
     };
 }
 
@@ -334,7 +345,7 @@ function buildViewportProps(core, viewport, focusNav, layoutExp) {
 function buildSidebarProps(core, viewport, focusNav) {
     return {
         focusPerson: core.tree.get(core.focusId), activeFilter: core.activeFilter,
-        onFilterBy: focusNav.handleFilterBy, sidebarWidth: core.sidebarWidth,
+        onFilterBy: focusNav.handleFilterBy, sidebarWidth: core.sidebarWidth, dockBottom: core.isCompactViewport,
         onResizeStart: core.handleResizeStart, isResizing: core.isResizingSidebar,
         tree: core.tree, setFocusId: focusNav.handleSetFocusId, isVisible: core.isAnySidebarOpen,
         centerOnPerson: viewport.centerOnPerson, showLogs: core.showLogs, setShowLogs: core.setShowLogs,
@@ -363,7 +374,8 @@ function buildZoomProps(core, viewport) {
     return {
         setCamera: viewport.setCamera, clampCamera: viewport.clampCamera, centerOnPerson: viewport.centerOnPerson,
         fitToScreen: viewport.handleFitToScreen, focusId: core.focusId, rootId: core.tree.rootId,
-        setIsSidebarVisible: core.setIsSidebarVisible, closeAllPanels: core.closeAllPanels
+        setIsSidebarVisible: core.setIsSidebarVisible, closeAllPanels: core.closeAllPanels,
+        bottomDockLift: resolveBottomDockLift(core.isCompactViewport, core.isAnySidebarOpen)
     };
 }
 
@@ -452,7 +464,8 @@ function buildShellProps(core, viewport, focusNav, layoutExp, applyDemographicSe
             onSelect: (actionId) => dispatchRadialFabAction(actionId, { core, layoutExp, clearAllStoredData }),
             isHomeOpen: core.isHomeOpen, isStandalone: core.isStandalone, hasTree: Boolean(core.tree?.root),
             isLoading: core.isLoading, showMap: core.showMap, showAI: core.showAI, showLogs: core.showLogs,
-            isAILoading: viewport.isAILoading, isExportingApp: layoutExp.isExportingApp, isExportingA4: layoutExp.isExportingA4
+            isAILoading: viewport.isAILoading, isExportingApp: layoutExp.isExportingApp, isExportingA4: layoutExp.isExportingA4,
+            bottomDockLift: resolveBottomDockLift(core.isCompactViewport, core.isAnySidebarOpen)
         },
         settingsPanelProps: {
             isOpen: core.isSettingsOpen, initialTab: core.settingsTab,
@@ -479,7 +492,7 @@ function useAppViewModel() {
     const core = useAppCoreState();
     const viewport = useAppViewportState({
         tree: core.tree, focusId: core.focusId, treeStats: core.treeStats,
-        isAnySidebarOpen: core.isAnySidebarOpen, sidebarWidth: core.sidebarWidth,
+        isAnySidebarOpen: core.isAnySidebarOpen, sidebarWidth: core.dockedSidebarWidth,
         closeAllPanels: core.closeAllPanels, openAiPanel: core.openAiPanel,
         setShowMap: core.setShowMap, setTree: core.setTree
     });
@@ -498,6 +511,7 @@ function useAppViewModel() {
 
     return {
         showZoom: !core.showMap && !core.showLogs && !core.isLoading,
+        isCompactViewport: core.isCompactViewport,
         topNavProps: buildTopNavProps(core, viewport, focusNav, layoutExp),
         zoomProps: buildZoomProps(core, viewport),
         viewportProps: buildViewportProps(core, viewport, focusNav, layoutExp),
@@ -510,6 +524,8 @@ function useAppViewModel() {
  * Main application visual layout shell containing top navigation, zoom controls,
  * main canvas viewport, collateral sidebar panels, and the shell overlays
  * (Home emblem button, sheet-chooser home screen, radial settings FAB, and settings panel).
+ * Desktop lays the canvas and the details panel out side by side; phones
+ * (`isCompactViewport`) stack them, canvas above panel.
  *
  * @param {object} props
  * @param {object} props.topNavProps - Props for TopNavigation component
@@ -518,6 +534,7 @@ function useAppViewModel() {
  * @param {object} props.sidebarProps - Props for PersonSidebar component
  * @param {object} props.shellProps - Props for the home button, home screen, radial FAB and settings panel
  * @param {boolean} props.showZoom - Whether zoom controls should be displayed
+ * @param {boolean} [props.isCompactViewport=false] - Phone layout: stack canvas and details panel vertically
  * @returns {React.ReactNode}
  *
  * @example
@@ -538,10 +555,11 @@ function useAppViewModel() {
  *   sidebarProps={{}}
  *   shellProps={{ isHomeOpen: true, homeButtonProps: {}, homeScreenProps: { isOpen: true }, settingsFabProps: {}, settingsPanelProps: {} }}
  *   showZoom={false}
+ *   isCompactViewport={true}
  * />
  */
-const AppRootView = ({ topNavProps, zoomProps, viewportProps, sidebarProps, shellProps, showZoom }) => (
-    <div className="flex h-screen w-screen bg-white overflow-hidden text-slate-800 relative" style={{ fontFamily: '"Google Sans", system-ui, -apple-system, sans-serif' }}>
+const AppRootView = ({ topNavProps, zoomProps, viewportProps, sidebarProps, shellProps, showZoom, isCompactViewport = false }) => (
+    <div className={`app-shell flex ${isCompactViewport ? 'flex-col' : ''} w-screen bg-white overflow-hidden text-slate-800 relative`} style={{ fontFamily: '"Google Sans", system-ui, -apple-system, sans-serif' }}>
         <GlobalAppStyles />
         <ButtonDocTooltipOverlay />
         <TopNavigation {...topNavProps} />

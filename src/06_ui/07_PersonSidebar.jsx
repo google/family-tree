@@ -609,9 +609,62 @@ const SidebarMainPanels = ({
     </>
 );
 
+/** Share of the viewport height the details panel takes when docked below the canvas on phones. */
+const BOTTOM_DOCK_HEIGHT = '55vh';
+
+/**
+ * Inline style that lifts a bottom-anchored control (zoom bar, settings FAB) clear of the
+ * phone layout's bottom-docked details panel, so it never covers the panel's content. On
+ * desktop, or while no panel is open, the control keeps its normal `bottom-6` position.
+ *
+ * @param {boolean} isCompactViewport - Phone layout (see `isCompactViewportWidth`)
+ * @param {boolean} isAnySidebarOpen - Whether a details / filter / AI / logs panel is open
+ * @returns {{ bottom: string }|undefined}
+ *
+ * @example
+ * resolveBottomDockLift(true, true);    // => { bottom: 'calc(55vh + 1.5rem)' }
+ *
+ * @example
+ * resolveBottomDockLift(false, true);   // => undefined (desktop: the panel sits beside the canvas)
+ * resolveBottomDockLift(true, false);   // => undefined (nothing docked at the bottom)
+ */
+function resolveBottomDockLift(isCompactViewport, isAnySidebarOpen) {
+    if (!isCompactViewport || !isAnySidebarOpen) return undefined;
+    return { bottom: `calc(${BOTTOM_DOCK_HEIGHT} + 1.5rem)` };
+}
+
+/**
+ * Container geometry for the details panel: a right-hand column on desktop, or a bottom sheet
+ * stacked under the canvas on phones (`dockBottom`). Hidden panels collapse to 0px along the
+ * docking axis so the canvas can take the room back with a CSS transition.
+ *
+ * @param {Object} options
+ * @param {boolean} options.dockBottom - Phone layout (see `isCompactViewportWidth`)
+ * @param {boolean} options.isVisible - Whether the panel is open
+ * @param {number} options.sidebarWidth - Configured desktop width in px
+ * @returns {{ className: string, style: Object }}
+ *
+ * @example
+ * resolveSidebarDockLayout({ dockBottom: false, isVisible: true, sidebarWidth: 360 });
+ * // => { className: 'border-l', style: { width: '360px' } }
+ *
+ * @example
+ * resolveSidebarDockLayout({ dockBottom: true, isVisible: true, sidebarWidth: 360 });
+ * // => { className: 'w-full border-t rounded-t-2xl', style: { height: '55vh' } }
+ * resolveSidebarDockLayout({ dockBottom: true, isVisible: false, sidebarWidth: 360 }).style;
+ * // => { height: 0 }
+ */
+function resolveSidebarDockLayout({ dockBottom, isVisible, sidebarWidth }) {
+    if (dockBottom) {
+        return { className: 'w-full border-t rounded-t-2xl', style: { height: isVisible ? BOTTOM_DOCK_HEIGHT : 0 } };
+    }
+    return { className: 'border-l', style: { width: isVisible ? `${sidebarWidth}px` : 0 } };
+}
+
 /**
  * Collapsible side panel orchestrating detail views for persons, attribute directories,
- * active filters, system logs, and the AI Assistant.
+ * active filters, system logs, and the AI Assistant. Docks to the right of the canvas on
+ * desktop and below it on phones (`dockBottom`).
  *
  * @param {object} props
  * @param {object} [props.focusPerson] - Currently selected person node
@@ -621,6 +674,7 @@ const SidebarMainPanels = ({
  * @param {Function} props.setFocusId - State setter to select a person ID
  * @param {boolean} props.isVisible - Whether the sidebar is currently open/visible
  * @param {number} [props.sidebarWidth=360] - Width of sidebar in pixels
+ * @param {boolean} [props.dockBottom=false] - Phone layout: full-width bottom sheet instead of a right column
  * @param {Function} props.onResizeStart - Pointer down handler to initiate sidebar resizing
  * @param {boolean} [props.isResizing=false] - Whether a resize drag operation is active
  * @param {boolean} props.showLogs - Whether system logs view is active
@@ -661,7 +715,7 @@ const SidebarMainPanels = ({
  * />
  */
 const PersonSidebar = ({ 
-    focusPerson, activeFilter, onFilterBy, tree, setFocusId, isVisible, sidebarWidth = 360,
+    focusPerson, activeFilter, onFilterBy, tree, setFocusId, isVisible, sidebarWidth = 360, dockBottom = false,
     onResizeStart, isResizing = false, showLogs, setShowLogs, logs, isLoading, showAI, setShowAI,
     isAILoading, setIsAILoading, onAiProfilesResponded, pendingAiQuery, setPendingAiQuery,
     showMap, setShowMap, omniSelectedIndex, setOmniSelectedIndex, centerOnPerson
@@ -671,13 +725,15 @@ const PersonSidebar = ({
 
     const aiProps = { isOpen: showAI, setIsOpen: setShowAI, tree, handleSetFocusId: setFocusId, isLoading: isAILoading, setIsLoading: setIsAILoading, onAiProfilesResponded, pendingAiQuery, setPendingAiQuery };
     const filteredProps = { activeFilter, tree, setFocusId, onFilterBy, setShowMap, setShowAI, setShowLogs, setPendingAiQuery, omniSelectedIndex, setOmniSelectedIndex };
+    const dock = resolveSidebarDockLayout({ dockBottom, isVisible, sidebarWidth });
 
     return (
         <div 
-            className={`bg-white border-l border-slate-200 shadow-2xl flex flex-col z-40 sidebar-scroll relative shrink-0 overflow-hidden ${isResizing ? 'transition-none' : 'transition-all duration-300 ease-in-out'} ${isVisible ? 'opacity-100' : 'w-0 border-none opacity-0 pointer-events-none'}`}
-            style={{ width: isVisible ? `${sidebarWidth}px` : 0 }}
+            data-testid="person-sidebar"
+            className={`bg-white border-slate-200 shadow-2xl flex flex-col z-40 sidebar-scroll relative shrink-0 overflow-hidden ${dock.className} ${isResizing ? 'transition-none' : 'transition-all duration-300 ease-in-out'} ${isVisible ? 'opacity-100' : 'border-none opacity-0 pointer-events-none'}`}
+            style={dock.style}
         >
-            {isVisible && <SidebarResizeHandle onResizeStart={onResizeStart} />}
+            {isVisible && !dockBottom && <SidebarResizeHandle onResizeStart={onResizeStart} />}
             <SidebarMainPanels
                 aiProps={aiProps} showLogs={showLogs} showAI={showAI} logs={logs} isLoading={isLoading}
                 setShowLogs={setShowLogs} activeFilter={activeFilter} filteredProps={filteredProps}

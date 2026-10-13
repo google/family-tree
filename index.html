@@ -103,6 +103,21 @@ limitations under the License.
     };
   </script>
   <!-- FT_TAILWIND_THEME_CONFIG:END -->
+  <!-- Pre-paints the stored (or default) theme on <html> before React mounts so dark themes never flash white. -->
+  <!-- FT_THEME_BOOT:BEGIN -->
+  <script>
+    (function () {
+      try {
+        var match = document.cookie.match(/(?:^|; )ft_color_theme=([^;]*)/);
+        var stored = match ? decodeURIComponent(match[1]) : (window.localStorage && localStorage.getItem('ft_pref_ft_color_theme'));
+        var canvases = {'classic':['255 255 255','light'],'pastel':['255 255 255','light'],'earthy':['253 250 244','light'],'solarized-light':['253 246 227','light'],'dark':['18 19 22','dark'],'solarized-dark':['0 43 54','dark'],'contrast':['255 255 255','light']};
+        var entry = canvases[stored] || canvases['solarized-dark'];
+        document.documentElement.style.setProperty('--tw-white', entry[0]);
+        document.documentElement.style.colorScheme = entry[1];
+      } catch (e) {}
+    })();
+  </script>
+  <!-- FT_THEME_BOOT:END -->
 
   <!-- Google Fonts -->
   <link rel="preconnect" href="https://fonts.googleapis.com">

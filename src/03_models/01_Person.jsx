@@ -73,31 +73,6 @@ class Person {
     }
 
     /**
-     * Applies resolved religious vocation and gender attributes to a person.
-     *
-     * @param {Person} p - Person instance to mutate
-     * @param {'Nun'|'Priest'} vocation - Religious role name
-     * @param {'F'|'M'} gender - Associated gender code
-     *
-     * @example
-     * const p = { name: 'Sr. Teresa' };
-     * Person._applyReligiousVocation(p, 'Nun', 'F');
-     * // => p.isNun === true, p.isCelibate === true, p.job === 'Nun', p.gender === 'F'
-     *
-     * @example
-     * const p = { name: 'Fr. Joseph' };
-     * Person._applyReligiousVocation(p, 'Priest', 'M');
-     * // => p.isPriest === true, p.isCelibate === true, p.job === 'Priest', p.gender === 'M'
-     */
-    static _applyReligiousVocation(p, vocation, gender) {
-        p.isCelibate = true;
-        if (vocation === 'Nun') p.isNun = true;
-        else if (vocation === 'Priest') p.isPriest = true;
-        if (!p.job) p.job = vocation;
-        if (!p.gender) p.gender = gender;
-    }
-
-    /**
      * Infers male gender from traditional patriarchal and generational name suffixes.
      *
      * @param {string} lowerName - Normalized lowercase name
@@ -113,31 +88,6 @@ class Person {
      */
     static _hasMaleNameSuffix(lowerName) {
         return lowerName.endsWith('appan') || lowerName.endsWith('son') || /\bson(?:\s+\d+)?$/i.test(lowerName);
-    }
-
-    /**
-     * Identifies religious title prefix in normalized name or nickname ('sr.' for Nun, 'fr.' for Priest).
-     *
-     * @param {string} lowerName - Normalized lowercase name
-     * @param {string} lowerNick - Normalized lowercase nickname
-     * @returns {?{ vocation: string, gender: string }} Vocation object or null
-     *
-     * @example
-     * Person._matchReligiousPrefix('sr. maria', '');
-     * // => { vocation: 'Nun', gender: 'F' }
-     *
-     * @example
-     * Person._matchReligiousPrefix('fr. thomas', '');
-     * // => { vocation: 'Priest', gender: 'M' }
-     */
-    static _matchReligiousPrefix(lowerName, lowerNick) {
-        if (/^sr(?:\.|\s)\s*/i.test(lowerName) || /^sr(?:\.|\s)\s*/i.test(lowerNick)) {
-            return { vocation: 'Nun', gender: 'F' };
-        }
-        if (/^fr(?:\.|\s)\s*/i.test(lowerName) || /^fr(?:\.|\s)\s*/i.test(lowerNick)) {
-            return { vocation: 'Priest', gender: 'M' };
-        }
-        return null;
     }
 
     /**
@@ -169,13 +119,8 @@ class Person {
             if (titleMatch.isPriest) p.isPriest = true;
             if (titleMatch.career && !p.job) p.job = titleMatch.career;
             if (titleMatch.gender && !p.gender) p.gender = titleMatch.gender;
-        } else {
-            const prefix = Person._matchReligiousPrefix(lowerName, lowerNick);
-            if (prefix) {
-                Person._applyReligiousVocation(p, prefix.vocation, prefix.gender);
-            } else if (!p.gender && Person._hasMaleNameSuffix(lowerName)) {
-                p.gender = 'M';
-            }
+        } else if (!p.gender && Person._hasMaleNameSuffix(lowerName)) {
+            p.gender = 'M';
         }
     }
 

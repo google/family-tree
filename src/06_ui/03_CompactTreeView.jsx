@@ -190,39 +190,126 @@ FamilyTreeBuilder._computeLayoutFn = function(tree, layout) {
 FamilyTreeBuilder.computeLayout = FamilyTreeBuilder._computeLayoutFn;
 
 /**
- * Renders the SVG connector layer containing orthogonal paths between ancestors, spouses, and descendants.
+ * Whether a sibling bus-bar is currently "folded": every sibling on it that has a branch of
+ * its own is collapsed. Bars whose siblings are all childless are never foldable.
+ *
+ * @param {{ foldableIds: string[] }} bar - Bar descriptor from `FamilyTree._describeSiblingBar`
+ * @param {Set<string>} collapsedNodes - Currently collapsed node IDs
+ * @returns {boolean}
+ *
+ * @example
+ * isSiblingBarFolded({ foldableIds: ['a', 'c'] }, new Set(['a', 'c', 'zzz']));
+ * // => true
+ *
+ * @example
+ * isSiblingBarFolded({ foldableIds: ['a', 'c'] }, new Set(['a']));   // => false (c still open)
+ * isSiblingBarFolded({ foldableIds: [] }, new Set());                 // => false (nothing to fold)
+ */
+function isSiblingBarFolded(bar, collapsedNodes) {
+    if (!bar || bar.foldableIds.length === 0) return false;
+    return bar.foldableIds.every(id => collapsedNodes.has(id));
+}
+
+/** Screen-pixel width of the invisible click/tap stroke laid along a sibling bus-bar. */
+const SIBLING_BAR_HIT_PX = 28;
+
+/**
+ * Tooltip for a sibling bus-bar, e.g. "Collapse all 3 sibling branches and zoom to fit the siblings".
+ *
+ * @param {number} count - Number of siblings with a branch of their own
+ * @param {boolean} isFolded - Whether those branches are all collapsed right now
+ * @returns {string}
+ *
+ * @example
+ * describeSiblingBarAction(3, false); // => 'Collapse all 3 sibling branches and zoom to fit the siblings'
+ *
+ * @example
+ * describeSiblingBarAction(1, true);  // => 'Expand the collapsed sibling branch and return to the previous view'
+ */
+function describeSiblingBarAction(count, isFolded) {
+    const branches = count === 1 ? 'sibling branch' : `${count} sibling branches`;
+    return isFolded
+        ? `Expand the collapsed ${branches} and return to the previous view`
+        : `Collapse all ${branches} and zoom to fit the siblings`;
+}
+
+/**
+ * A sibling bus-bar that doubles as a "fold this whole row" button. The visible connector is
+ * drawn as usual; an invisible stroke along its horizontal run catches clicks. The stroke is
+ * `SIBLING_BAR_HIT_PX / var(--camera-z)` wide, so it stays a finger-friendly 28 screen pixels
+ * however far the canvas is zoomed out (the canvas sets `--camera-z` on the zoomed layer).
+ * A folded bar is drawn dashed and in the accent colour.
  *
  * @param {Object} props
- * @param {Array<{ d: string }>} props.paths - Array of path descriptors with SVG d path strings
+ * @param {{ d: string, bar: Object }} props.path - Bus-bar path descriptor
+ * @param {boolean} props.isFolded - Whether every foldable sibling on the bar is collapsed
+ * @param {Function} props.onToggle - Receives the bar descriptor on click
+ * @returns {React.ReactNode}
+ *
+ * @example
+ * <SiblingBusBar path={busBarPath} isFolded={false} onToggle={layout.toggleSiblingBar} />
+ *
+ * @example
+ * <SiblingBusBar path={busBarPath} isFolded={true} onToggle={(bar) => console.log(bar.siblingIds)} />
+ */
+const SiblingBusBar = React.memo(({ path, isFolded, onToggle }) => {
+    const { bar } = path;
+    const lineClass = isFolded ? 'text-blue-500 group-hover:text-blue-700' : 'text-slate-300 group-hover:text-blue-500';
+    return (
+        <g className="group">
+            <path d={path.d} stroke="currentColor" className={`transition-colors ${lineClass}`} strokeWidth={isFolded ? 3 : 2}
+                strokeDasharray={isFolded ? '6 4' : undefined} fill="none" strokeLinecap="round" strokeLinejoin="round" />
+            <path d={`M ${bar.x1} ${bar.y} L ${bar.x2} ${bar.y}`} stroke="transparent" fill="none" strokeWidth={SIBLING_BAR_HIT_PX}
+                className="interactive-element sibling-bar-hit cursor-pointer" data-testid={`sibling-bar-${bar.parentId}`}
+                style={{ pointerEvents: 'stroke', strokeWidth: `calc(${SIBLING_BAR_HIT_PX}px / var(--camera-z, 1))` }}
+                onPointerDown={(e) => e.stopPropagation()}
+                onClick={(e) => { e.preventDefault(); e.stopPropagation(); onToggle(bar); }}>
+                <title>{describeSiblingBarAction(bar.foldableIds.length, isFolded)}</title>
+            </path>
+        </g>
+    );
+});
+
+/**
+ * Renders the SVG connector layer containing orthogonal paths between ancestors, spouses, and descendants.
+ * Sibling bus-bars become clickable fold buttons when `onToggleSiblingBar` is supplied.
+ *
+ * @param {Object} props
+ * @param {Array<{ d: string, bar?: Object }>} props.paths - Array of path descriptors with SVG d path strings
  * @param {number} props.padX - Horizontal coordinate offset
  * @param {number} props.padY - Vertical coordinate offset
  * @param {number} props.totalW - Total canvas width in pixels
  * @param {number} props.totalH - Total canvas height in pixels
+ * @param {Function} [props.onToggleSiblingBar] - Click handler for sibling bus-bars (receives the bar descriptor)
+ * @param {Set<string>} [props.collapsedNodes] - Collapsed node IDs, used to draw folded bars
  * @returns {React.ReactNode}
  *
  * @example
  * <CompactTreeConnectorSvg paths={layoutData.paths} padX={10} padY={10} totalW={800} totalH={600} />
  *
  * @example
- * <CompactTreeConnectorSvg paths={[]} padX={0} padY={0} totalW={100} totalH={100} />
+ * <CompactTreeConnectorSvg paths={layoutData.paths} padX={10} padY={10} totalW={800} totalH={600}
+ *     onToggleSiblingBar={layout.toggleSiblingBar} collapsedNodes={layout.collapsedNodes} />
  */
-const CompactTreeConnectorSvg = React.memo(({ paths, padX, padY, totalW, totalH }) => (
+const CompactTreeConnectorSvg = React.memo(({ paths, padX, padY, totalW, totalH, onToggleSiblingBar, collapsedNodes }) => (
     <svg 
         className="absolute top-0 left-0 w-full h-full pointer-events-none z-0 overflow-visible"
         style={{ width: `${totalW}px`, height: `${totalH}px` }}
     >
         <g transform={`translate(${padX}, ${padY})`}>
             {paths.map((p, idx) => (
-                <path 
-                    key={`path-${idx}`} 
-                    d={p.d} 
-                    stroke="currentColor" 
-                    className="text-slate-300"
-                    strokeWidth="2" 
-                    fill="none" 
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                />
+                (onToggleSiblingBar && p.bar && p.bar.foldableIds.length > 0)
+                    ? <SiblingBusBar key={`path-${idx}`} path={p} isFolded={isSiblingBarFolded(p.bar, collapsedNodes || new Set())} onToggle={onToggleSiblingBar} />
+                    : <path 
+                        key={`path-${idx}`} 
+                        d={p.d} 
+                        stroke="currentColor" 
+                        className="text-slate-300"
+                        strokeWidth="2" 
+                        fill="none" 
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                    />
             ))}
         </g>
     </svg>
@@ -296,6 +383,8 @@ const CompactTreeView = React.memo(({ tree, layout }) => {
                 padY={padY}
                 totalW={totalW}
                 totalH={totalH}
+                onToggleSiblingBar={layout.toggleSiblingBar}
+                collapsedNodes={layout.collapsedNodes}
             />
 
             {/* Person Card Nodes */}

@@ -346,6 +346,9 @@ if (shouldRunChrome) {
         '--user-data-dir=' + userDataDir,
         '--no-sandbox',
         '--disable-gpu',
+        // Without a plain-text password store a fresh profile blocks on the OS keyring (gnome-keyring
+        // unlock) and never commits a navigation: every tab sits on about:blank forever.
+        '--password-store=basic',
         '--window-size=1280,800',
         'http://localhost:8000/'
     ]);

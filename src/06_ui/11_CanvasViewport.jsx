@@ -11,6 +11,7 @@
  * @param {string|null} props.rootId - ID of active tree root
  * @param {Function} props.setIsSidebarVisible - Toggle for details sidebar panel
  * @param {Function} [props.closeAllPanels] - Optional callback to close all overlay panels
+ * @param {{ bottom: string }} [props.bottomDockLift] - Inline offset lifting the bar above a bottom-docked details panel (phones)
  * @returns {React.ReactNode}
  *
  * @example
@@ -36,20 +37,21 @@
  *   setIsSidebarVisible={() => {}}
  * />
  */
-const ZoomControls = ({ setCamera, clampCamera, centerOnPerson, fitToScreen, focusId, rootId, setIsSidebarVisible, closeAllPanels }) => {
+const ZoomControls = ({ setCamera, clampCamera, centerOnPerson, fitToScreen, focusId, rootId, setIsSidebarVisible, closeAllPanels, bottomDockLift }) => {
     const handleZoom = (delta) => {
         setCamera(cam => clampCamera({ ...cam, z: cam.z + delta }));
     };
 
     return (
-        <div className="absolute bottom-6 left-16 z-50 flex gap-2 pointer-events-auto bg-white/95 backdrop-blur-md p-1.5 rounded-2xl shadow-md border border-slate-200">
-            <button onClick={() => handleZoom(0.15)} className="p-2 hover:bg-slate-100 rounded-xl text-slate-700 transition-colors" title="Zoom In"><Icons.ZoomIn /></button>
+        <div className="absolute bottom-6 left-16 z-50 flex gap-2 pointer-events-auto bg-white/95 backdrop-blur-md p-1.5 rounded-2xl shadow-md border border-slate-200" style={bottomDockLift}>
+            {/* p-3 below the `sm` breakpoint gives phones 44px touch targets; desktop keeps the tighter 36px buttons. */}
+            <button onClick={() => handleZoom(0.15)} className="p-3 sm:p-2 hover:bg-slate-100 rounded-xl text-slate-700 transition-colors" title="Zoom In"><Icons.ZoomIn /></button>
             <div className="w-px bg-slate-200 my-1"></div>
-            <button onClick={() => handleZoom(-0.15)} className="p-2 hover:bg-slate-100 rounded-xl text-slate-700 transition-colors" title="Zoom Out"><Icons.ZoomOut /></button>
+            <button onClick={() => handleZoom(-0.15)} className="p-3 sm:p-2 hover:bg-slate-100 rounded-xl text-slate-700 transition-colors" title="Zoom Out"><Icons.ZoomOut /></button>
             <div className="w-px bg-slate-200 my-1"></div>
-            <button onClick={() => fitToScreen()} className="p-2 hover:bg-slate-100 rounded-xl text-slate-700 transition-colors" title="Fit to Screen"><Icons.Maximize /></button>
+            <button onClick={() => fitToScreen()} className="p-3 sm:p-2 hover:bg-slate-100 rounded-xl text-slate-700 transition-colors" title="Fit to Screen"><Icons.Maximize /></button>
             <div className="w-px bg-slate-200 my-1"></div>
-            <button onClick={() => { centerOnPerson(focusId || rootId, 0.80); setIsSidebarVisible(true); }} className="p-2 hover:bg-slate-100 rounded-xl text-slate-700 transition-colors" title="Center Focus"><Icons.Target /></button>
+            <button onClick={() => { centerOnPerson(focusId || rootId, 0.80); setIsSidebarVisible(true); }} className="p-3 sm:p-2 hover:bg-slate-100 rounded-xl text-slate-700 transition-colors" title="Center Focus"><Icons.Target /></button>
         </div>
     );
 };
@@ -80,6 +82,8 @@ const HISTORICAL_GENERATION_COHORTS = Object.freeze([
 
 /**
  * Renders vertical generational era bands and milestone year labels on the timeline margin.
+ * Below 48px (the phone gutter, see `resolveTimelineGutterWidth`) only the year labels fit, so
+ * the era bands are dropped.
  *
  * @param {object} props
  * @param {number[]} props.dynamicYears - Array of timeline interval years to render
@@ -87,6 +91,7 @@ const HISTORICAL_GENERATION_COHORTS = Object.freeze([
  * @param {number} props.maxYear - Maximum year represented in tree
  * @param {object} props.camera - Active camera coordinate and zoom transform
  * @param {number} props.ppy - Pixels per calendar year scaling factor
+ * @param {number} [props.gutterWidth=48] - Gutter width in px (32 on phones)
  * @returns {React.ReactNode}
  *
  * @example
@@ -105,14 +110,16 @@ const HISTORICAL_GENERATION_COHORTS = Object.freeze([
  *   maxYear={1980}
  *   camera={{ x: 100, y: 50, z: 0.8 }}
  *   ppy={15}
+ *   gutterWidth={32}
  * />
  */
-const TimelineLabels = ({ dynamicYears, rootNodeYob, maxYear, camera, ppy }) => {
+const TimelineLabels = ({ dynamicYears, rootNodeYob, maxYear, camera, ppy, gutterWidth = 48 }) => {
     const GENERATIONS = HISTORICAL_GENERATION_COHORTS;
+    const showEraBands = gutterWidth >= 48;
 
     return (
-        <div className="absolute top-0 left-0 bottom-0 w-12 pointer-events-none z-20 border-r border-slate-200 bg-slate-50/90 backdrop-blur-sm shadow-[2px_0_4px_rgba(0,0,0,0.02)] font-sans overflow-hidden">
-            {GENERATIONS.map(gen => {
+        <div className="absolute top-0 left-0 bottom-0 pointer-events-none z-20 border-r border-slate-200 bg-slate-50/90 backdrop-blur-sm shadow-[2px_0_4px_rgba(0,0,0,0.02)] font-sans overflow-hidden" style={{ width: gutterWidth }}>
+            {showEraBands && GENERATIONS.map(gen => {
                 if (maxYear && gen.start > maxYear) return null;
                 const effectiveEnd = maxYear ? Math.min(gen.end, maxYear) : gen.end;
                 const startY = ((gen.start - rootNodeYob) * ppy + 24) * camera.z + camera.y;
@@ -126,7 +133,7 @@ const TimelineLabels = ({ dynamicYears, rootNodeYob, maxYear, camera, ppy }) => 
                 );
             })}
             {dynamicYears.map(year => (
-                <div key={`label-${year}`} className="absolute w-full text-right pr-1 text-[10px] tracking-wider font-bold text-slate-600 py-1 z-10" style={{ top: ((year - rootNodeYob) * ppy + 24) * camera.z + camera.y, transform: 'translateY(-50%)' }}>{year}</div>
+                <div key={`label-${year}`} className={`absolute w-full text-right pr-1 font-bold text-slate-600 py-1 z-10 ${showEraBands ? 'text-[10px] tracking-wider' : 'text-[9px]'}`} style={{ top: ((year - rootNodeYob) * ppy + 24) * camera.z + camera.y, transform: 'translateY(-50%)' }}>{year}</div>
             ))}
         </div>
     );
@@ -142,6 +149,7 @@ TimelineLabels.GENERATIONS = HISTORICAL_GENERATION_COHORTS;
  * @param {object} props.camera - Canvas viewport camera state
  * @param {number} props.ppy - Pixels per year layout scale
  * @param {boolean} [props.isStandalone=false] - Whether running in standalone mode (adjusts left padding)
+ * @param {number} [props.gutterWidth=48] - Timeline gutter width the lines start after (ignored in standalone mode)
  * @returns {React.ReactNode}
  *
  * @example
@@ -162,10 +170,10 @@ TimelineLabels.GENERATIONS = HISTORICAL_GENERATION_COHORTS;
  *   isStandalone={true}
  * />
  */
-const TimelineGrid = ({ dynamicYears, rootNodeYob, camera, ppy, isStandalone = false }) => (
+const TimelineGrid = ({ dynamicYears, rootNodeYob, camera, ppy, isStandalone = false, gutterWidth = 48 }) => (
     <div className="absolute inset-0 pointer-events-none z-0 overflow-hidden">
         {dynamicYears.map(year => (
-            <div key={`line-${year}`} className={`absolute w-full ${isStandalone ? 'pl-4' : 'pl-12'}`} style={{ top: ((year - rootNodeYob) * ppy + 24) * camera.z + camera.y, transform: 'translateY(-50%)' }}>
+            <div key={`line-${year}`} className="absolute w-full" style={{ paddingLeft: isStandalone ? 16 : gutterWidth, top: ((year - rootNodeYob) * ppy + 24) * camera.z + camera.y, transform: 'translateY(-50%)' }}>
                 <div className="w-full border-t border-slate-300 border-dashed"></div>
             </div>
         ))}
@@ -2682,6 +2690,131 @@ function useSubtreeCollapseAnchor({ treeRef, setCamera, centerOnPerson, rootId, 
 }
 
 /**
+ * Returns a copy of `set` with every id in `ids` added (`shouldInclude` true) or removed (false).
+ *
+ * @template T
+ * @param {Set<T>} set - Original set (left untouched)
+ * @param {Iterable<T>} ids - Members to add or remove
+ * @param {boolean} shouldInclude - true to add, false to remove
+ * @returns {Set<T>} New Set
+ *
+ * @example
+ * withSetMembers(new Set(['a']), ['b', 'c'], true);   // => Set {'a', 'b', 'c'}
+ *
+ * @example
+ * withSetMembers(new Set(['a', 'b', 'c']), ['b', 'zzz'], false);   // => Set {'a', 'c'}
+ */
+function withSetMembers(set, ids, shouldInclude) {
+    const next = new Set(set);
+    for (const id of ids) {
+        if (shouldInclude) {
+            next.add(id);
+        } else {
+            next.delete(id);
+        }
+    }
+    return next;
+}
+
+/**
+ * Decides what a click on a sibling bus-bar does. The bar is a toggle over the siblings that
+ * have branches of their own (`bar.foldableIds`):
+ *
+ *  - not all collapsed → FOLD: collapse the open ones and remember the camera so that the
+ *    next click can bring the previous view back;
+ *  - all collapsed → UNFOLD: re-open exactly the branches an earlier fold closed (siblings the
+ *    user had collapsed by hand before stay collapsed) and go back to the remembered camera.
+ *    Without a remembered fold (e.g. the user collapsed every sibling with its own +/- button,
+ *    or the state came from a shared URL) every foldable sibling re-opens and the camera stays.
+ *
+ * @param {{ foldableIds: string[] }} bar - Bar descriptor from `FamilyTree._describeSiblingBar`
+ * @param {Set<string>} collapsedNodes - Currently collapsed node IDs
+ * @param {{ addedIds: string[], camera: Object }|null} fold - What an earlier fold of this bar remembered
+ * @param {{ x: number, y: number, z: number }} camera - Camera right now (remembered when folding)
+ * @returns {{ action: 'fold'|'unfold', ids: string[], camera: (Object|null) }}
+ *
+ * @example
+ * planSiblingBarToggle({ foldableIds: ['a', 'b'] }, new Set(['b']), null, { x: 0, y: 0, z: 1 });
+ * // => { action: 'fold', ids: ['a'], camera: { x: 0, y: 0, z: 1 } }   ('b' was already collapsed)
+ *
+ * @example
+ * planSiblingBarToggle({ foldableIds: ['a', 'b'] }, new Set(['a', 'b']), { addedIds: ['a'], camera: { x: 9, y: 9, z: 0.5 } }, { x: 0, y: 0, z: 1 });
+ * // => { action: 'unfold', ids: ['a'], camera: { x: 9, y: 9, z: 0.5 } }
+ *
+ * @example
+ * planSiblingBarToggle({ foldableIds: ['a', 'b'] }, new Set(['a', 'b']), null, { x: 0, y: 0, z: 1 });
+ * // => { action: 'unfold', ids: ['a', 'b'], camera: null }
+ */
+function planSiblingBarToggle(bar, collapsedNodes, fold, camera) {
+    const isFolded = bar.foldableIds.length > 0 && bar.foldableIds.every(id => collapsedNodes.has(id));
+    if (isFolded) {
+        return { action: 'unfold', ids: fold ? fold.addedIds : bar.foldableIds, camera: fold ? fold.camera : null };
+    }
+    const opening = bar.foldableIds.filter(id => !collapsedNodes.has(id));
+    // Re-folding a bar the user partially re-opened by hand keeps the ORIGINAL camera, so the
+    // eventual unfold still returns to the view from before the first fold.
+    const ids = fold ? [...new Set([...fold.addedIds, ...opening])] : opening;
+    return { action: 'fold', ids, camera: fold ? fold.camera : { ...camera } };
+}
+
+/** Framing used after a sibling-bar fold: tight padding so the sibling row fills the viewport. */
+const SIBLING_BAR_FRAME_OPTIONS = Object.freeze({ targetPadX: 40, targetPadY: 90 });
+
+/**
+ * Makes sibling bus-bars act as fold/unfold toggles for the whole sibling row. Folding
+ * collapses every open sibling branch and, once the collapsed layout is in the DOM, frames
+ * the siblings so they all fit on screen; unfolding restores the collapsed set and the camera
+ * from before the fold (see {@link planSiblingBarToggle}). Fold memory is per bar and is
+ * dropped when another tree is loaded.
+ *
+ * @param {object} params
+ * @param {Set<string>} params.collapsedNodes - Collapsed node IDs
+ * @param {Function} params.setCollapsedNodes - Collapsed set state setter
+ * @param {React.MutableRefObject<{x: number, y: number, z: number}>} params.cameraRef - Latest camera (read, never subscribed, so panning does not rebuild the layout)
+ * @param {Function} params.setCamera - Camera state setter
+ * @param {Function} params.framePeople - `(ids, options) => void` camera framing from useCanvasControls
+ * @param {string|null} params.rootId - Active tree root (fold memory resets when it changes)
+ * @returns {{ toggleSiblingBar: (bar: Object) => void }}
+ *
+ * @example
+ * const { toggleSiblingBar } = useSiblingBarFold({ collapsedNodes, setCollapsedNodes, cameraRef, setCamera, framePeople, rootId });
+ * toggleSiblingBar({ parentId: 'p', siblingIds: ['a', 'b', 'c'], foldableIds: ['a', 'c'] });
+ *
+ * @example
+ * // Second click on the same bar: branches 'a' and 'c' re-open and the camera returns to where it was.
+ * toggleSiblingBar({ parentId: 'p', siblingIds: ['a', 'b', 'c'], foldableIds: ['a', 'c'] });
+ */
+function useSiblingBarFold({ collapsedNodes, setCollapsedNodes, cameraRef, setCamera, framePeople, rootId }) {
+    const foldsRef = useRef(new Map());
+    const pendingFrameIdsRef = useRef(null);
+
+    useEffect(() => { foldsRef.current = new Map(); }, [rootId]);
+
+    const toggleSiblingBar = useCallback((bar) => {
+        const plan = planSiblingBarToggle(bar, collapsedNodes, foldsRef.current.get(bar.parentId) || null, cameraRef.current);
+        if (plan.action === 'fold') {
+            foldsRef.current.set(bar.parentId, { addedIds: plan.ids, camera: plan.camera });
+            pendingFrameIdsRef.current = bar.siblingIds;
+        } else {
+            foldsRef.current.delete(bar.parentId);
+            if (plan.camera) setCamera(plan.camera);
+        }
+        setCollapsedNodes(prev => withSetMembers(prev, plan.ids, plan.action === 'fold'));
+    }, [collapsedNodes, setCollapsedNodes, cameraRef, setCamera]);
+
+    // Frame the siblings only after React has committed the collapsed layout, so the
+    // measured card positions are the post-fold ones.
+    useLayoutEffect(() => {
+        if (!pendingFrameIdsRef.current) return;
+        const ids = pendingFrameIdsRef.current;
+        pendingFrameIdsRef.current = null;
+        framePeople(ids, SIBLING_BAR_FRAME_OPTIONS);
+    }, [collapsedNodes, framePeople]);
+
+    return { toggleSiblingBar };
+}
+
+/**
  * Subscribes to global window 'focusPerson' CustomEvents (dispatched by external controls,
  * dialogs, or embedded widgets) to coordinate person focus and camera centering.
  * 
@@ -3254,6 +3387,8 @@ const GlobalAppStyles = React.memo(() => (
             .tf-tree li:only-child::before { display: none; }
             .family-unit { display: inline-flex; align-items: stretch; justify-content: center; padding: 0 12px; }
             .disable-transitions, .disable-transitions * { transition: none !important; animation: none !important; }
+            .app-shell { height: 100vh; height: 100dvh; } /* 100dvh tracks the visible area as mobile browser chrome shows/hides; 100vh is the fallback */
+            .app-shell button, .app-shell a, .app-shell input { touch-action: manipulation; } /* no 300ms double-tap-zoom delay on controls (the canvas sets touch-action: none itself) */
             .custom-scrollbar::-webkit-scrollbar { width: 6px; }
             .custom-scrollbar::-webkit-scrollbar-track { background: transparent; margin: 4px; }
             .custom-scrollbar::-webkit-scrollbar-thumb { background-color: rgb(var(--tw-slate-300, 203 213 225)); border-radius: 10px; }
@@ -3957,6 +4092,11 @@ function useAppCanvasViewportManager({
         focusId
     });
 
+    const siblingFold = useSiblingBarFold({
+        collapsedNodes: collapse.collapsedNodes, setCollapsedNodes: collapse.setCollapsedNodes,
+        cameraRef: canvas.cameraRef, setCamera: canvas.setCamera, framePeople: canvas.framePeople, rootId
+    });
+
     const handleFitToScreen = useCallback(() => {
         canvas.fitToScreen(true);
     }, [canvas.fitToScreen]);
@@ -3964,6 +4104,7 @@ function useAppCanvasViewportManager({
     return {
         ...canvas,
         ...collapse,
+        ...siblingFold,
         handleFitToScreen
     };
 }
@@ -4043,6 +4184,7 @@ function useAppAiCoordinator({
  * @param {Set<string>} params.visibleNodes - Currently uncollapsed visible node IDs
  * @param {Set<string>} params.collapsedNodes - Currently collapsed node IDs
  * @param {function} params.toggleCollapse - Callback to toggle node collapse state
+ * @param {function} [params.toggleSiblingBar] - Callback folding/unfolding a whole sibling row (receives the bus-bar descriptor)
  * @param {number} params.ppy - Pixels per year scale factor
  * @param {number} params.siblingGap - Dynamic horizontal spacing between sibling cards
  * @param {function} params.handleSetFocusId - Handler to set focused person ID
@@ -4080,7 +4222,7 @@ function useAppAiCoordinator({
  */
 function useTreeLayoutConfig({
     tree, activeFilter, focusId, aiHighlightedIds, rootNodeYob,
-    visibleNodes, collapsedNodes, toggleCollapse, ppy, siblingGap, handleSetFocusId
+    visibleNodes, collapsedNodes, toggleCollapse, toggleSiblingBar, ppy, siblingGap, handleSetFocusId
 }) {
     const filterHighlightedIds = useMemo(() => (
         FamilyTreeBuilder.computeFilterHighlightedIds(tree, activeFilter)
@@ -4092,9 +4234,9 @@ function useTreeLayoutConfig({
 
     return useMemo(() => ({
         focusId, aiHighlightedIds, filterHighlightedIds, filterHighlightClass,
-        rootNodeYob, visibleNodes, collapsedNodes, toggleCollapse,
+        rootNodeYob, visibleNodes, collapsedNodes, toggleCollapse, toggleSiblingBar,
         ppy, siblingGap, onFocus: handleSetFocusId
-    }), [focusId, aiHighlightedIds, filterHighlightedIds, filterHighlightClass, rootNodeYob, visibleNodes, collapsedNodes, toggleCollapse, ppy, siblingGap, handleSetFocusId]);
+    }), [focusId, aiHighlightedIds, filterHighlightedIds, filterHighlightClass, rootNodeYob, visibleNodes, collapsedNodes, toggleCollapse, toggleSiblingBar, ppy, siblingGap, handleSetFocusId]);
 }
 
 /**
@@ -4217,7 +4359,7 @@ function resolveCanvasDisplayMode(tree, isLoading) {
 
 const TreeCanvasContent = ({
     tree, isStandalone, dynamicYears, treeStats, camera, ppy,
-    isDragging, isShifting, treeRef, layoutConfig, isLoading
+    isDragging, isShifting, treeRef, layoutConfig, isLoading, timelineGutterWidth = 48
 }) => {
     const mode = resolveCanvasDisplayMode(tree, isLoading);
     if (mode === 'loading-splash') {
@@ -4234,9 +4376,10 @@ const TreeCanvasContent = ({
 
     return (
         <>
-            {!isStandalone && <TimelineLabels dynamicYears={dynamicYears} rootNodeYob={treeStats.rootNodeYob} maxYear={treeStats.maxYear} camera={camera} ppy={ppy} />}
-            <TimelineGrid dynamicYears={dynamicYears} rootNodeYob={treeStats.rootNodeYob} camera={camera} ppy={ppy} isStandalone={isStandalone} />
-            <div className={`absolute top-0 left-0 w-full h-full ${isDragging || isShifting ? '' : 'transition-transform duration-300 ease-out'} z-10`} style={{ transform: `translate(${camera.x}px, ${camera.y}px) scale(${camera.z})`, transformOrigin: '0 0' }}>
+            {!isStandalone && <TimelineLabels dynamicYears={dynamicYears} rootNodeYob={treeStats.rootNodeYob} maxYear={treeStats.maxYear} camera={camera} ppy={ppy} gutterWidth={timelineGutterWidth} />}
+            <TimelineGrid dynamicYears={dynamicYears} rootNodeYob={treeStats.rootNodeYob} camera={camera} ppy={ppy} isStandalone={isStandalone} gutterWidth={timelineGutterWidth} />
+            {/* `--camera-z` lets zoom-independent hit areas (sibling bus-bars) size themselves in screen pixels. */}
+            <div className={`absolute top-0 left-0 w-full h-full ${isDragging || isShifting ? '' : 'transition-transform duration-300 ease-out'} z-10`} style={{ transform: `translate(${camera.x}px, ${camera.y}px) scale(${camera.z})`, transformOrigin: '0 0', '--camera-z': camera.z }}>
                 <div className={`min-w-max min-h-max relative inline-block ${isShifting ? 'disable-transitions' : ''}`} ref={treeRef}>
                     <CompactTreeView tree={tree} layout={layoutConfig} />
                 </div>
@@ -4427,10 +4570,10 @@ const MainCanvasViewport = (props) => {
         handlePointerUp, handleWheel, tree, activeFilter, handleFilterBy,
         handleExportMapCSV, setShowMap, sidebarWidth, isAnySidebarOpen,
         isStandalone, dynamicYears, treeStats, camera, ppy, isShifting,
-        treeRef, layoutConfig, isLoading
+        treeRef, layoutConfig, isLoading, timelineGutterWidth
     } = props;
     const mapOverlayProps = { showMap, tree, activeFilter, handleFilterBy, handleExportMapCSV, setShowMap, sidebarWidth, isAnySidebarOpen };
-    const canvasContentProps = { tree, isStandalone, dynamicYears, treeStats, camera, ppy, isDragging, isShifting, treeRef, layoutConfig, isLoading };
+    const canvasContentProps = { tree, isStandalone, dynamicYears, treeStats, camera, ppy, isDragging, isShifting, treeRef, layoutConfig, isLoading, timelineGutterWidth };
 
     return (
         <div 

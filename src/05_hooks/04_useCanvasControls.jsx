@@ -505,11 +505,98 @@ function calculateViewportCameraBounds({
     const treeW = getTreeElementWidth(treeElement);
     const treeH = computeTreeSpanHeight(treeStats, targetPpy);
 
-    // 48px left timeline generation bar offset (0 in standalone mode)
-    const isStandalone = isStandaloneExportMode();
-    const TIMELINE_WIDTH = isStandalone ? 0 : 48;
+    return computeCameraBounds({ treeW, treeH, contW, contH, z, timelineWidth: resolveTimelineGutterWidth() });
+}
 
-    return computeCameraBounds({ treeW, treeH, contW, contH, z, timelineWidth: TIMELINE_WIDTH });
+/** Viewports no wider than this (just under Tailwind's `sm` breakpoint) get the phone layout. */
+const COMPACT_VIEWPORT_MAX_WIDTH = 639;
+/** Left timeline gutter (era bands + year labels) on desktop, in px. */
+const TIMELINE_GUTTER_WIDTH = 48;
+/** Narrow year-labels-only gutter on phones, in px (the era bands are dropped). */
+const TIMELINE_GUTTER_COMPACT_WIDTH = 32;
+
+/**
+ * Whether a viewport width calls for the phone layout: details panel docked below the canvas,
+ * narrow timeline gutter, full-width top bar.
+ *
+ * @param {number} [width=window.innerWidth] - Viewport width in CSS px
+ * @returns {boolean}
+ *
+ * @example
+ * isCompactViewportWidth(390);   // => true  (portrait phone)
+ *
+ * @example
+ * isCompactViewportWidth(640);   // => false (Tailwind `sm` and up: tablets, laptops)
+ */
+function isCompactViewportWidth(width = (typeof window !== 'undefined' ? window.innerWidth : 1024)) {
+    return width <= COMPACT_VIEWPORT_MAX_WIDTH;
+}
+
+/**
+ * Width of the left timeline gutter the camera must keep clear: 48px on desktop, 32px on
+ * phones (year labels only — the 48px band would eat an eighth of a portrait screen) and 0 in
+ * standalone exports, which draw no gutter at all.
+ *
+ * @param {Object} [options]
+ * @param {boolean} [options.isStandalone=isStandaloneExportMode()] - Standalone export mode
+ * @param {boolean} [options.isCompact=isCompactViewportWidth()] - Phone layout active
+ * @returns {number}
+ *
+ * @example
+ * resolveTimelineGutterWidth({ isStandalone: false, isCompact: false });   // => 48
+ *
+ * @example
+ * resolveTimelineGutterWidth({ isStandalone: false, isCompact: true });    // => 32
+ * resolveTimelineGutterWidth({ isStandalone: true, isCompact: true });     // => 0
+ */
+function resolveTimelineGutterWidth({ isStandalone = isStandaloneExportMode(), isCompact = isCompactViewportWidth() } = {}) {
+    if (isStandalone) return 0;
+    return isCompact ? TIMELINE_GUTTER_COMPACT_WIDTH : TIMELINE_GUTTER_WIDTH;
+}
+
+/**
+ * Horizontal space the details panel reserves beside the canvas: its width on desktop, 0 on
+ * phones, where it docks BELOW the canvas instead (the canvas then shrinks vertically, which the
+ * container measurements already reflect — see `resolveViewportDimensions`).
+ *
+ * @param {number} sidebarWidth - Configured sidebar width in px
+ * @param {boolean} isCompact - Phone layout active (see `isCompactViewportWidth`)
+ * @returns {number}
+ *
+ * @example
+ * resolveDockedSidebarWidth(360, false);   // => 360
+ *
+ * @example
+ * resolveDockedSidebarWidth(360, true);    // => 0
+ */
+function resolveDockedSidebarWidth(sidebarWidth, isCompact) {
+    return isCompact ? 0 : sidebarWidth;
+}
+
+/**
+ * Tracks whether the phone layout applies, re-evaluating on resize / rotation via a
+ * `matchMedia` listener (no per-frame resize handler).
+ *
+ * @returns {boolean} true on viewports up to `COMPACT_VIEWPORT_MAX_WIDTH` px wide
+ *
+ * @example
+ * const isCompactViewport = useCompactViewport();
+ * <PersonSidebar dockBottom={isCompactViewport} />
+ *
+ * @example
+ * const isCompact = useCompactViewport();   // false on a 1280px laptop window
+ */
+function useCompactViewport() {
+    const [isCompact, setIsCompact] = useState(() => isCompactViewportWidth());
+    useEffect(() => {
+        if (typeof window === 'undefined' || typeof window.matchMedia !== 'function') return undefined;
+        const query = window.matchMedia(`(max-width: ${COMPACT_VIEWPORT_MAX_WIDTH}px)`);
+        const sync = () => setIsCompact(query.matches);
+        sync();
+        query.addEventListener('change', sync);
+        return () => query.removeEventListener('change', sync);
+    }, []);
+    return isCompact;
 }
 
 /**
@@ -617,12 +704,11 @@ function resolveFitToScreenMetrics({ container, isSidebarOpen, sidebarWidth, for
         forceFullWindow
     });
 
-    const isStandalone = isStandaloneExportMode();
-    const TIMELINE_WIDTH = isStandalone ? 0 : 48;
-    const usableContW = Math.max(100, contW - TIMELINE_WIDTH);
+    const timelineWidth = resolveTimelineGutterWidth();
+    const usableContW = Math.max(100, contW - timelineWidth);
     return {
         usableContW,
-        timelineWidth: TIMELINE_WIDTH,
+        timelineWidth,
         paddingX: 8,
         topMargin: 16
     };
@@ -933,6 +1019,7 @@ function useCanvasTouchLifecycle({ containerRef, onInteract, cameraRef, setCamer
  * @returns {{
  *   camera: { x: number, y: number, z: number },
  *   setCamera: React.Dispatch<React.SetStateAction<{ x: number, y: number, z: number }>>,
+ *   cameraRef: React.MutableRefObject<{ x: number, y: number, z: number }>,
  *   containerRef: React.RefObject<HTMLDivElement>,
  *   treeRef: React.RefObject<HTMLDivElement>,
  *   isDragging: boolean,
@@ -980,7 +1067,7 @@ function useCanvasControls(onInteract, treeStats, isSidebarOpen = false, sidebar
     });
 
     return {
-        camera, setCamera, clampCamera, containerRef, treeRef,
+        camera, setCamera, cameraRef, clampCamera, containerRef, treeRef,
         centerOnPerson, framePeople, fitToScreen, getPpy, ...gestures
     };
 }

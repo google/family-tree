@@ -72,9 +72,9 @@ class FamilyTreeBuilder {
      * Encapsulates honorific prefix matching, canonical gender, celibacy vows, and career labels.
      */
     static TITLE_ONTOLOGY = Object.freeze([
-        { prefix: /^(?:sr\.?|sister)\b/i, gender: 'F', isCelibate: true, career: 'Nun', isNun: true },
-        { prefix: /^(?:fr\.?|father|rev\.?)\b/i, gender: 'M', isCelibate: true, career: 'Priest', isPriest: true },
-        { prefix: /^(?:br\.?|brother)\b/i, gender: 'M', isCelibate: true, career: 'Brother', isBrother: true },
+        { prefix: /^(?:sr|sister)\b\.?/i, gender: 'F', isCelibate: true, career: 'Nun', isNun: true },
+        { prefix: /^(?:fr|father|rev)\b\.?/i, gender: 'M', isCelibate: true, career: 'Priest', isPriest: true },
+        { prefix: /^(?:br|brother)\b\.?/i, gender: 'M', isCelibate: true, career: 'Brother', isBrother: true },
     ]);
 
     /**
@@ -1302,7 +1302,7 @@ class FamilyTreeBuilder {
      * console.log(cfg.includes('text-gradient'));
      */
     static _getStandaloneTailwindConfig() {
-        return `  <script>\n${TAILWIND_THEME_CONFIG_SCRIPT}\n  </script>`;
+        return `  <script>\n${TAILWIND_THEME_CONFIG_SCRIPT}\n  </script>\n  <script>\n${THEME_BOOT_SCRIPT}\n  </script>`;
     }
 
     /**
@@ -1994,12 +1994,9 @@ ${b64Jsx}
             if (titleMatch.gender === 'F') return true;
             if (titleMatch.gender === 'M') return false;
         }
-        const femaleNames = FamilyTreeBuilder._STATIC_FEMALE_NAMES;
-        if (femaleNames.has(lower)) return true;
         const tokens = lower.split(/\s+/);
-        if (tokens.some(t => femaleNames.has(t))) return true;
         if (tokens.some(t => FamilyTreeBuilder._dynamicFemaleNames && FamilyTreeBuilder._dynamicFemaleNames.has(t))) return true;
-        if (!FamilyTreeBuilder._isMaleName(lower) && tokens.some(t => /(?:amma|mol|mary)$/i.test(t))) return true;
+        if (!FamilyTreeBuilder._isMaleName(lower) && tokens.some(t => /^(?:mary|rose)$/i.test(t) || /(?:amma|mol)$/i.test(t))) return true;
         return false;
     }
 
@@ -2027,14 +2024,12 @@ ${b64Jsx}
             if (titleMatch.gender === 'M') return true;
             if (titleMatch.gender === 'F') return false;
         }
-        const maleNames = FamilyTreeBuilder._STATIC_MALE_NAMES;
-        if (maleNames.has(lower)) return true;
         const tokens = lower.split(/\s+/);
-        if (tokens.some(t => maleNames.has(t))) return true;
         if (tokens.some(t => FamilyTreeBuilder._dynamicMaleNames && FamilyTreeBuilder._dynamicMaleNames.has(t))) return true;
-        if (lower.endsWith('appan') || lower.endsWith('son') || /\bson(?:\s+\d+)?$/i.test(lower) ||
+        if (Person._hasMaleNameSuffix(lower) ||
             lower.endsWith('achan') || lower.endsWith('mon') ||
-            lower.endsWith('ose') || lower.endsWith('ouse') || lower.endsWith('eph')) return true;
+            (lower.endsWith('ose') && !/\brose$/i.test(lower)) ||
+            lower.endsWith('ouse') || lower.endsWith('eph')) return true;
         return false;
     }
 
@@ -2055,9 +2050,7 @@ ${b64Jsx}
      */
     static _isGenericKinshipName(name) {
         if (!name) return false;
-        const norm = name.toLowerCase().trim();
-        const keywords = ['wife', 'husband', 'ghost', 'unknown', 'father', 'mother', 'brother', 'sister', 'son', 'daughter'];
-        return keywords.some(kw => norm.includes(kw));
+        return /\b(?:wife|husband|spouse|partner|ghost|unknown|father|dad|mother|mom|brother|sister|sibling|son|daughter|boy|girl)\b/i.test(name);
     }
 
     /**
@@ -2145,9 +2138,11 @@ ${b64Jsx}
      */
     static _isNodeLikelyFemale(node) {
         if (!node) return false;
-        return node.gender === 'F' || node.spouseType === 'wife' ||
+        if (node.gender === 'F') return true;
+        if (node.gender === 'M') return false;
+        return node.spouseType === 'wife' ||
             Boolean(node.spouse && FamilyTreeBuilder._isMaleName(node.spouse)) ||
-            (!FamilyTreeBuilder._isMaleName(node.name) && (node.name || '').toLowerCase().split(/\s+/).some(t => /(?:amma|mol|mary)$/i.test(t)));
+            FamilyTreeBuilder._isFemaleName(node.name);
     }
 
     /**
@@ -2434,6 +2429,7 @@ ${b64Jsx}
      * // => []
      */
     static _sortPartnersForRemarriage(known, getYob, nodeMap) {
+        const sentinel = FamilyTreeBuilder.MAX_ROW_SENTINEL;
         return (known.partners || []).map(pid => {
             const ptr = nodeMap[pid];
             const ptrChildren = FamilyTreeBuilder._collectPartnerChildren(known, ptr, nodeMap, getYob);
@@ -2442,7 +2438,7 @@ ${b64Jsx}
                 ptr,
                 ord: FamilyTree._extractPartnerOrdinal(ptr),
                 firstChildYob: firstChild ? getYob(firstChild) : null,
-                firstChildRow: ptrChildren.length ? FamilyTreeBuilder.getNodeSheetRow(ptrChildren[0], 99999) : 99999,
+                firstChildRow: ptrChildren.length ? FamilyTreeBuilder.getNodeSheetRow(ptrChildren[0], sentinel) : sentinel,
                 children: ptrChildren
             };
         }).sort((a, b) => FamilyTreeBuilder._compareRemarriagePartners(a, b, getYob));
@@ -3573,7 +3569,7 @@ ${b64Jsx}
 
             const dist = FamilyTreeBuilder._getMinRowDistance(potentialSp, ch);
             const reciprocal = potentialSp.spouse && (potentialSp.spouse || '').toLowerCase().trim() === chNorm;
-            if (reciprocal || dist <= 3) {
+            if (reciprocal || dist <= FamilyTreeBuilder.GENERATIONAL_GAPS.ADJACENT_ROW_MAX_DISTANCE) {
                 chSpouseIds.add(potentialSp.id);
             }
         }
@@ -3910,26 +3906,24 @@ ${b64Jsx}
      */
     static _isCelibateReligious(node) {
         if (!node) return false;
-        if (node.isCelibate) return true;
-        if (node.isNun || node.isPriest) return true;
+        if (node.isCelibate || node.isNun || node.isPriest) return true;
         if (node.job === 'Nun' || node.job === 'Priest') return true;
         const name = (node.name || '').trim();
         const nick = (node.nick || '').trim();
         const norm = (node._normName || '').trim();
-        const text = [name, nick, norm, node.freeForm].filter(Boolean).join(' ');
-        if (!text) return false;
+        const nameText = [name, nick, norm].filter(Boolean).join(' ');
+        if (!nameText && !node.freeForm) return false;
 
         // Relative roles, spouses, and parents are NEVER celibate religious
-        if (/(?:wife|husband|daughter|son)/i.test(text)) return false;
-        if (/(?:brother|sister)\b/i.test(name) && !/^(?:brother|sister|br\.|sr\.)\s+/i.test(name)) return false;
+        if (/\b(?:wife|husband|daughter|son)\b/i.test(nameText)) return false;
+        if (/\b(?:brother|sister)\b/i.test(name) && !/^(?:brother|sister|br\.?|sr\.?)\s+/i.test(name)) return false;
         if (node.children && node.children.length > 0) return false;
 
         const titleMatch = FamilyTreeBuilder.matchTitleOntology(name, nick);
         if (titleMatch && titleMatch.isCelibate) return true;
 
-        return /\b(?:sr|sr\.|fr|fr\.|rev|rev\.|br\.|nun|monk|priest)\b/i.test(text) ||
-               /^(?:brother|sister)\s+[a-z]+/i.test(name) ||
-               /^(?:brother|sister)\s+[a-z]+/i.test(nick);
+        return /\b(?:sr\.?|fr\.?|rev\.?|br\.|nun|monk|priest)\b/i.test(nameText) ||
+               /\b(?:nun|monk|priest)\b/i.test(node.freeForm || '');
     }
 
     /**
@@ -5545,25 +5539,9 @@ ${b64Jsx}
      * // => n.gender === 'M', n.isPriest === true
      */
     _inferVocationAndSuffixGender(n) {
-        if (!n.name) return;
-        const lowerName = n.name.toLowerCase().trim();
-        const lowerNick = (n.nick || '').toLowerCase().trim();
-
-        // 1. Nun check: "Sr." or "Sr " prefix -> nun, female
-        if (/^sr(?:\.|\s)\s*/i.test(lowerName) || (n.nick && /^sr(?:\.|\s)\s*/i.test(lowerNick))) {
-            n.isNun = true;
-            if (!n.job) n.job = 'Nun';
-            if (!n.gender) n.gender = 'F';
-        }
-        // 2. Priest check: "Fr." or "Fr " prefix -> priest, male
-        else if (/^fr(?:\.|\s)\s*/i.test(lowerName) || (n.nick && /^fr(?:\.|\s)\s*/i.test(lowerNick))) {
-            n.isPriest = true;
-            if (!n.job) n.job = 'Priest';
-            if (!n.gender) n.gender = 'M';
-        }
-        // 3. Suffix check: "son", "appan" -> male
-        else if (!n.gender && (lowerName.endsWith('appan') || lowerName.endsWith('son') || /\bson(?:\s+\d+)?$/i.test(lowerName))) {
-            n.gender = 'M';
+        if (!n || !n.name) return;
+        if (typeof Person !== 'undefined' && Person._resolveTitleAndVocationAttributes) {
+            Person._resolveTitleAndVocationAttributes(n);
         }
     }
 
@@ -7371,36 +7349,6 @@ ${b64Jsx}
     }
 
     /**
-     * Resolves religious prefix and returns parsed vocation attributes, or null if no match.
-     *
-     * @param {string} normName - Normalized lowercase name
-     * @param {string} normNick - Normalized lowercase nickname
-     * @param {string} gender - Initial resolved gender
-     * @returns {Object|null} Vocation attributes or null
-     *
-     * @example
-     * FamilyTreeBuilder._resolveReligiousPrefixVocation('fr. john', '', 'M');
-     * // returns { gender: 'M', isNun: false, isPriest: true, isCelibate: true, job: '' }
-     *
-     * @example
-     * FamilyTreeBuilder._resolveReligiousPrefixVocation('alice', '', '');
-     * // returns null
-     */
-    static _resolveReligiousPrefixVocation(normName, normNick, gender) {
-        const prefix = (typeof Person !== 'undefined' && Person._matchReligiousPrefix)
-            ? Person._matchReligiousPrefix(normName, normNick)
-            : null;
-        if (!prefix) return null;
-        return {
-            gender: gender || prefix.gender || '',
-            isNun: prefix.vocation === 'Nun',
-            isPriest: prefix.vocation === 'Priest',
-            isCelibate: true,
-            job: ''
-        };
-    }
-
-    /**
      * Resolves religious vocation and gender from name, nickname, and explicit gender.
      *
      * @param {string} name - Primary name
@@ -7431,9 +7379,6 @@ ${b64Jsx}
                 job: titleMatch.career || ''
             };
         }
-
-        const prefixResult = FamilyTreeBuilder._resolveReligiousPrefixVocation(normNameCheck, normNickCheck, gender);
-        if (prefixResult) return prefixResult;
 
         if (!gender && typeof Person !== 'undefined' && Person._hasMaleNameSuffix(normNameCheck)) {
             gender = 'M';
@@ -8733,7 +8678,7 @@ ${b64Jsx}
         if (/\b(?:no|without|zero|0)\s+(?:children|kids|issue|sons?|daughters?|boys?|girls?|siblings?|sisters?|brothers?)\b/i.test(t) || /\bchildless\b/i.test(t)) {
             return;
         }
-        const numPattern = /(?:\b(?:additional|more)\s+)?(\d+|one|two|three|four|five|six|seven|eight|nine|ten|eleven|twelve|a|an)?\s*(?:additional|more)?\s*(daughters?|sons?|children|kids|boys?|girls?|sisters?|brothers?|siblings?)/gi;
+        const numPattern = /(?:\b(?:additional|more)\s+)?(?:\b(\d+|one|two|three|four|five|six|seven|eight|nine|ten|eleven|twelve|a|an)\s+)?(?:additional|more)?\s*\b(daughters?|sons?|children|kids|boys?|girls?|sisters?|brothers?|siblings?)\b/gi;
         let match;
         while ((match = numPattern.exec(t)) !== null) {
             const count = this._parseWordNum(match[1]) || 1;
@@ -8926,7 +8871,7 @@ ${b64Jsx}
         const anchorNode = this._findAnchorNode(baseName, n, ws);
         const anchorName = anchorNode ? anchorNode.name : baseName;
         const srcId = anchorNode ? (anchorNode._sourceId || n._sourceId) : n._sourceId;
-        const isAnchorFemale = anchorNode ? (anchorNode.gender === 'F' || anchorNode.spouseType === 'wife') : false;
+        const isAnchorFemale = anchorNode ? (anchorNode.gender === 'F' || (!anchorNode.gender && anchorNode.spouseType === 'husband')) : false;
 
         const knownSpouseNode = this._findKnownSpouseNode(anchorNode, anchorName, ws);
 
@@ -10007,7 +9952,7 @@ ${b64Jsx}
             return;
         }
 
-        const isAnchorMale = anchorNode.gender === 'M' || anchorNode.spouseType === 'husband';
+        const isAnchorMale = anchorNode.gender === 'M' || (!anchorNode.gender && anchorNode.spouseType === 'wife');
         if (isAnchorMale) {
             cNode.fatherId = anchorNode.id;
             if (knownSpouseNode) cNode.momId = knownSpouseNode.id;
@@ -10093,7 +10038,7 @@ ${b64Jsx}
         const anchorNode = this._findAnchorNode(baseName, n, ws);
         const anchorName = anchorNode ? anchorNode.name : baseName;
         const srcId = anchorNode ? (anchorNode._sourceId || n._sourceId) : n._sourceId;
-        const isAnchorFemale = anchorNode ? (anchorNode.gender === 'F' || anchorNode.spouseType === 'wife') : false;
+        const isAnchorFemale = anchorNode ? (anchorNode.gender === 'F' || (!anchorNode.gender && anchorNode.spouseType === 'husband')) : false;
 
         const knownSpouseNode = this._findKnownSpouseNode(anchorNode, anchorName, ws);
         const knownSpouseName = knownSpouseNode ? knownSpouseNode.name : null;
@@ -11156,12 +11101,7 @@ ${b64Jsx}
         const relType = (field === 'mom' || field === 'mother') ? 'mother' : 'father';
         if (!FamilyTreeBuilder._isValidParentCandidate(c, n, relType, c._normName, this.nodeMap)) return false;
         if (!c.yob || !n.yob) return true;
-        const MathDiff = n.yob - c.yob;
-        const minAge = FamilyTreeBuilder.GENERATIONAL_GAPS?.MIN_PARENTAL_AGE || 14;
-        const maxAge = relType === 'mother'
-            ? (FamilyTreeBuilder.BIOLOGICAL_BOUNDS?.MAX_MOTHER_CHILDBIRTH_AGE || 55)
-            : (FamilyTreeBuilder.BIOLOGICAL_BOUNDS?.MAX_FATHER_CHILDBIRTH_AGE || 80);
-        return MathDiff >= minAge && MathDiff <= maxAge;
+        return FamilyTreeBuilder._isBiologicalAgeGapValid(c.yob, n.yob, relType);
     }
 
     /**
@@ -12886,7 +12826,7 @@ ${b64Jsx}
             if (useMomId && useFatherId) {
                 const mom = this.nodeMap[useMomId];
                 const dad = this.nodeMap[useFatherId];
-                if (mom && dad && mom.yob && dad.yob && mom.yob < dad.yob) {
+                if (mom && dad && mom.yob && dad.yob && (dad.yob - mom.yob) > 5) {
                     useFatherId = null;
                 }
             }
@@ -12940,11 +12880,8 @@ ${b64Jsx}
      */
     _isValidMaternalAge(childYob, momYob, momId = null) {
         if (!childYob || !momYob) return true;
+        if (!FamilyTreeBuilder._isBiologicalAgeGapValid(momYob, childYob, 'mother')) return false;
         const ageDiff = childYob - momYob;
-        if (ageDiff < FamilyTreeBuilder.GENERATIONAL_GAPS.MIN_PARENTAL_AGE ||
-            ageDiff > FamilyTreeBuilder.BIOLOGICAL_BOUNDS.MAX_MOTHER_CHILDBIRTH_AGE) {
-            return false;
-        }
         if (ageDiff > FamilyTreeBuilder.BIOLOGICAL_BOUNDS.MOTHER_OLDER_CHILD_THRESHOLD) {
             if (!momId) return false;
             const hasValidFirstChild = Object.values(this.nodeMap).some(c =>
@@ -13550,17 +13487,22 @@ ${b64Jsx}
         const nYob = FamilyTreeBuilder._effectiveYob(n);
         const pYob = FamilyTreeBuilder._effectiveYob(p);
         if (nYob && pYob && nYob !== pYob) {
-            // Older person in partnership is safely assumed to be male
-            n.gender = nYob < pYob ? 'M' : 'F';
-            p.gender = nYob < pYob ? 'F' : 'M';
+            const nextN = nYob < pYob ? 'M' : 'F';
+            const nextP = nYob < pYob ? 'F' : 'M';
+            if (n.gender === nextN && p.gender === nextP) return false;
+            n.gender = nextN;
+            p.gender = nextP;
             return true;
         }
-        // Lower row number in sheet is safely assumed to be male
-        const nRow = n._sheetRow || (n._sheetRows && Object.values(n._sheetRows)[0]) || 9999;
-        const pRow = p._sheetRow || (p._sheetRows && Object.values(p._sheetRows)[0]) || 9999;
-        if (nRow !== pRow && nRow !== 9999 && pRow !== 9999) {
-            n.gender = nRow < pRow ? 'M' : 'F';
-            p.gender = nRow < pRow ? 'F' : 'M';
+        const sentinel = FamilyTreeBuilder.CROSS_SHEET_DISTANCE;
+        const nRow = n._sheetRow || (n._sheetRows && Object.values(n._sheetRows)[0]) || sentinel;
+        const pRow = p._sheetRow || (p._sheetRows && Object.values(p._sheetRows)[0]) || sentinel;
+        if (nRow !== pRow && nRow !== sentinel && pRow !== sentinel) {
+            const nextN = nRow < pRow ? 'M' : 'F';
+            const nextP = nRow < pRow ? 'F' : 'M';
+            if (n.gender === nextN && p.gender === nextP) return false;
+            n.gender = nextN;
+            p.gender = nextP;
             return true;
         }
         return false;
@@ -13638,7 +13580,8 @@ ${b64Jsx}
      */
     _convergePartnerGenders(nodes) {
         let changed = true;
-        while (changed) {
+        let iter = 0;
+        while (changed && iter++ < 10) {
             changed = this._propagatePartnerGenders(nodes);
         }
     }
@@ -14014,10 +13957,6 @@ ${b64Jsx}
     }
 
     /**
-     * Infers death year (at age 90) for centenarians without an explicit death year.
-     *
-     * @param {Object[]} nodes - Array of domain Person nodes
-    /**
      * Infers death years for centenarians (age > 100) lacking an explicit death year by assuming death at 90.
      *
      * @param {Object[]} nodes - Domain Person instances
@@ -14032,11 +13971,8 @@ ${b64Jsx}
     static _inferCentenarianDeaths(nodes, currentYear) {
         nodes.forEach(n => {
             if (n.death) return;
-            const yob = n.yob || n._inferredYob || null;
-            if (!yob) return;
-            if (currentYear - yob > 100) {
-                n.death = yob + 90;
-            }
+            const inferredDeath = Person.inferCentenarianDeath(n.yob || n._inferredYob, currentYear);
+            if (inferredDeath) n.death = inferredDeath;
         });
     }
 
@@ -14703,7 +14639,7 @@ ${b64Jsx}
         const sameSheetCandidates = Object.values(this.nodeMap).filter(c => 
             c && c !== p && FamilyTreeBuilder.sharesSheet(c, p) &&
             (!c.partners || c.partners.length === 0) &&
-            (c._normName === expectedName || (c.spouse && c.spouse.toLowerCase().trim() === p._normName && FamilyTreeBuilder._getMinRowDistance(c, p) <= 5))
+            (c._normName === expectedName || (c.spouse && c.spouse.toLowerCase().trim() === p._normName && FamilyTreeBuilder._getMinRowDistance(c, p) <= FamilyTreeBuilder.GENERATIONAL_GAPS.MAX_ROW_NEIGHBOR_DISTANCE))
         );
         if (sameSheetCandidates.length === 0) return false;
 
@@ -14744,9 +14680,8 @@ ${b64Jsx}
         this._assignChildrenToNewPartner(p, g, isMale);
         if (p.yob || p._inferredYob) {
             g._inferredYob = (p.yob || p._inferredYob) + (isMale ? FamilyTreeBuilder.GENERATIONAL_GAPS.SPOUSAL_GENDER_OFFSET : -FamilyTreeBuilder.GENERATIONAL_GAPS.SPOUSAL_GENDER_OFFSET);
-            const currentYear = new Date().getFullYear();
-            if (!g.death && (currentYear - g._inferredYob > 100)) {
-                g.death = g._inferredYob + 90;
+            if (!g.death) {
+                g.death = Person.inferCentenarianDeath(g._inferredYob) || g.death;
             }
         }
     }

@@ -1375,12 +1375,12 @@ class FamilyTree {
         );
         if (isCoSpouseChild) return false;
 
-        const isPersonMale = person.gender === 'M' || (!person.gender && person.spouseType === 'husband');
+        const isPersonMale = person.gender === 'M' || (!person.gender && person.spouseType === 'wife');
         if (isPersonMale && child.fatherId && child.fatherId !== person.id && tree.get(child.fatherId)) {
             return false;
         }
 
-        const isPersonFemale = person.gender === 'F' || (!person.gender && person.spouseType === 'wife');
+        const isPersonFemale = person.gender === 'F' || (!person.gender && person.spouseType === 'husband');
         if (isPersonFemale && child.momId && child.momId !== person.id && tree.get(child.momId)) {
             return false;
         }
@@ -2067,6 +2067,47 @@ class FamilyTree {
     }
 
     /**
+     * Describes the click target of a sibling bus-bar: the horizontal run it draws and the
+     * siblings it joins, so the viewport can fold every branch on that row with one click
+     * (see `SiblingBusBar`). `foldableIds` are the siblings that carry a +/- collapse button,
+     * i.e. whose family unit lays out at least one child.
+     *
+     * @param {Array<Object>} children - Child subtree layout descriptors (`person`, `relX`, `memberLayouts`)
+     * @param {number} originX - Subtree X origin coordinate
+     * @param {number} busBarY - Vertical coordinate of the bus-bar
+     * @param {string|undefined} parentId - ID of the member whose children the bar joins
+     * @returns {{ parentId: (string|undefined), x1: number, x2: number, y: number, siblingIds: string[], foldableIds: string[] }}
+     *
+     * @example
+     * // Three siblings; only the first and last have children of their own.
+     * FamilyTree._describeSiblingBar([
+     *   { person: { id: 'a' }, relX: 0, memberLayouts: [{ mChildren: [{}] }] },
+     *   { person: { id: 'b' }, relX: 100, memberLayouts: [{ mChildren: [] }] },
+     *   { person: { id: 'c' }, relX: 200, memberLayouts: [{ mChildren: [] }, { mChildren: [{}] }] }
+     * ], 50, 90, 'p');
+     * // => { parentId: 'p', x1: 50, x2: 250, y: 90, siblingIds: ['a', 'b', 'c'], foldableIds: ['a', 'c'] }
+     *
+     * @example
+     * // Childless siblings produce no foldable ids, so the bar renders as a plain connector.
+     * FamilyTree._describeSiblingBar([
+     *   { person: { id: 'a' }, relX: 0, memberLayouts: [{ mChildren: [] }] },
+     *   { person: { id: 'b' }, relX: 100, memberLayouts: [{ mChildren: [] }] }
+     * ], 0, 80, 'p').foldableIds;
+     * // => []
+     */
+    static _describeSiblingBar(children, originX, busBarY, parentId) {
+        const hasOwnChildren = (cSub) => (cSub.memberLayouts || []).some(m => (m.mChildren || []).length > 0);
+        return {
+            parentId,
+            x1: originX + children[0].relX,
+            x2: originX + children[children.length - 1].relX,
+            y: busBarY,
+            siblingIds: children.map(c => c.person.id),
+            foldableIds: children.filter(hasOwnChildren).map(c => c.person.id)
+        };
+    }
+
+    /**
      * Generates horizontal bus-bar, intermediate vertical drop stems, and executes
      * recursive traversal for multiple child subtrees.
      *
@@ -2074,23 +2115,24 @@ class FamilyTree {
      * @param {Array<Object>} params.children - Array of child subtree layout descriptors
      * @param {number} params.originX - Subtree X origin coordinate
      * @param {number} params.busBarY - Vertical coordinate of bus-bar
+     * @param {string} [params.parentId] - ID of the member whose children the bar joins (tagged onto the bar)
      * @param {Array<Object>} params.paths - Target SVG path descriptors array
      * @param {Function} params.traverse - Recursive layout traversal callback
      *
      * @example
      * FamilyTree._generateMultiChildConnections({
-     *   children: [{ relX: 0, targetY: 120 }, { relX: 100, targetY: 120 }],
-     *   originX: 50, busBarY: 90, paths: [], traverse: () => {}
+     *   children: [{ person: { id: 'a' }, relX: 0, targetY: 120 }, { person: { id: 'b' }, relX: 100, targetY: 120 }],
+     *   originX: 50, busBarY: 90, parentId: 'p', paths: [], traverse: () => {}
      * });
-     * // paths pushed: [{ d: '...', type: 'bus-bar' }]
+     * // paths pushed: [{ d: '...', type: 'bus-bar', bar: { parentId: 'p', x1: 50, x2: 150, y: 90, siblingIds: ['a', 'b'], foldableIds: [] } }]
      *
      * @example
      * FamilyTree._generateMultiChildConnections({
-     *   children: [{ relX: 0, targetY: 120 }, { relX: 50, targetY: 120 }, { relX: 100, targetY: 120 }],
+     *   children: [{ person: { id: 'a' }, relX: 0, targetY: 120 }, { person: { id: 'b' }, relX: 50, targetY: 120 }, { person: { id: 'c' }, relX: 100, targetY: 120 }],
      *   originX: 0, busBarY: 80, paths: [], traverse: () => {}
      * });
      */
-    static _generateMultiChildConnections({ children, originX, busBarY, paths, traverse }) {
+    static _generateMultiChildConnections({ children, originX, busBarY, parentId, paths, traverse }) {
         const firstChild = children[0];
         const lastChild = children[children.length - 1];
         const firstDropX = originX + firstChild.relX;
@@ -2100,7 +2142,8 @@ class FamilyTree {
 
         paths.push({
             d: _generateBusBarPath(firstDropX, firstTopY, lastDropX, lastTopY, busBarY),
-            type: 'bus-bar'
+            type: 'bus-bar',
+            bar: FamilyTree._describeSiblingBar(children, originX, busBarY, parentId)
         });
 
         // Intermediate children (straight vertical drop stems from bus bar)
@@ -2171,7 +2214,9 @@ class FamilyTree {
                 cSub: children[0], originX, parentDropX, busBarY, isSyntheticSiblingUnit, paths, traverse
             });
         } else {
-            FamilyTree._generateMultiChildConnections({ children, originX, busBarY, paths, traverse });
+            FamilyTree._generateMultiChildConnections({
+                children, originX, busBarY, parentId: mInfo.person?.id, paths, traverse
+            });
         }
     }
 
@@ -2705,6 +2750,7 @@ class FamilyTree {
         const husband = isHusband ? p : partner;
         const wife = isHusband ? partner : p;
         const gap = wife.yob - husband.yob;
+        const maxGap = (typeof FamilyTreeBuilder !== 'undefined' && FamilyTreeBuilder.BIOLOGICAL_BOUNDS?.MAX_SPOUSE_AGE_DIFF) || 30;
 
         if (gap < 0 && Math.abs(gap) > 0) {
             issues.push({
@@ -2713,7 +2759,7 @@ class FamilyTree {
                 category: 'spouse_inconsistency',
                 text: `Wife ${wife.name} (b. ${wife.yob}) is recorded as older than husband ${husband.name} (b. ${husband.yob}) by ${Math.abs(gap)} years.`
             });
-        } else if (gap > 30) {
+        } else if (gap > maxGap) {
             issues.push({
                 p: husband,
                 type: 'warning',
@@ -3155,7 +3201,10 @@ class FamilyTree {
     static cleanPersonName(name) {
         if (!name || typeof name !== 'string') return '';
         let cleaned = name.trim();
-        cleaned = cleaned.replace(/^(?:Rev\.|Fr\.|Sr\.|Br\.|Brother|Father|Sister)\s+/i, '');
+        const ontology = (typeof FamilyTreeBuilder !== 'undefined' && FamilyTreeBuilder.TITLE_ONTOLOGY) || [];
+        for (const entry of ontology) {
+            cleaned = cleaned.replace(new RegExp(entry.prefix.source + '\\s+', 'i'), '');
+        }
         return cleaned.trim();
     }
 
@@ -3194,65 +3243,6 @@ class FamilyTree {
     }
 
     /**
-     * Calculates the Levenshtein edit distance between two strings.
-     *
-     * @param {string} a - First string
-     * @param {string} b - Second string
-     * @returns {number} Minimum number of single-character edits (insertions, deletions, substitutions)
-     *
-     * @example
-     * FamilyTree.levenshtein('kitten', 'sitting')
-     * // => 3
-     *
-     * @example
-     * FamilyTree.levenshtein('flaw', 'lawn')
-     * // => 2
-     */
-    static levenshtein(a, b) {
-        if (!a) return (b || '').length;
-        if (!b) return a.length;
-        const s1 = a.toLowerCase();
-        const s2 = b.toLowerCase();
-        const m = s1.length, n = s2.length;
-        const dp = Array.from({ length: m + 1 }, () => new Array(n + 1).fill(0));
-        for (let i = 0; i <= m; i++) dp[i][0] = i;
-        for (let j = 0; j <= n; j++) dp[0][j] = j;
-        for (let i = 1; i <= m; i++) {
-            for (let j = 1; j <= n; j++) {
-                dp[i][j] = s1[i - 1] === s2[j - 1]
-                    ? dp[i - 1][j - 1]
-                    : 1 + Math.min(dp[i - 1][j], dp[i][j - 1], dp[i - 1][j - 1]);
-            }
-        }
-        return dp[m][n];
-    }
-
-    /**
-     * Computes the Jaro-Winkler similarity metric between two strings, returning
-     * a normalized value in [0.0, 1.0]. Delegates to FamilyTreeBuilder.computeJaroWinkler.
-     *
-     * @param {string} s1 - First string
-     * @param {string} s2 - Second string
-     * @returns {number} Jaro-Winkler distance score between 0.0 and 1.0
-     *
-     * @example
-     * FamilyTree.computeJaroWinkler('mothr', 'mother')
-     * // => ~0.967
-     *
-     * @example
-     * FamilyTree.computeJaroWinkler('dixon', 'dicksonx')
-     * // => ~0.813
-     */
-    static computeJaroWinkler(s1, s2) {
-        if (typeof FamilyTreeBuilder !== 'undefined' && typeof FamilyTreeBuilder.computeJaroWinkler === 'function') {
-            return FamilyTreeBuilder.computeJaroWinkler(s1, s2);
-        }
-        if (s1 === s2) return 1.0;
-        if (!s1 || !s2) return 0.0;
-        return s1.toLowerCase() === s2.toLowerCase() ? 1.0 : 0.0;
-    }
-
-    /**
      * Checks if two strings differ ONLY by consonant gemination (letter doubling),
      * such as 'Mathew' vs 'Matthew', 'Chacko' vs 'Chako', 'Eliamma' vs 'Elliamma',
      * or 'Annamma' vs 'Anamma'.
@@ -3277,99 +3267,6 @@ class FamilyTree {
 
         const degeminate = (s) => s.replace(/([a-z])\1+/g, '$1').replace(/ck/g, 'k');
         return degeminate(s1) === degeminate(s2);
-    }
-
-    /**
-     * Checks whether a character is an English vowel (a, e, i, o, u) or semi-vowel (y, w).
-     *
-     * @param {string} ch - Character to check
-     * @returns {boolean} True if character is a vowel or semi-vowel
-     *
-     * @example
-     * FamilyTree.isVowelOrSemiVowel('a')
-     * // => true
-     *
-     * @example
-     * FamilyTree.isVowelOrSemiVowel('k')
-     * // => false
-     */
-    static isVowelOrSemiVowel(ch) {
-        return /^[aeiouyw]$/i.test(ch || '');
-    }
-
-    /**
-     * Checks whether a candidate word extends another word by adding a single trailing vowel or semi-vowel.
-     *
-     * @param {string} s1 - First word
-     * @param {string} s2 - Second word
-     * @returns {boolean} True if one word is a strict prefix of the other with a trailing vowel/semi-vowel
-     *
-     * @example
-     * FamilyTree._isTrailingVowelExtension('john', 'johny')
-     * // => true
-     *
-     * @example
-     * FamilyTree._isTrailingVowelExtension('ouseph', 'ousep')
-     * // => false
-     */
-    static _isTrailingVowelExtension(s1, s2) {
-        if (Math.abs(s1.length - s2.length) !== 1) return false;
-        const shorter = s1.length < s2.length ? s1 : s2;
-        const longer = s1.length < s2.length ? s2 : s1;
-        if (!longer.startsWith(shorter)) return false;
-        const extraChar = longer[longer.length - 1];
-        return FamilyTree.isVowelOrSemiVowel(extraChar);
-    }
-
-    /**
-     * Checks whether two words of identical length differ only by a single final character that is a vowel or semi-vowel.
-     *
-     * @param {string} s1 - First word
-     * @param {string} s2 - Second word
-     * @returns {boolean} True if words differ solely at the final character involving a vowel/semi-vowel
-     *
-     * @example
-     * FamilyTree._isFinalVowelSubstitution('deepa', 'deepu')
-     * // => true
-     *
-     * @example
-     * FamilyTree._isFinalVowelSubstitution('deepa', 'deept')
-     * // => false
-     */
-    static _isFinalVowelSubstitution(s1, s2) {
-        if (s1.length !== s2.length || s1.length === 0) return false;
-        if (s1.slice(0, -1) !== s2.slice(0, -1)) return false;
-        const c1 = s1[s1.length - 1];
-        const c2 = s2[s2.length - 1];
-        return FamilyTree.isVowelOrSemiVowel(c1) || FamilyTree.isVowelOrSemiVowel(c2);
-    }
-
-    /**
-     * Determines whether two words differ only by a word-ending vowel or semi-vowel.
-     * Word-ending vowel or semi-vowel differences are meaningful distinctions (e.g. 'Deepa' vs 'Deepu',
-     * 'John' vs 'Johny', 'Paul' vs 'Pauly', 'Anto' vs 'Antu', 'Rose' vs 'Rosa') and should be avoided
-     * from spelling warnings.
-     *
-     * @param {string} w1 - First word
-     * @param {string} w2 - Second word
-     * @returns {boolean} True if the difference between w1 and w2 is at the word ending involving a vowel or semi-vowel
-     *
-     * @example
-     *   FamilyTree.hasWordEndingVowelDifference('deepa', 'deepu')
-     *   // => true ('a' vs 'u')
-     *
-     * @example
-     *   FamilyTree.hasWordEndingVowelDifference('john', 'johny')
-     *   // => true (appended 'y')
-     */
-    static hasWordEndingVowelDifference(w1, w2) {
-        if (!w1 || !w2) return false;
-        const s1 = w1.toLowerCase().trim();
-        const s2 = w2.toLowerCase().trim();
-        if (s1 === s2) return false;
-
-        return FamilyTree._isTrailingVowelExtension(s1, s2) ||
-               FamilyTree._isFinalVowelSubstitution(s1, s2);
     }
 
     /**

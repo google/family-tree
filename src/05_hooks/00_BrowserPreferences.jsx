@@ -13,8 +13,8 @@
 const SHEET_HISTORY_COOKIE = 'ft_sheet_history';
 /** Cookie holding the user-tuned demographic deduction settings (JSON). */
 const DEMOGRAPHIC_SETTINGS_COOKIE = 'ft_demographic_settings';
-/** Cookie holding the id of the chosen colour theme (see COLOR_THEMES). */
-const COLOR_THEME_COOKIE = 'ft_color_theme';
+// The colour-theme cookie name (COLOR_THEME_COOKIE) lives with the theme engine, which also
+// stamps it into the pre-React boot script.
 /** Cookie holding the last URL hash view state (p=…&z=…&o=…&v=map) for session restore. */
 const LAST_VIEW_STATE_COOKIE = 'ft_last_view_state';
 /** Cookie holding background-geocoded location coordinates and hierarchies (JSON). */
@@ -980,7 +980,7 @@ function clearStoredColorTheme() {
 }
 
 /**
- * Applies the stored theme (or Classic) to the document at startup and returns it.
+ * Applies the stored theme (or the default, Solarized Dark) to the document at startup and returns it.
  *
  * @returns {Object} The resolved theme (`{ id, name, mode, roles, … }`)
  *
@@ -990,7 +990,7 @@ function clearStoredColorTheme() {
  *
  * @example
  * clearStoredColorTheme();
- * applyStoredColorTheme().id; // => 'classic'
+ * applyStoredColorTheme().id; // => DEFAULT_COLOR_THEME_ID ('solarized-dark')
  */
 function applyStoredColorTheme() {
     return applyColorTheme(loadStoredColorThemeId() || DEFAULT_COLOR_THEME_ID);

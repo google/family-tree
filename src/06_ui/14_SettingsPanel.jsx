@@ -426,7 +426,7 @@ const ColorThemePicker = ({ themeId, onThemeChange }) => {
 };
 
 /**
- * Appearance tab: the theme picker plus a footer with "Reset to Classic" and "Done".
+ * Appearance tab: the theme picker plus a footer with "Reset to default" (the default theme's name) and "Done".
  *
  * @param {object} props
  * @param {string} props.themeId - Active theme id
@@ -451,7 +451,7 @@ const AppearanceSettingsTab = ({ themeId, onThemeChange, onClose }) => (
         </div>
         <div className="flex items-center gap-2 border-t border-slate-200 px-5 py-3">
             <button type="button" onClick={() => onThemeChange(DEFAULT_COLOR_THEME_ID)} disabled={themeId === DEFAULT_COLOR_THEME_ID}
-                className="text-xs font-semibold text-slate-500 hover:text-slate-700 disabled:opacity-40">Reset to Classic</button>
+                className="text-xs font-semibold text-slate-500 hover:text-slate-700 disabled:opacity-40">Reset to {getColorThemeDefinition(DEFAULT_COLOR_THEME_ID).name}</button>
             <span className="flex-1" />
             <button type="button" onClick={onClose} className="h-9 rounded-lg bg-primary px-4 text-sm font-semibold text-on-primary shadow-sm hover:bg-primary-hover">Done</button>
         </div>

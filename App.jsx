@@ -1449,7 +1449,17 @@ const M3_ROLE_TONES = {
     }
 };
 
-const DEFAULT_COLOR_THEME_ID = 'classic';
+/** Theme applied when nothing (or an unknown id) is stored; also the fallback for retired ids. */
+const DEFAULT_COLOR_THEME_ID = 'solarized-dark';
+/** Cookie holding the id of the chosen colour theme (see COLOR_THEMES). */
+const COLOR_THEME_COOKIE = 'ft_color_theme';
+/**
+ * Theme whose colours back the stamped Tailwind config fallbacks. Pinned to Classic rather than
+ * the default theme because the Tailwind *family* fallbacks are the stock palette (= Classic);
+ * mixing them with another theme's Material roles would paint a two-tone page in the instant
+ * before `applyColorTheme()` sets the real CSS variables.
+ */
+const TAILWIND_FALLBACK_THEME_ID = 'classic';
 const COLOR_THEME_PREVIEW_SHADES = { cardFill: 100, cardBorder: 300, cardText: 950 };
 
 // ─── Colour maths (sRGB ⇄ CIELAB ⇄ LCh) ────────────────────────────────────────
@@ -1812,15 +1822,16 @@ const COLOR_THEMES = [
 ];
 
 /**
- * Looks a theme definition up by id, falling back to Classic for unknown / missing ids.
+ * Looks a theme definition up by id, falling back to the default theme for unknown / missing ids.
  *
  * @example getColorThemeDefinition('dark').mode // → 'dark'
- * @example getColorThemeDefinition('does-not-exist').id // → 'classic'
+ * @example getColorThemeDefinition('does-not-exist').id // → DEFAULT_COLOR_THEME_ID
  * @param {string} id
  * @returns {Object}
  */
 function getColorThemeDefinition(id) {
-    return COLOR_THEMES.find((theme) => theme.id === id) || COLOR_THEMES[0];
+    const byId = (themeId) => COLOR_THEMES.find((theme) => theme.id === themeId);
+    return byId(id) || byId(DEFAULT_COLOR_THEME_ID) || COLOR_THEMES[0];
 }
 
 /**
@@ -2080,7 +2091,7 @@ function tailwindVarColor(variable, fallbackHex) {
  * @returns {string[]} indented source lines
  */
 function buildTailwindColorConfigLines() {
-    const classicRoles = resolveColorTheme(DEFAULT_COLOR_THEME_ID).roles;
+    const classicRoles = resolveColorTheme(TAILWIND_FALLBACK_THEME_ID).roles;
     const lines = TAILWIND_THEME_FAMILIES.map((family) => {
         const shades = TAILWIND_SHADES.map((shade) => shade + ': ' + tailwindVarColor('--tw-' + family + '-' + shade, TAILWIND_DEFAULT_PALETTE[family][shade]));
         return '        ' + family + ': { ' + shades.join(', ') + ' },';
@@ -2091,6 +2102,36 @@ function buildTailwindColorConfigLines() {
         lines.push("        '" + token + "': " + tailwindVarColor('--md-sys-color-' + token, classicRoles[role]) + ',');
     }
     return lines;
+}
+
+/**
+ * Builds the tiny inline boot script that index.html (and the standalone export) run ahead
+ * of React: it reads the theme cookie — or its localStorage mirror, which is what `file://`
+ * exports have — falls back to the default theme, and pre-paints `--tw-white` /
+ * `color-scheme` on `<html>`. Without it a dark theme flashes white for the second or two
+ * Babel needs to compile the app; `applyColorTheme()` later replaces these two properties.
+ *
+ * @example buildThemeBootScript().includes("'solarized-dark':['0 43 54','dark']") // → true (base03 canvas)
+ * @example buildThemeBootScript().includes("'ft_pref_ft_color_theme'") // → true (the localStorage mirror key)
+ * @returns {string}
+ */
+function buildThemeBootScript() {
+    const canvases = COLOR_THEMES.map((theme) => {
+        const resolved = resolveColorTheme(theme.id);
+        return "'" + theme.id + "':['" + rgbTriplet(themeFamilyHex(resolved, 'white')) + "','" + resolved.mode + "']";
+    });
+    return [
+        '(function () {',
+        '  try {',
+        "    var match = document.cookie.match(/(?:^|; )" + COLOR_THEME_COOKIE + "=([^;]*)/);",
+        "    var stored = match ? decodeURIComponent(match[1]) : (window.localStorage && localStorage.getItem('ft_pref_" + COLOR_THEME_COOKIE + "'));",
+        '    var canvases = {' + canvases.join(',') + '};',
+        "    var entry = canvases[stored] || canvases['" + DEFAULT_COLOR_THEME_ID + "'];",
+        "    document.documentElement.style.setProperty('--tw-white', entry[0]);",
+        '    document.documentElement.style.colorScheme = entry[1];',
+        '  } catch (e) {}',
+        '})();'
+    ].join('\n');
 }
 
 /**
@@ -2125,6 +2166,7 @@ function buildTailwindThemeConfigScript() {
     ].join('\n');
 }
 
+const THEME_BOOT_SCRIPT = buildThemeBootScript();
 const TAILWIND_THEME_CONFIG_SCRIPT = buildTailwindThemeConfigScript();
 
 // ============================================================================
@@ -2641,31 +2683,6 @@ class Person {
     }
 
     /**
-     * Applies resolved religious vocation and gender attributes to a person.
-     *
-     * @param {Person} p - Person instance to mutate
-     * @param {'Nun'|'Priest'} vocation - Religious role name
-     * @param {'F'|'M'} gender - Associated gender code
-     *
-     * @example
-     * const p = { name: 'Sr. Teresa' };
-     * Person._applyReligiousVocation(p, 'Nun', 'F');
-     * // => p.isNun === true, p.isCelibate === true, p.job === 'Nun', p.gender === 'F'
-     *
-     * @example
-     * const p = { name: 'Fr. Joseph' };
-     * Person._applyReligiousVocation(p, 'Priest', 'M');
-     * // => p.isPriest === true, p.isCelibate === true, p.job === 'Priest', p.gender === 'M'
-     */
-    static _applyReligiousVocation(p, vocation, gender) {
-        p.isCelibate = true;
-        if (vocation === 'Nun') p.isNun = true;
-        else if (vocation === 'Priest') p.isPriest = true;
-        if (!p.job) p.job = vocation;
-        if (!p.gender) p.gender = gender;
-    }
-
-    /**
      * Infers male gender from traditional patriarchal and generational name suffixes.
      *
      * @param {string} lowerName - Normalized lowercase name
@@ -2681,31 +2698,6 @@ class Person {
      */
     static _hasMaleNameSuffix(lowerName) {
         return lowerName.endsWith('appan') || lowerName.endsWith('son') || /\bson(?:\s+\d+)?$/i.test(lowerName);
-    }
-
-    /**
-     * Identifies religious title prefix in normalized name or nickname ('sr.' for Nun, 'fr.' for Priest).
-     *
-     * @param {string} lowerName - Normalized lowercase name
-     * @param {string} lowerNick - Normalized lowercase nickname
-     * @returns {?{ vocation: string, gender: string }} Vocation object or null
-     *
-     * @example
-     * Person._matchReligiousPrefix('sr. maria', '');
-     * // => { vocation: 'Nun', gender: 'F' }
-     *
-     * @example
-     * Person._matchReligiousPrefix('fr. thomas', '');
-     * // => { vocation: 'Priest', gender: 'M' }
-     */
-    static _matchReligiousPrefix(lowerName, lowerNick) {
-        if (/^sr(?:\.|\s)\s*/i.test(lowerName) || /^sr(?:\.|\s)\s*/i.test(lowerNick)) {
-            return { vocation: 'Nun', gender: 'F' };
-        }
-        if (/^fr(?:\.|\s)\s*/i.test(lowerName) || /^fr(?:\.|\s)\s*/i.test(lowerNick)) {
-            return { vocation: 'Priest', gender: 'M' };
-        }
-        return null;
     }
 
     /**
@@ -2737,13 +2729,8 @@ class Person {
             if (titleMatch.isPriest) p.isPriest = true;
             if (titleMatch.career && !p.job) p.job = titleMatch.career;
             if (titleMatch.gender && !p.gender) p.gender = titleMatch.gender;
-        } else {
-            const prefix = Person._matchReligiousPrefix(lowerName, lowerNick);
-            if (prefix) {
-                Person._applyReligiousVocation(p, prefix.vocation, prefix.gender);
-            } else if (!p.gender && Person._hasMaleNameSuffix(lowerName)) {
-                p.gender = 'M';
-            }
+        } else if (!p.gender && Person._hasMaleNameSuffix(lowerName)) {
+            p.gender = 'M';
         }
     }
 
@@ -4586,12 +4573,12 @@ class FamilyTree {
         );
         if (isCoSpouseChild) return false;
 
-        const isPersonMale = person.gender === 'M' || (!person.gender && person.spouseType === 'husband');
+        const isPersonMale = person.gender === 'M' || (!person.gender && person.spouseType === 'wife');
         if (isPersonMale && child.fatherId && child.fatherId !== person.id && tree.get(child.fatherId)) {
             return false;
         }
 
-        const isPersonFemale = person.gender === 'F' || (!person.gender && person.spouseType === 'wife');
+        const isPersonFemale = person.gender === 'F' || (!person.gender && person.spouseType === 'husband');
         if (isPersonFemale && child.momId && child.momId !== person.id && tree.get(child.momId)) {
             return false;
         }
@@ -5278,6 +5265,47 @@ class FamilyTree {
     }
 
     /**
+     * Describes the click target of a sibling bus-bar: the horizontal run it draws and the
+     * siblings it joins, so the viewport can fold every branch on that row with one click
+     * (see `SiblingBusBar`). `foldableIds` are the siblings that carry a +/- collapse button,
+     * i.e. whose family unit lays out at least one child.
+     *
+     * @param {Array<Object>} children - Child subtree layout descriptors (`person`, `relX`, `memberLayouts`)
+     * @param {number} originX - Subtree X origin coordinate
+     * @param {number} busBarY - Vertical coordinate of the bus-bar
+     * @param {string|undefined} parentId - ID of the member whose children the bar joins
+     * @returns {{ parentId: (string|undefined), x1: number, x2: number, y: number, siblingIds: string[], foldableIds: string[] }}
+     *
+     * @example
+     * // Three siblings; only the first and last have children of their own.
+     * FamilyTree._describeSiblingBar([
+     *   { person: { id: 'a' }, relX: 0, memberLayouts: [{ mChildren: [{}] }] },
+     *   { person: { id: 'b' }, relX: 100, memberLayouts: [{ mChildren: [] }] },
+     *   { person: { id: 'c' }, relX: 200, memberLayouts: [{ mChildren: [] }, { mChildren: [{}] }] }
+     * ], 50, 90, 'p');
+     * // => { parentId: 'p', x1: 50, x2: 250, y: 90, siblingIds: ['a', 'b', 'c'], foldableIds: ['a', 'c'] }
+     *
+     * @example
+     * // Childless siblings produce no foldable ids, so the bar renders as a plain connector.
+     * FamilyTree._describeSiblingBar([
+     *   { person: { id: 'a' }, relX: 0, memberLayouts: [{ mChildren: [] }] },
+     *   { person: { id: 'b' }, relX: 100, memberLayouts: [{ mChildren: [] }] }
+     * ], 0, 80, 'p').foldableIds;
+     * // => []
+     */
+    static _describeSiblingBar(children, originX, busBarY, parentId) {
+        const hasOwnChildren = (cSub) => (cSub.memberLayouts || []).some(m => (m.mChildren || []).length > 0);
+        return {
+            parentId,
+            x1: originX + children[0].relX,
+            x2: originX + children[children.length - 1].relX,
+            y: busBarY,
+            siblingIds: children.map(c => c.person.id),
+            foldableIds: children.filter(hasOwnChildren).map(c => c.person.id)
+        };
+    }
+
+    /**
      * Generates horizontal bus-bar, intermediate vertical drop stems, and executes
      * recursive traversal for multiple child subtrees.
      *
@@ -5285,23 +5313,24 @@ class FamilyTree {
      * @param {Array<Object>} params.children - Array of child subtree layout descriptors
      * @param {number} params.originX - Subtree X origin coordinate
      * @param {number} params.busBarY - Vertical coordinate of bus-bar
+     * @param {string} [params.parentId] - ID of the member whose children the bar joins (tagged onto the bar)
      * @param {Array<Object>} params.paths - Target SVG path descriptors array
      * @param {Function} params.traverse - Recursive layout traversal callback
      *
      * @example
      * FamilyTree._generateMultiChildConnections({
-     *   children: [{ relX: 0, targetY: 120 }, { relX: 100, targetY: 120 }],
-     *   originX: 50, busBarY: 90, paths: [], traverse: () => {}
+     *   children: [{ person: { id: 'a' }, relX: 0, targetY: 120 }, { person: { id: 'b' }, relX: 100, targetY: 120 }],
+     *   originX: 50, busBarY: 90, parentId: 'p', paths: [], traverse: () => {}
      * });
-     * // paths pushed: [{ d: '...', type: 'bus-bar' }]
+     * // paths pushed: [{ d: '...', type: 'bus-bar', bar: { parentId: 'p', x1: 50, x2: 150, y: 90, siblingIds: ['a', 'b'], foldableIds: [] } }]
      *
      * @example
      * FamilyTree._generateMultiChildConnections({
-     *   children: [{ relX: 0, targetY: 120 }, { relX: 50, targetY: 120 }, { relX: 100, targetY: 120 }],
+     *   children: [{ person: { id: 'a' }, relX: 0, targetY: 120 }, { person: { id: 'b' }, relX: 50, targetY: 120 }, { person: { id: 'c' }, relX: 100, targetY: 120 }],
      *   originX: 0, busBarY: 80, paths: [], traverse: () => {}
      * });
      */
-    static _generateMultiChildConnections({ children, originX, busBarY, paths, traverse }) {
+    static _generateMultiChildConnections({ children, originX, busBarY, parentId, paths, traverse }) {
         const firstChild = children[0];
         const lastChild = children[children.length - 1];
         const firstDropX = originX + firstChild.relX;
@@ -5311,7 +5340,8 @@ class FamilyTree {
 
         paths.push({
             d: _generateBusBarPath(firstDropX, firstTopY, lastDropX, lastTopY, busBarY),
-            type: 'bus-bar'
+            type: 'bus-bar',
+            bar: FamilyTree._describeSiblingBar(children, originX, busBarY, parentId)
         });
 
         // Intermediate children (straight vertical drop stems from bus bar)
@@ -5382,7 +5412,9 @@ class FamilyTree {
                 cSub: children[0], originX, parentDropX, busBarY, isSyntheticSiblingUnit, paths, traverse
             });
         } else {
-            FamilyTree._generateMultiChildConnections({ children, originX, busBarY, paths, traverse });
+            FamilyTree._generateMultiChildConnections({
+                children, originX, busBarY, parentId: mInfo.person?.id, paths, traverse
+            });
         }
     }
 
@@ -5916,6 +5948,7 @@ class FamilyTree {
         const husband = isHusband ? p : partner;
         const wife = isHusband ? partner : p;
         const gap = wife.yob - husband.yob;
+        const maxGap = (typeof FamilyTreeBuilder !== 'undefined' && FamilyTreeBuilder.BIOLOGICAL_BOUNDS?.MAX_SPOUSE_AGE_DIFF) || 30;
 
         if (gap < 0 && Math.abs(gap) > 0) {
             issues.push({
@@ -5924,7 +5957,7 @@ class FamilyTree {
                 category: 'spouse_inconsistency',
                 text: `Wife ${wife.name} (b. ${wife.yob}) is recorded as older than husband ${husband.name} (b. ${husband.yob}) by ${Math.abs(gap)} years.`
             });
-        } else if (gap > 30) {
+        } else if (gap > maxGap) {
             issues.push({
                 p: husband,
                 type: 'warning',
@@ -6366,7 +6399,10 @@ class FamilyTree {
     static cleanPersonName(name) {
         if (!name || typeof name !== 'string') return '';
         let cleaned = name.trim();
-        cleaned = cleaned.replace(/^(?:Rev\.|Fr\.|Sr\.|Br\.|Brother|Father|Sister)\s+/i, '');
+        const ontology = (typeof FamilyTreeBuilder !== 'undefined' && FamilyTreeBuilder.TITLE_ONTOLOGY) || [];
+        for (const entry of ontology) {
+            cleaned = cleaned.replace(new RegExp(entry.prefix.source + '\\s+', 'i'), '');
+        }
         return cleaned.trim();
     }
 
@@ -6405,65 +6441,6 @@ class FamilyTree {
     }
 
     /**
-     * Calculates the Levenshtein edit distance between two strings.
-     *
-     * @param {string} a - First string
-     * @param {string} b - Second string
-     * @returns {number} Minimum number of single-character edits (insertions, deletions, substitutions)
-     *
-     * @example
-     * FamilyTree.levenshtein('kitten', 'sitting')
-     * // => 3
-     *
-     * @example
-     * FamilyTree.levenshtein('flaw', 'lawn')
-     * // => 2
-     */
-    static levenshtein(a, b) {
-        if (!a) return (b || '').length;
-        if (!b) return a.length;
-        const s1 = a.toLowerCase();
-        const s2 = b.toLowerCase();
-        const m = s1.length, n = s2.length;
-        const dp = Array.from({ length: m + 1 }, () => new Array(n + 1).fill(0));
-        for (let i = 0; i <= m; i++) dp[i][0] = i;
-        for (let j = 0; j <= n; j++) dp[0][j] = j;
-        for (let i = 1; i <= m; i++) {
-            for (let j = 1; j <= n; j++) {
-                dp[i][j] = s1[i - 1] === s2[j - 1]
-                    ? dp[i - 1][j - 1]
-                    : 1 + Math.min(dp[i - 1][j], dp[i][j - 1], dp[i - 1][j - 1]);
-            }
-        }
-        return dp[m][n];
-    }
-
-    /**
-     * Computes the Jaro-Winkler similarity metric between two strings, returning
-     * a normalized value in [0.0, 1.0]. Delegates to FamilyTreeBuilder.computeJaroWinkler.
-     *
-     * @param {string} s1 - First string
-     * @param {string} s2 - Second string
-     * @returns {number} Jaro-Winkler distance score between 0.0 and 1.0
-     *
-     * @example
-     * FamilyTree.computeJaroWinkler('mothr', 'mother')
-     * // => ~0.967
-     *
-     * @example
-     * FamilyTree.computeJaroWinkler('dixon', 'dicksonx')
-     * // => ~0.813
-     */
-    static computeJaroWinkler(s1, s2) {
-        if (typeof FamilyTreeBuilder !== 'undefined' && typeof FamilyTreeBuilder.computeJaroWinkler === 'function') {
-            return FamilyTreeBuilder.computeJaroWinkler(s1, s2);
-        }
-        if (s1 === s2) return 1.0;
-        if (!s1 || !s2) return 0.0;
-        return s1.toLowerCase() === s2.toLowerCase() ? 1.0 : 0.0;
-    }
-
-    /**
      * Checks if two strings differ ONLY by consonant gemination (letter doubling),
      * such as 'Mathew' vs 'Matthew', 'Chacko' vs 'Chako', 'Eliamma' vs 'Elliamma',
      * or 'Annamma' vs 'Anamma'.
@@ -6488,99 +6465,6 @@ class FamilyTree {
 
         const degeminate = (s) => s.replace(/([a-z])\1+/g, '$1').replace(/ck/g, 'k');
         return degeminate(s1) === degeminate(s2);
-    }
-
-    /**
-     * Checks whether a character is an English vowel (a, e, i, o, u) or semi-vowel (y, w).
-     *
-     * @param {string} ch - Character to check
-     * @returns {boolean} True if character is a vowel or semi-vowel
-     *
-     * @example
-     * FamilyTree.isVowelOrSemiVowel('a')
-     * // => true
-     *
-     * @example
-     * FamilyTree.isVowelOrSemiVowel('k')
-     * // => false
-     */
-    static isVowelOrSemiVowel(ch) {
-        return /^[aeiouyw]$/i.test(ch || '');
-    }
-
-    /**
-     * Checks whether a candidate word extends another word by adding a single trailing vowel or semi-vowel.
-     *
-     * @param {string} s1 - First word
-     * @param {string} s2 - Second word
-     * @returns {boolean} True if one word is a strict prefix of the other with a trailing vowel/semi-vowel
-     *
-     * @example
-     * FamilyTree._isTrailingVowelExtension('john', 'johny')
-     * // => true
-     *
-     * @example
-     * FamilyTree._isTrailingVowelExtension('ouseph', 'ousep')
-     * // => false
-     */
-    static _isTrailingVowelExtension(s1, s2) {
-        if (Math.abs(s1.length - s2.length) !== 1) return false;
-        const shorter = s1.length < s2.length ? s1 : s2;
-        const longer = s1.length < s2.length ? s2 : s1;
-        if (!longer.startsWith(shorter)) return false;
-        const extraChar = longer[longer.length - 1];
-        return FamilyTree.isVowelOrSemiVowel(extraChar);
-    }
-
-    /**
-     * Checks whether two words of identical length differ only by a single final character that is a vowel or semi-vowel.
-     *
-     * @param {string} s1 - First word
-     * @param {string} s2 - Second word
-     * @returns {boolean} True if words differ solely at the final character involving a vowel/semi-vowel
-     *
-     * @example
-     * FamilyTree._isFinalVowelSubstitution('deepa', 'deepu')
-     * // => true
-     *
-     * @example
-     * FamilyTree._isFinalVowelSubstitution('deepa', 'deept')
-     * // => false
-     */
-    static _isFinalVowelSubstitution(s1, s2) {
-        if (s1.length !== s2.length || s1.length === 0) return false;
-        if (s1.slice(0, -1) !== s2.slice(0, -1)) return false;
-        const c1 = s1[s1.length - 1];
-        const c2 = s2[s2.length - 1];
-        return FamilyTree.isVowelOrSemiVowel(c1) || FamilyTree.isVowelOrSemiVowel(c2);
-    }
-
-    /**
-     * Determines whether two words differ only by a word-ending vowel or semi-vowel.
-     * Word-ending vowel or semi-vowel differences are meaningful distinctions (e.g. 'Deepa' vs 'Deepu',
-     * 'John' vs 'Johny', 'Paul' vs 'Pauly', 'Anto' vs 'Antu', 'Rose' vs 'Rosa') and should be avoided
-     * from spelling warnings.
-     *
-     * @param {string} w1 - First word
-     * @param {string} w2 - Second word
-     * @returns {boolean} True if the difference between w1 and w2 is at the word ending involving a vowel or semi-vowel
-     *
-     * @example
-     *   FamilyTree.hasWordEndingVowelDifference('deepa', 'deepu')
-     *   // => true ('a' vs 'u')
-     *
-     * @example
-     *   FamilyTree.hasWordEndingVowelDifference('john', 'johny')
-     *   // => true (appended 'y')
-     */
-    static hasWordEndingVowelDifference(w1, w2) {
-        if (!w1 || !w2) return false;
-        const s1 = w1.toLowerCase().trim();
-        const s2 = w2.toLowerCase().trim();
-        if (s1 === s2) return false;
-
-        return FamilyTree._isTrailingVowelExtension(s1, s2) ||
-               FamilyTree._isFinalVowelSubstitution(s1, s2);
     }
 
     /**
@@ -7516,9 +7400,9 @@ class FamilyTreeBuilder {
      * Encapsulates honorific prefix matching, canonical gender, celibacy vows, and career labels.
      */
     static TITLE_ONTOLOGY = Object.freeze([
-        { prefix: /^(?:sr\.?|sister)\b/i, gender: 'F', isCelibate: true, career: 'Nun', isNun: true },
-        { prefix: /^(?:fr\.?|father|rev\.?)\b/i, gender: 'M', isCelibate: true, career: 'Priest', isPriest: true },
-        { prefix: /^(?:br\.?|brother)\b/i, gender: 'M', isCelibate: true, career: 'Brother', isBrother: true },
+        { prefix: /^(?:sr|sister)\b\.?/i, gender: 'F', isCelibate: true, career: 'Nun', isNun: true },
+        { prefix: /^(?:fr|father|rev)\b\.?/i, gender: 'M', isCelibate: true, career: 'Priest', isPriest: true },
+        { prefix: /^(?:br|brother)\b\.?/i, gender: 'M', isCelibate: true, career: 'Brother', isBrother: true },
     ]);
 
     /**
@@ -8746,7 +8630,7 @@ class FamilyTreeBuilder {
      * console.log(cfg.includes('text-gradient'));
      */
     static _getStandaloneTailwindConfig() {
-        return `  <script>\n${TAILWIND_THEME_CONFIG_SCRIPT}\n  </script>`;
+        return `  <script>\n${TAILWIND_THEME_CONFIG_SCRIPT}\n  </script>\n  <script>\n${THEME_BOOT_SCRIPT}\n  </script>`;
     }
 
     /**
@@ -9438,12 +9322,9 @@ ${b64Jsx}
             if (titleMatch.gender === 'F') return true;
             if (titleMatch.gender === 'M') return false;
         }
-        const femaleNames = FamilyTreeBuilder._STATIC_FEMALE_NAMES;
-        if (femaleNames.has(lower)) return true;
         const tokens = lower.split(/\s+/);
-        if (tokens.some(t => femaleNames.has(t))) return true;
         if (tokens.some(t => FamilyTreeBuilder._dynamicFemaleNames && FamilyTreeBuilder._dynamicFemaleNames.has(t))) return true;
-        if (!FamilyTreeBuilder._isMaleName(lower) && tokens.some(t => /(?:amma|mol|mary)$/i.test(t))) return true;
+        if (!FamilyTreeBuilder._isMaleName(lower) && tokens.some(t => /^(?:mary|rose)$/i.test(t) || /(?:amma|mol)$/i.test(t))) return true;
         return false;
     }
 
@@ -9471,14 +9352,12 @@ ${b64Jsx}
             if (titleMatch.gender === 'M') return true;
             if (titleMatch.gender === 'F') return false;
         }
-        const maleNames = FamilyTreeBuilder._STATIC_MALE_NAMES;
-        if (maleNames.has(lower)) return true;
         const tokens = lower.split(/\s+/);
-        if (tokens.some(t => maleNames.has(t))) return true;
         if (tokens.some(t => FamilyTreeBuilder._dynamicMaleNames && FamilyTreeBuilder._dynamicMaleNames.has(t))) return true;
-        if (lower.endsWith('appan') || lower.endsWith('son') || /\bson(?:\s+\d+)?$/i.test(lower) ||
+        if (Person._hasMaleNameSuffix(lower) ||
             lower.endsWith('achan') || lower.endsWith('mon') ||
-            lower.endsWith('ose') || lower.endsWith('ouse') || lower.endsWith('eph')) return true;
+            (lower.endsWith('ose') && !/\brose$/i.test(lower)) ||
+            lower.endsWith('ouse') || lower.endsWith('eph')) return true;
         return false;
     }
 
@@ -9499,9 +9378,7 @@ ${b64Jsx}
      */
     static _isGenericKinshipName(name) {
         if (!name) return false;
-        const norm = name.toLowerCase().trim();
-        const keywords = ['wife', 'husband', 'ghost', 'unknown', 'father', 'mother', 'brother', 'sister', 'son', 'daughter'];
-        return keywords.some(kw => norm.includes(kw));
+        return /\b(?:wife|husband|spouse|partner|ghost|unknown|father|dad|mother|mom|brother|sister|sibling|son|daughter|boy|girl)\b/i.test(name);
     }
 
     /**
@@ -9589,9 +9466,11 @@ ${b64Jsx}
      */
     static _isNodeLikelyFemale(node) {
         if (!node) return false;
-        return node.gender === 'F' || node.spouseType === 'wife' ||
+        if (node.gender === 'F') return true;
+        if (node.gender === 'M') return false;
+        return node.spouseType === 'wife' ||
             Boolean(node.spouse && FamilyTreeBuilder._isMaleName(node.spouse)) ||
-            (!FamilyTreeBuilder._isMaleName(node.name) && (node.name || '').toLowerCase().split(/\s+/).some(t => /(?:amma|mol|mary)$/i.test(t)));
+            FamilyTreeBuilder._isFemaleName(node.name);
     }
 
     /**
@@ -9878,6 +9757,7 @@ ${b64Jsx}
      * // => []
      */
     static _sortPartnersForRemarriage(known, getYob, nodeMap) {
+        const sentinel = FamilyTreeBuilder.MAX_ROW_SENTINEL;
         return (known.partners || []).map(pid => {
             const ptr = nodeMap[pid];
             const ptrChildren = FamilyTreeBuilder._collectPartnerChildren(known, ptr, nodeMap, getYob);
@@ -9886,7 +9766,7 @@ ${b64Jsx}
                 ptr,
                 ord: FamilyTree._extractPartnerOrdinal(ptr),
                 firstChildYob: firstChild ? getYob(firstChild) : null,
-                firstChildRow: ptrChildren.length ? FamilyTreeBuilder.getNodeSheetRow(ptrChildren[0], 99999) : 99999,
+                firstChildRow: ptrChildren.length ? FamilyTreeBuilder.getNodeSheetRow(ptrChildren[0], sentinel) : sentinel,
                 children: ptrChildren
             };
         }).sort((a, b) => FamilyTreeBuilder._compareRemarriagePartners(a, b, getYob));
@@ -11017,7 +10897,7 @@ ${b64Jsx}
 
             const dist = FamilyTreeBuilder._getMinRowDistance(potentialSp, ch);
             const reciprocal = potentialSp.spouse && (potentialSp.spouse || '').toLowerCase().trim() === chNorm;
-            if (reciprocal || dist <= 3) {
+            if (reciprocal || dist <= FamilyTreeBuilder.GENERATIONAL_GAPS.ADJACENT_ROW_MAX_DISTANCE) {
                 chSpouseIds.add(potentialSp.id);
             }
         }
@@ -11354,26 +11234,24 @@ ${b64Jsx}
      */
     static _isCelibateReligious(node) {
         if (!node) return false;
-        if (node.isCelibate) return true;
-        if (node.isNun || node.isPriest) return true;
+        if (node.isCelibate || node.isNun || node.isPriest) return true;
         if (node.job === 'Nun' || node.job === 'Priest') return true;
         const name = (node.name || '').trim();
         const nick = (node.nick || '').trim();
         const norm = (node._normName || '').trim();
-        const text = [name, nick, norm, node.freeForm].filter(Boolean).join(' ');
-        if (!text) return false;
+        const nameText = [name, nick, norm].filter(Boolean).join(' ');
+        if (!nameText && !node.freeForm) return false;
 
         // Relative roles, spouses, and parents are NEVER celibate religious
-        if (/(?:wife|husband|daughter|son)/i.test(text)) return false;
-        if (/(?:brother|sister)\b/i.test(name) && !/^(?:brother|sister|br\.|sr\.)\s+/i.test(name)) return false;
+        if (/\b(?:wife|husband|daughter|son)\b/i.test(nameText)) return false;
+        if (/\b(?:brother|sister)\b/i.test(name) && !/^(?:brother|sister|br\.?|sr\.?)\s+/i.test(name)) return false;
         if (node.children && node.children.length > 0) return false;
 
         const titleMatch = FamilyTreeBuilder.matchTitleOntology(name, nick);
         if (titleMatch && titleMatch.isCelibate) return true;
 
-        return /\b(?:sr|sr\.|fr|fr\.|rev|rev\.|br\.|nun|monk|priest)\b/i.test(text) ||
-               /^(?:brother|sister)\s+[a-z]+/i.test(name) ||
-               /^(?:brother|sister)\s+[a-z]+/i.test(nick);
+        return /\b(?:sr\.?|fr\.?|rev\.?|br\.|nun|monk|priest)\b/i.test(nameText) ||
+               /\b(?:nun|monk|priest)\b/i.test(node.freeForm || '');
     }
 
     /**
@@ -12989,25 +12867,9 @@ ${b64Jsx}
      * // => n.gender === 'M', n.isPriest === true
      */
     _inferVocationAndSuffixGender(n) {
-        if (!n.name) return;
-        const lowerName = n.name.toLowerCase().trim();
-        const lowerNick = (n.nick || '').toLowerCase().trim();
-
-        // 1. Nun check: "Sr." or "Sr " prefix -> nun, female
-        if (/^sr(?:\.|\s)\s*/i.test(lowerName) || (n.nick && /^sr(?:\.|\s)\s*/i.test(lowerNick))) {
-            n.isNun = true;
-            if (!n.job) n.job = 'Nun';
-            if (!n.gender) n.gender = 'F';
-        }
-        // 2. Priest check: "Fr." or "Fr " prefix -> priest, male
-        else if (/^fr(?:\.|\s)\s*/i.test(lowerName) || (n.nick && /^fr(?:\.|\s)\s*/i.test(lowerNick))) {
-            n.isPriest = true;
-            if (!n.job) n.job = 'Priest';
-            if (!n.gender) n.gender = 'M';
-        }
-        // 3. Suffix check: "son", "appan" -> male
-        else if (!n.gender && (lowerName.endsWith('appan') || lowerName.endsWith('son') || /\bson(?:\s+\d+)?$/i.test(lowerName))) {
-            n.gender = 'M';
+        if (!n || !n.name) return;
+        if (typeof Person !== 'undefined' && Person._resolveTitleAndVocationAttributes) {
+            Person._resolveTitleAndVocationAttributes(n);
         }
     }
 
@@ -14815,36 +14677,6 @@ ${b64Jsx}
     }
 
     /**
-     * Resolves religious prefix and returns parsed vocation attributes, or null if no match.
-     *
-     * @param {string} normName - Normalized lowercase name
-     * @param {string} normNick - Normalized lowercase nickname
-     * @param {string} gender - Initial resolved gender
-     * @returns {Object|null} Vocation attributes or null
-     *
-     * @example
-     * FamilyTreeBuilder._resolveReligiousPrefixVocation('fr. john', '', 'M');
-     * // returns { gender: 'M', isNun: false, isPriest: true, isCelibate: true, job: '' }
-     *
-     * @example
-     * FamilyTreeBuilder._resolveReligiousPrefixVocation('alice', '', '');
-     * // returns null
-     */
-    static _resolveReligiousPrefixVocation(normName, normNick, gender) {
-        const prefix = (typeof Person !== 'undefined' && Person._matchReligiousPrefix)
-            ? Person._matchReligiousPrefix(normName, normNick)
-            : null;
-        if (!prefix) return null;
-        return {
-            gender: gender || prefix.gender || '',
-            isNun: prefix.vocation === 'Nun',
-            isPriest: prefix.vocation === 'Priest',
-            isCelibate: true,
-            job: ''
-        };
-    }
-
-    /**
      * Resolves religious vocation and gender from name, nickname, and explicit gender.
      *
      * @param {string} name - Primary name
@@ -14875,9 +14707,6 @@ ${b64Jsx}
                 job: titleMatch.career || ''
             };
         }
-
-        const prefixResult = FamilyTreeBuilder._resolveReligiousPrefixVocation(normNameCheck, normNickCheck, gender);
-        if (prefixResult) return prefixResult;
 
         if (!gender && typeof Person !== 'undefined' && Person._hasMaleNameSuffix(normNameCheck)) {
             gender = 'M';
@@ -16177,7 +16006,7 @@ ${b64Jsx}
         if (/\b(?:no|without|zero|0)\s+(?:children|kids|issue|sons?|daughters?|boys?|girls?|siblings?|sisters?|brothers?)\b/i.test(t) || /\bchildless\b/i.test(t)) {
             return;
         }
-        const numPattern = /(?:\b(?:additional|more)\s+)?(\d+|one|two|three|four|five|six|seven|eight|nine|ten|eleven|twelve|a|an)?\s*(?:additional|more)?\s*(daughters?|sons?|children|kids|boys?|girls?|sisters?|brothers?|siblings?)/gi;
+        const numPattern = /(?:\b(?:additional|more)\s+)?(?:\b(\d+|one|two|three|four|five|six|seven|eight|nine|ten|eleven|twelve|a|an)\s+)?(?:additional|more)?\s*\b(daughters?|sons?|children|kids|boys?|girls?|sisters?|brothers?|siblings?)\b/gi;
         let match;
         while ((match = numPattern.exec(t)) !== null) {
             const count = this._parseWordNum(match[1]) || 1;
@@ -16370,7 +16199,7 @@ ${b64Jsx}
         const anchorNode = this._findAnchorNode(baseName, n, ws);
         const anchorName = anchorNode ? anchorNode.name : baseName;
         const srcId = anchorNode ? (anchorNode._sourceId || n._sourceId) : n._sourceId;
-        const isAnchorFemale = anchorNode ? (anchorNode.gender === 'F' || anchorNode.spouseType === 'wife') : false;
+        const isAnchorFemale = anchorNode ? (anchorNode.gender === 'F' || (!anchorNode.gender && anchorNode.spouseType === 'husband')) : false;
 
         const knownSpouseNode = this._findKnownSpouseNode(anchorNode, anchorName, ws);
 
@@ -17451,7 +17280,7 @@ ${b64Jsx}
             return;
         }
 
-        const isAnchorMale = anchorNode.gender === 'M' || anchorNode.spouseType === 'husband';
+        const isAnchorMale = anchorNode.gender === 'M' || (!anchorNode.gender && anchorNode.spouseType === 'wife');
         if (isAnchorMale) {
             cNode.fatherId = anchorNode.id;
             if (knownSpouseNode) cNode.momId = knownSpouseNode.id;
@@ -17537,7 +17366,7 @@ ${b64Jsx}
         const anchorNode = this._findAnchorNode(baseName, n, ws);
         const anchorName = anchorNode ? anchorNode.name : baseName;
         const srcId = anchorNode ? (anchorNode._sourceId || n._sourceId) : n._sourceId;
-        const isAnchorFemale = anchorNode ? (anchorNode.gender === 'F' || anchorNode.spouseType === 'wife') : false;
+        const isAnchorFemale = anchorNode ? (anchorNode.gender === 'F' || (!anchorNode.gender && anchorNode.spouseType === 'husband')) : false;
 
         const knownSpouseNode = this._findKnownSpouseNode(anchorNode, anchorName, ws);
         const knownSpouseName = knownSpouseNode ? knownSpouseNode.name : null;
@@ -18600,12 +18429,7 @@ ${b64Jsx}
         const relType = (field === 'mom' || field === 'mother') ? 'mother' : 'father';
         if (!FamilyTreeBuilder._isValidParentCandidate(c, n, relType, c._normName, this.nodeMap)) return false;
         if (!c.yob || !n.yob) return true;
-        const MathDiff = n.yob - c.yob;
-        const minAge = FamilyTreeBuilder.GENERATIONAL_GAPS?.MIN_PARENTAL_AGE || 14;
-        const maxAge = relType === 'mother'
-            ? (FamilyTreeBuilder.BIOLOGICAL_BOUNDS?.MAX_MOTHER_CHILDBIRTH_AGE || 55)
-            : (FamilyTreeBuilder.BIOLOGICAL_BOUNDS?.MAX_FATHER_CHILDBIRTH_AGE || 80);
-        return MathDiff >= minAge && MathDiff <= maxAge;
+        return FamilyTreeBuilder._isBiologicalAgeGapValid(c.yob, n.yob, relType);
     }
 
     /**
@@ -20330,7 +20154,7 @@ ${b64Jsx}
             if (useMomId && useFatherId) {
                 const mom = this.nodeMap[useMomId];
                 const dad = this.nodeMap[useFatherId];
-                if (mom && dad && mom.yob && dad.yob && mom.yob < dad.yob) {
+                if (mom && dad && mom.yob && dad.yob && (dad.yob - mom.yob) > 5) {
                     useFatherId = null;
                 }
             }
@@ -20384,11 +20208,8 @@ ${b64Jsx}
      */
     _isValidMaternalAge(childYob, momYob, momId = null) {
         if (!childYob || !momYob) return true;
+        if (!FamilyTreeBuilder._isBiologicalAgeGapValid(momYob, childYob, 'mother')) return false;
         const ageDiff = childYob - momYob;
-        if (ageDiff < FamilyTreeBuilder.GENERATIONAL_GAPS.MIN_PARENTAL_AGE ||
-            ageDiff > FamilyTreeBuilder.BIOLOGICAL_BOUNDS.MAX_MOTHER_CHILDBIRTH_AGE) {
-            return false;
-        }
         if (ageDiff > FamilyTreeBuilder.BIOLOGICAL_BOUNDS.MOTHER_OLDER_CHILD_THRESHOLD) {
             if (!momId) return false;
             const hasValidFirstChild = Object.values(this.nodeMap).some(c =>
@@ -20994,17 +20815,22 @@ ${b64Jsx}
         const nYob = FamilyTreeBuilder._effectiveYob(n);
         const pYob = FamilyTreeBuilder._effectiveYob(p);
         if (nYob && pYob && nYob !== pYob) {
-            // Older person in partnership is safely assumed to be male
-            n.gender = nYob < pYob ? 'M' : 'F';
-            p.gender = nYob < pYob ? 'F' : 'M';
+            const nextN = nYob < pYob ? 'M' : 'F';
+            const nextP = nYob < pYob ? 'F' : 'M';
+            if (n.gender === nextN && p.gender === nextP) return false;
+            n.gender = nextN;
+            p.gender = nextP;
             return true;
         }
-        // Lower row number in sheet is safely assumed to be male
-        const nRow = n._sheetRow || (n._sheetRows && Object.values(n._sheetRows)[0]) || 9999;
-        const pRow = p._sheetRow || (p._sheetRows && Object.values(p._sheetRows)[0]) || 9999;
-        if (nRow !== pRow && nRow !== 9999 && pRow !== 9999) {
-            n.gender = nRow < pRow ? 'M' : 'F';
-            p.gender = nRow < pRow ? 'F' : 'M';
+        const sentinel = FamilyTreeBuilder.CROSS_SHEET_DISTANCE;
+        const nRow = n._sheetRow || (n._sheetRows && Object.values(n._sheetRows)[0]) || sentinel;
+        const pRow = p._sheetRow || (p._sheetRows && Object.values(p._sheetRows)[0]) || sentinel;
+        if (nRow !== pRow && nRow !== sentinel && pRow !== sentinel) {
+            const nextN = nRow < pRow ? 'M' : 'F';
+            const nextP = nRow < pRow ? 'F' : 'M';
+            if (n.gender === nextN && p.gender === nextP) return false;
+            n.gender = nextN;
+            p.gender = nextP;
             return true;
         }
         return false;
@@ -21082,7 +20908,8 @@ ${b64Jsx}
      */
     _convergePartnerGenders(nodes) {
         let changed = true;
-        while (changed) {
+        let iter = 0;
+        while (changed && iter++ < 10) {
             changed = this._propagatePartnerGenders(nodes);
         }
     }
@@ -21458,10 +21285,6 @@ ${b64Jsx}
     }
 
     /**
-     * Infers death year (at age 90) for centenarians without an explicit death year.
-     *
-     * @param {Object[]} nodes - Array of domain Person nodes
-    /**
      * Infers death years for centenarians (age > 100) lacking an explicit death year by assuming death at 90.
      *
      * @param {Object[]} nodes - Domain Person instances
@@ -21476,11 +21299,8 @@ ${b64Jsx}
     static _inferCentenarianDeaths(nodes, currentYear) {
         nodes.forEach(n => {
             if (n.death) return;
-            const yob = n.yob || n._inferredYob || null;
-            if (!yob) return;
-            if (currentYear - yob > 100) {
-                n.death = yob + 90;
-            }
+            const inferredDeath = Person.inferCentenarianDeath(n.yob || n._inferredYob, currentYear);
+            if (inferredDeath) n.death = inferredDeath;
         });
     }
 
@@ -22147,7 +21967,7 @@ ${b64Jsx}
         const sameSheetCandidates = Object.values(this.nodeMap).filter(c => 
             c && c !== p && FamilyTreeBuilder.sharesSheet(c, p) &&
             (!c.partners || c.partners.length === 0) &&
-            (c._normName === expectedName || (c.spouse && c.spouse.toLowerCase().trim() === p._normName && FamilyTreeBuilder._getMinRowDistance(c, p) <= 5))
+            (c._normName === expectedName || (c.spouse && c.spouse.toLowerCase().trim() === p._normName && FamilyTreeBuilder._getMinRowDistance(c, p) <= FamilyTreeBuilder.GENERATIONAL_GAPS.MAX_ROW_NEIGHBOR_DISTANCE))
         );
         if (sameSheetCandidates.length === 0) return false;
 
@@ -22188,9 +22008,8 @@ ${b64Jsx}
         this._assignChildrenToNewPartner(p, g, isMale);
         if (p.yob || p._inferredYob) {
             g._inferredYob = (p.yob || p._inferredYob) + (isMale ? FamilyTreeBuilder.GENERATIONAL_GAPS.SPOUSAL_GENDER_OFFSET : -FamilyTreeBuilder.GENERATIONAL_GAPS.SPOUSAL_GENDER_OFFSET);
-            const currentYear = new Date().getFullYear();
-            if (!g.death && (currentYear - g._inferredYob > 100)) {
-                g.death = g._inferredYob + 90;
+            if (!g.death) {
+                g.death = Person.inferCentenarianDeath(g._inferredYob) || g.death;
             }
         }
     }
@@ -24917,8 +24736,8 @@ ${bodyHtml}
 const SHEET_HISTORY_COOKIE = 'ft_sheet_history';
 /** Cookie holding the user-tuned demographic deduction settings (JSON). */
 const DEMOGRAPHIC_SETTINGS_COOKIE = 'ft_demographic_settings';
-/** Cookie holding the id of the chosen colour theme (see COLOR_THEMES). */
-const COLOR_THEME_COOKIE = 'ft_color_theme';
+// The colour-theme cookie name (COLOR_THEME_COOKIE) lives with the theme engine, which also
+// stamps it into the pre-React boot script.
 /** Cookie holding the last URL hash view state (p=…&z=…&o=…&v=map) for session restore. */
 const LAST_VIEW_STATE_COOKIE = 'ft_last_view_state';
 /** Cookie holding background-geocoded location coordinates and hierarchies (JSON). */
@@ -25884,7 +25703,7 @@ function clearStoredColorTheme() {
 }
 
 /**
- * Applies the stored theme (or Classic) to the document at startup and returns it.
+ * Applies the stored theme (or the default, Solarized Dark) to the document at startup and returns it.
  *
  * @returns {Object} The resolved theme (`{ id, name, mode, roles, … }`)
  *
@@ -25894,7 +25713,7 @@ function clearStoredColorTheme() {
  *
  * @example
  * clearStoredColorTheme();
- * applyStoredColorTheme().id; // => 'classic'
+ * applyStoredColorTheme().id; // => DEFAULT_COLOR_THEME_ID ('solarized-dark')
  */
 function applyStoredColorTheme() {
     return applyColorTheme(loadStoredColorThemeId() || DEFAULT_COLOR_THEME_ID);
@@ -28785,6 +28604,11 @@ function calculateTwoPointGeometry(p1, p2) {
  * @example
  * resolveViewportDimensions({ isSidebarOpen: true, sidebarWidth: 400 });
  * // => { contW: 624, contH: 768 }
+ *
+ * @example
+ * // Phone layout: the panel is docked BELOW the canvas, so it reserves no width (0 is a real value, not "unset").
+ * resolveViewportDimensions({ container, isSidebarOpen: true, sidebarWidth: 0 });
+ * // => { contW: 390, contH: container.clientHeight }
  */
 function resolveViewportDimensions({
     container,
@@ -28794,7 +28618,7 @@ function resolveViewportDimensions({
 }) {
     const hasWindow = typeof window !== 'undefined';
     const effectiveContW = (isSidebarOpen && hasWindow)
-        ? (window.innerWidth - (sidebarWidth || 360))
+        ? (window.innerWidth - sidebarWidth)
         : (container ? container.clientWidth : (hasWindow ? window.innerWidth : 1000));
     const contW = (forceFullWindow && hasWindow) ? window.innerWidth : effectiveContW;
     const contH = (forceFullWindow || !isSidebarOpen) && hasWindow
@@ -29012,7 +28836,7 @@ function applyFramedCamera({
 
     setCamera(cam => {
         const nextCam = computeFramedCamera({
-            box, contW: effectiveContW, contH, preferredZ,
+            box, contW: effectiveContW, contH, preferredZ, timelineWidth: resolveTimelineGutterWidth(),
             currentZ: cam.z, targetPadX, targetPadY, treeW: currentTreeW
         });
         return clampCamera(nextCam);
@@ -29807,11 +29631,98 @@ function calculateViewportCameraBounds({
     const treeW = getTreeElementWidth(treeElement);
     const treeH = computeTreeSpanHeight(treeStats, targetPpy);
 
-    // 48px left timeline generation bar offset (0 in standalone mode)
-    const isStandalone = isStandaloneExportMode();
-    const TIMELINE_WIDTH = isStandalone ? 0 : 48;
+    return computeCameraBounds({ treeW, treeH, contW, contH, z, timelineWidth: resolveTimelineGutterWidth() });
+}
 
-    return computeCameraBounds({ treeW, treeH, contW, contH, z, timelineWidth: TIMELINE_WIDTH });
+/** Viewports no wider than this (just under Tailwind's `sm` breakpoint) get the phone layout. */
+const COMPACT_VIEWPORT_MAX_WIDTH = 639;
+/** Left timeline gutter (era bands + year labels) on desktop, in px. */
+const TIMELINE_GUTTER_WIDTH = 48;
+/** Narrow year-labels-only gutter on phones, in px (the era bands are dropped). */
+const TIMELINE_GUTTER_COMPACT_WIDTH = 32;
+
+/**
+ * Whether a viewport width calls for the phone layout: details panel docked below the canvas,
+ * narrow timeline gutter, full-width top bar.
+ *
+ * @param {number} [width=window.innerWidth] - Viewport width in CSS px
+ * @returns {boolean}
+ *
+ * @example
+ * isCompactViewportWidth(390);   // => true  (portrait phone)
+ *
+ * @example
+ * isCompactViewportWidth(640);   // => false (Tailwind `sm` and up: tablets, laptops)
+ */
+function isCompactViewportWidth(width = (typeof window !== 'undefined' ? window.innerWidth : 1024)) {
+    return width <= COMPACT_VIEWPORT_MAX_WIDTH;
+}
+
+/**
+ * Width of the left timeline gutter the camera must keep clear: 48px on desktop, 32px on
+ * phones (year labels only — the 48px band would eat an eighth of a portrait screen) and 0 in
+ * standalone exports, which draw no gutter at all.
+ *
+ * @param {Object} [options]
+ * @param {boolean} [options.isStandalone=isStandaloneExportMode()] - Standalone export mode
+ * @param {boolean} [options.isCompact=isCompactViewportWidth()] - Phone layout active
+ * @returns {number}
+ *
+ * @example
+ * resolveTimelineGutterWidth({ isStandalone: false, isCompact: false });   // => 48
+ *
+ * @example
+ * resolveTimelineGutterWidth({ isStandalone: false, isCompact: true });    // => 32
+ * resolveTimelineGutterWidth({ isStandalone: true, isCompact: true });     // => 0
+ */
+function resolveTimelineGutterWidth({ isStandalone = isStandaloneExportMode(), isCompact = isCompactViewportWidth() } = {}) {
+    if (isStandalone) return 0;
+    return isCompact ? TIMELINE_GUTTER_COMPACT_WIDTH : TIMELINE_GUTTER_WIDTH;
+}
+
+/**
+ * Horizontal space the details panel reserves beside the canvas: its width on desktop, 0 on
+ * phones, where it docks BELOW the canvas instead (the canvas then shrinks vertically, which the
+ * container measurements already reflect — see `resolveViewportDimensions`).
+ *
+ * @param {number} sidebarWidth - Configured sidebar width in px
+ * @param {boolean} isCompact - Phone layout active (see `isCompactViewportWidth`)
+ * @returns {number}
+ *
+ * @example
+ * resolveDockedSidebarWidth(360, false);   // => 360
+ *
+ * @example
+ * resolveDockedSidebarWidth(360, true);    // => 0
+ */
+function resolveDockedSidebarWidth(sidebarWidth, isCompact) {
+    return isCompact ? 0 : sidebarWidth;
+}
+
+/**
+ * Tracks whether the phone layout applies, re-evaluating on resize / rotation via a
+ * `matchMedia` listener (no per-frame resize handler).
+ *
+ * @returns {boolean} true on viewports up to `COMPACT_VIEWPORT_MAX_WIDTH` px wide
+ *
+ * @example
+ * const isCompactViewport = useCompactViewport();
+ * <PersonSidebar dockBottom={isCompactViewport} />
+ *
+ * @example
+ * const isCompact = useCompactViewport();   // false on a 1280px laptop window
+ */
+function useCompactViewport() {
+    const [isCompact, setIsCompact] = useState(() => isCompactViewportWidth());
+    useEffect(() => {
+        if (typeof window === 'undefined' || typeof window.matchMedia !== 'function') return undefined;
+        const query = window.matchMedia(`(max-width: ${COMPACT_VIEWPORT_MAX_WIDTH}px)`);
+        const sync = () => setIsCompact(query.matches);
+        sync();
+        query.addEventListener('change', sync);
+        return () => query.removeEventListener('change', sync);
+    }, []);
+    return isCompact;
 }
 
 /**
@@ -29919,12 +29830,11 @@ function resolveFitToScreenMetrics({ container, isSidebarOpen, sidebarWidth, for
         forceFullWindow
     });
 
-    const isStandalone = isStandaloneExportMode();
-    const TIMELINE_WIDTH = isStandalone ? 0 : 48;
-    const usableContW = Math.max(100, contW - TIMELINE_WIDTH);
+    const timelineWidth = resolveTimelineGutterWidth();
+    const usableContW = Math.max(100, contW - timelineWidth);
     return {
         usableContW,
-        timelineWidth: TIMELINE_WIDTH,
+        timelineWidth,
         paddingX: 8,
         topMargin: 16
     };
@@ -30235,6 +30145,7 @@ function useCanvasTouchLifecycle({ containerRef, onInteract, cameraRef, setCamer
  * @returns {{
  *   camera: { x: number, y: number, z: number },
  *   setCamera: React.Dispatch<React.SetStateAction<{ x: number, y: number, z: number }>>,
+ *   cameraRef: React.MutableRefObject<{ x: number, y: number, z: number }>,
  *   containerRef: React.RefObject<HTMLDivElement>,
  *   treeRef: React.RefObject<HTMLDivElement>,
  *   isDragging: boolean,
@@ -30282,7 +30193,7 @@ function useCanvasControls(onInteract, treeStats, isSidebarOpen = false, sidebar
     });
 
     return {
-        camera, setCamera, clampCamera, containerRef, treeRef,
+        camera, setCamera, cameraRef, clampCamera, containerRef, treeRef,
         centerOnPerson, framePeople, fitToScreen, getPpy, ...gestures
     };
 }
@@ -31071,39 +30982,126 @@ FamilyTreeBuilder._computeLayoutFn = function(tree, layout) {
 FamilyTreeBuilder.computeLayout = FamilyTreeBuilder._computeLayoutFn;
 
 /**
- * Renders the SVG connector layer containing orthogonal paths between ancestors, spouses, and descendants.
+ * Whether a sibling bus-bar is currently "folded": every sibling on it that has a branch of
+ * its own is collapsed. Bars whose siblings are all childless are never foldable.
+ *
+ * @param {{ foldableIds: string[] }} bar - Bar descriptor from `FamilyTree._describeSiblingBar`
+ * @param {Set<string>} collapsedNodes - Currently collapsed node IDs
+ * @returns {boolean}
+ *
+ * @example
+ * isSiblingBarFolded({ foldableIds: ['a', 'c'] }, new Set(['a', 'c', 'zzz']));
+ * // => true
+ *
+ * @example
+ * isSiblingBarFolded({ foldableIds: ['a', 'c'] }, new Set(['a']));   // => false (c still open)
+ * isSiblingBarFolded({ foldableIds: [] }, new Set());                 // => false (nothing to fold)
+ */
+function isSiblingBarFolded(bar, collapsedNodes) {
+    if (!bar || bar.foldableIds.length === 0) return false;
+    return bar.foldableIds.every(id => collapsedNodes.has(id));
+}
+
+/** Screen-pixel width of the invisible click/tap stroke laid along a sibling bus-bar. */
+const SIBLING_BAR_HIT_PX = 28;
+
+/**
+ * Tooltip for a sibling bus-bar, e.g. "Collapse all 3 sibling branches and zoom to fit the siblings".
+ *
+ * @param {number} count - Number of siblings with a branch of their own
+ * @param {boolean} isFolded - Whether those branches are all collapsed right now
+ * @returns {string}
+ *
+ * @example
+ * describeSiblingBarAction(3, false); // => 'Collapse all 3 sibling branches and zoom to fit the siblings'
+ *
+ * @example
+ * describeSiblingBarAction(1, true);  // => 'Expand the collapsed sibling branch and return to the previous view'
+ */
+function describeSiblingBarAction(count, isFolded) {
+    const branches = count === 1 ? 'sibling branch' : `${count} sibling branches`;
+    return isFolded
+        ? `Expand the collapsed ${branches} and return to the previous view`
+        : `Collapse all ${branches} and zoom to fit the siblings`;
+}
+
+/**
+ * A sibling bus-bar that doubles as a "fold this whole row" button. The visible connector is
+ * drawn as usual; an invisible stroke along its horizontal run catches clicks. The stroke is
+ * `SIBLING_BAR_HIT_PX / var(--camera-z)` wide, so it stays a finger-friendly 28 screen pixels
+ * however far the canvas is zoomed out (the canvas sets `--camera-z` on the zoomed layer).
+ * A folded bar is drawn dashed and in the accent colour.
  *
  * @param {Object} props
- * @param {Array<{ d: string }>} props.paths - Array of path descriptors with SVG d path strings
+ * @param {{ d: string, bar: Object }} props.path - Bus-bar path descriptor
+ * @param {boolean} props.isFolded - Whether every foldable sibling on the bar is collapsed
+ * @param {Function} props.onToggle - Receives the bar descriptor on click
+ * @returns {React.ReactNode}
+ *
+ * @example
+ * <SiblingBusBar path={busBarPath} isFolded={false} onToggle={layout.toggleSiblingBar} />
+ *
+ * @example
+ * <SiblingBusBar path={busBarPath} isFolded={true} onToggle={(bar) => console.log(bar.siblingIds)} />
+ */
+const SiblingBusBar = React.memo(({ path, isFolded, onToggle }) => {
+    const { bar } = path;
+    const lineClass = isFolded ? 'text-blue-500 group-hover:text-blue-700' : 'text-slate-300 group-hover:text-blue-500';
+    return (
+        <g className="group">
+            <path d={path.d} stroke="currentColor" className={`transition-colors ${lineClass}`} strokeWidth={isFolded ? 3 : 2}
+                strokeDasharray={isFolded ? '6 4' : undefined} fill="none" strokeLinecap="round" strokeLinejoin="round" />
+            <path d={`M ${bar.x1} ${bar.y} L ${bar.x2} ${bar.y}`} stroke="transparent" fill="none" strokeWidth={SIBLING_BAR_HIT_PX}
+                className="interactive-element sibling-bar-hit cursor-pointer" data-testid={`sibling-bar-${bar.parentId}`}
+                style={{ pointerEvents: 'stroke', strokeWidth: `calc(${SIBLING_BAR_HIT_PX}px / var(--camera-z, 1))` }}
+                onPointerDown={(e) => e.stopPropagation()}
+                onClick={(e) => { e.preventDefault(); e.stopPropagation(); onToggle(bar); }}>
+                <title>{describeSiblingBarAction(bar.foldableIds.length, isFolded)}</title>
+            </path>
+        </g>
+    );
+});
+
+/**
+ * Renders the SVG connector layer containing orthogonal paths between ancestors, spouses, and descendants.
+ * Sibling bus-bars become clickable fold buttons when `onToggleSiblingBar` is supplied.
+ *
+ * @param {Object} props
+ * @param {Array<{ d: string, bar?: Object }>} props.paths - Array of path descriptors with SVG d path strings
  * @param {number} props.padX - Horizontal coordinate offset
  * @param {number} props.padY - Vertical coordinate offset
  * @param {number} props.totalW - Total canvas width in pixels
  * @param {number} props.totalH - Total canvas height in pixels
+ * @param {Function} [props.onToggleSiblingBar] - Click handler for sibling bus-bars (receives the bar descriptor)
+ * @param {Set<string>} [props.collapsedNodes] - Collapsed node IDs, used to draw folded bars
  * @returns {React.ReactNode}
  *
  * @example
  * <CompactTreeConnectorSvg paths={layoutData.paths} padX={10} padY={10} totalW={800} totalH={600} />
  *
  * @example
- * <CompactTreeConnectorSvg paths={[]} padX={0} padY={0} totalW={100} totalH={100} />
+ * <CompactTreeConnectorSvg paths={layoutData.paths} padX={10} padY={10} totalW={800} totalH={600}
+ *     onToggleSiblingBar={layout.toggleSiblingBar} collapsedNodes={layout.collapsedNodes} />
  */
-const CompactTreeConnectorSvg = React.memo(({ paths, padX, padY, totalW, totalH }) => (
+const CompactTreeConnectorSvg = React.memo(({ paths, padX, padY, totalW, totalH, onToggleSiblingBar, collapsedNodes }) => (
     <svg 
         className="absolute top-0 left-0 w-full h-full pointer-events-none z-0 overflow-visible"
         style={{ width: `${totalW}px`, height: `${totalH}px` }}
     >
         <g transform={`translate(${padX}, ${padY})`}>
             {paths.map((p, idx) => (
-                <path 
-                    key={`path-${idx}`} 
-                    d={p.d} 
-                    stroke="currentColor" 
-                    className="text-slate-300"
-                    strokeWidth="2" 
-                    fill="none" 
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                />
+                (onToggleSiblingBar && p.bar && p.bar.foldableIds.length > 0)
+                    ? <SiblingBusBar key={`path-${idx}`} path={p} isFolded={isSiblingBarFolded(p.bar, collapsedNodes || new Set())} onToggle={onToggleSiblingBar} />
+                    : <path 
+                        key={`path-${idx}`} 
+                        d={p.d} 
+                        stroke="currentColor" 
+                        className="text-slate-300"
+                        strokeWidth="2" 
+                        fill="none" 
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                    />
             ))}
         </g>
     </svg>
@@ -31177,6 +31175,8 @@ const CompactTreeView = React.memo(({ tree, layout }) => {
                 padY={padY}
                 totalW={totalW}
                 totalH={totalH}
+                onToggleSiblingBar={layout.toggleSiblingBar}
+                collapsedNodes={layout.collapsedNodes}
             />
 
             {/* Person Card Nodes */}
@@ -38140,9 +38140,62 @@ const SidebarMainPanels = ({
     </>
 );
 
+/** Share of the viewport height the details panel takes when docked below the canvas on phones. */
+const BOTTOM_DOCK_HEIGHT = '55vh';
+
+/**
+ * Inline style that lifts a bottom-anchored control (zoom bar, settings FAB) clear of the
+ * phone layout's bottom-docked details panel, so it never covers the panel's content. On
+ * desktop, or while no panel is open, the control keeps its normal `bottom-6` position.
+ *
+ * @param {boolean} isCompactViewport - Phone layout (see `isCompactViewportWidth`)
+ * @param {boolean} isAnySidebarOpen - Whether a details / filter / AI / logs panel is open
+ * @returns {{ bottom: string }|undefined}
+ *
+ * @example
+ * resolveBottomDockLift(true, true);    // => { bottom: 'calc(55vh + 1.5rem)' }
+ *
+ * @example
+ * resolveBottomDockLift(false, true);   // => undefined (desktop: the panel sits beside the canvas)
+ * resolveBottomDockLift(true, false);   // => undefined (nothing docked at the bottom)
+ */
+function resolveBottomDockLift(isCompactViewport, isAnySidebarOpen) {
+    if (!isCompactViewport || !isAnySidebarOpen) return undefined;
+    return { bottom: `calc(${BOTTOM_DOCK_HEIGHT} + 1.5rem)` };
+}
+
+/**
+ * Container geometry for the details panel: a right-hand column on desktop, or a bottom sheet
+ * stacked under the canvas on phones (`dockBottom`). Hidden panels collapse to 0px along the
+ * docking axis so the canvas can take the room back with a CSS transition.
+ *
+ * @param {Object} options
+ * @param {boolean} options.dockBottom - Phone layout (see `isCompactViewportWidth`)
+ * @param {boolean} options.isVisible - Whether the panel is open
+ * @param {number} options.sidebarWidth - Configured desktop width in px
+ * @returns {{ className: string, style: Object }}
+ *
+ * @example
+ * resolveSidebarDockLayout({ dockBottom: false, isVisible: true, sidebarWidth: 360 });
+ * // => { className: 'border-l', style: { width: '360px' } }
+ *
+ * @example
+ * resolveSidebarDockLayout({ dockBottom: true, isVisible: true, sidebarWidth: 360 });
+ * // => { className: 'w-full border-t rounded-t-2xl', style: { height: '55vh' } }
+ * resolveSidebarDockLayout({ dockBottom: true, isVisible: false, sidebarWidth: 360 }).style;
+ * // => { height: 0 }
+ */
+function resolveSidebarDockLayout({ dockBottom, isVisible, sidebarWidth }) {
+    if (dockBottom) {
+        return { className: 'w-full border-t rounded-t-2xl', style: { height: isVisible ? BOTTOM_DOCK_HEIGHT : 0 } };
+    }
+    return { className: 'border-l', style: { width: isVisible ? `${sidebarWidth}px` : 0 } };
+}
+
 /**
  * Collapsible side panel orchestrating detail views for persons, attribute directories,
- * active filters, system logs, and the AI Assistant.
+ * active filters, system logs, and the AI Assistant. Docks to the right of the canvas on
+ * desktop and below it on phones (`dockBottom`).
  *
  * @param {object} props
  * @param {object} [props.focusPerson] - Currently selected person node
@@ -38152,6 +38205,7 @@ const SidebarMainPanels = ({
  * @param {Function} props.setFocusId - State setter to select a person ID
  * @param {boolean} props.isVisible - Whether the sidebar is currently open/visible
  * @param {number} [props.sidebarWidth=360] - Width of sidebar in pixels
+ * @param {boolean} [props.dockBottom=false] - Phone layout: full-width bottom sheet instead of a right column
  * @param {Function} props.onResizeStart - Pointer down handler to initiate sidebar resizing
  * @param {boolean} [props.isResizing=false] - Whether a resize drag operation is active
  * @param {boolean} props.showLogs - Whether system logs view is active
@@ -38192,7 +38246,7 @@ const SidebarMainPanels = ({
  * />
  */
 const PersonSidebar = ({ 
-    focusPerson, activeFilter, onFilterBy, tree, setFocusId, isVisible, sidebarWidth = 360,
+    focusPerson, activeFilter, onFilterBy, tree, setFocusId, isVisible, sidebarWidth = 360, dockBottom = false,
     onResizeStart, isResizing = false, showLogs, setShowLogs, logs, isLoading, showAI, setShowAI,
     isAILoading, setIsAILoading, onAiProfilesResponded, pendingAiQuery, setPendingAiQuery,
     showMap, setShowMap, omniSelectedIndex, setOmniSelectedIndex, centerOnPerson
@@ -38202,13 +38256,15 @@ const PersonSidebar = ({
 
     const aiProps = { isOpen: showAI, setIsOpen: setShowAI, tree, handleSetFocusId: setFocusId, isLoading: isAILoading, setIsLoading: setIsAILoading, onAiProfilesResponded, pendingAiQuery, setPendingAiQuery };
     const filteredProps = { activeFilter, tree, setFocusId, onFilterBy, setShowMap, setShowAI, setShowLogs, setPendingAiQuery, omniSelectedIndex, setOmniSelectedIndex };
+    const dock = resolveSidebarDockLayout({ dockBottom, isVisible, sidebarWidth });
 
     return (
         <div 
-            className={`bg-white border-l border-slate-200 shadow-2xl flex flex-col z-40 sidebar-scroll relative shrink-0 overflow-hidden ${isResizing ? 'transition-none' : 'transition-all duration-300 ease-in-out'} ${isVisible ? 'opacity-100' : 'w-0 border-none opacity-0 pointer-events-none'}`}
-            style={{ width: isVisible ? `${sidebarWidth}px` : 0 }}
+            data-testid="person-sidebar"
+            className={`bg-white border-slate-200 shadow-2xl flex flex-col z-40 sidebar-scroll relative shrink-0 overflow-hidden ${dock.className} ${isResizing ? 'transition-none' : 'transition-all duration-300 ease-in-out'} ${isVisible ? 'opacity-100' : 'border-none opacity-0 pointer-events-none'}`}
+            style={dock.style}
         >
-            {isVisible && <SidebarResizeHandle onResizeStart={onResizeStart} />}
+            {isVisible && !dockBottom && <SidebarResizeHandle onResizeStart={onResizeStart} />}
             <SidebarMainPanels
                 aiProps={aiProps} showLogs={showLogs} showAI={showAI} logs={logs} isLoading={isLoading}
                 setShowLogs={setShowLogs} activeFilter={activeFilter} filteredProps={filteredProps}
@@ -43720,11 +43776,14 @@ function useTopNavigationHandlers({ showMap, setShowMap, setIsSidebarVisible, se
 
 /**
  * Right-aligned container panel in top navigation housing search bar or compact toolbar.
+ * On desktop it is as wide as the details sidebar it sits above; on phones (`isCompactViewport`)
+ * the sidebar docks below the canvas, so the panel spans the full width instead.
  *
  * @param {object} props
  * @param {boolean} props.isSearchActive - Whether omni-search is currently expanded
  * @param {boolean} props.isSidebarVisible - Whether details sidebar is open
  * @param {number} props.sidebarWidth - Configured sidebar width in pixels
+ * @param {boolean} [props.isCompactViewport=false] - Phone layout
  * @param {React.ReactNode} props.activeSearchBar - Rendered active search bar element
  * @param {React.ReactNode} props.inactiveToolbar - Rendered inactive toolbar element
  * @returns {React.ReactNode}
@@ -43733,16 +43792,20 @@ function useTopNavigationHandlers({ showMap, setShowMap, setIsSidebarVisible, se
  * <TopNavigationRightPanel isSearchActive={false} isSidebarVisible={true} sidebarWidth={360} activeSearchBar={null} inactiveToolbar={<div>Toolbar</div>} />
  *
  * @example
- * <TopNavigationRightPanel isSearchActive={true} isSidebarVisible={false} sidebarWidth={360} activeSearchBar={<div>Search</div>} inactiveToolbar={null} />
+ * <TopNavigationRightPanel isSearchActive={true} isSidebarVisible={false} sidebarWidth={360} isCompactViewport={true} activeSearchBar={<div>Search</div>} inactiveToolbar={null} />
  */
-const TopNavigationRightPanel = ({ isSearchActive, isSidebarVisible, sidebarWidth, activeSearchBar, inactiveToolbar }) => (
-    <div 
-        className={`flex flex-col gap-3 items-end pointer-events-auto ${(isSidebarVisible || isSearchActive) ? 'px-6' : 'pr-4'}`}
-        style={{ width: (isSidebarVisible || isSearchActive) ? `${sidebarWidth}px` : 'auto' }}
-    >
-        {isSearchActive ? activeSearchBar : inactiveToolbar}
-    </div>
-);
+const TopNavigationRightPanel = ({ isSearchActive, isSidebarVisible, sidebarWidth, isCompactViewport = false, activeSearchBar, inactiveToolbar }) => {
+    const isDocked = isSidebarVisible || isSearchActive;
+    const width = isCompactViewport ? (isDocked ? '100%' : 'auto') : (isDocked ? `${sidebarWidth}px` : 'auto');
+    return (
+        <div 
+            className={`flex flex-col gap-3 items-end pointer-events-auto ${isDocked ? (isCompactViewport ? 'px-4' : 'px-6') : 'pr-4'}`}
+            style={{ width }}
+        >
+            {isSearchActive ? activeSearchBar : inactiveToolbar}
+        </div>
+    );
+};
 
 /**
  * Main navigation row containing right-side interactive toolbars.
@@ -43754,6 +43817,7 @@ const TopNavigationRightPanel = ({ isSearchActive, isSidebarVisible, sidebarWidt
  * @param {boolean} props.isSearchActive - Whether omni search input is expanded.
  * @param {boolean} props.isSidebarVisible - Whether details sidebar is open.
  * @param {number} [props.sidebarWidth=360] - Width of details sidebar in pixels.
+ * @param {boolean} [props.isCompactViewport=false] - Phone layout (full-width right panel).
  * @param {Object} props.activeProps - Props for active search bar.
  * @param {Object} props.inactiveProps - Props for inactive navigation toolbar.
  * @returns {React.ReactElement}
@@ -43765,7 +43829,7 @@ const TopNavigationRightPanel = ({ isSearchActive, isSidebarVisible, sidebarWidt
  * <TopNavigationMainBar isStandalone={true} showLogs={true} isLoading={true} isSearchActive={true} isSidebarVisible={true} activeProps={{}} inactiveProps={{}} />
  */
 const TopNavigationMainBar = ({
-    isStandalone, showLogs, isLoading, isSearchActive, isSidebarVisible, sidebarWidth, activeProps, inactiveProps
+    isStandalone, showLogs, isLoading, isSearchActive, isSidebarVisible, sidebarWidth, isCompactViewport, activeProps, inactiveProps
 }) => (
     <div className="flex justify-between items-start">
         {!isStandalone && (
@@ -43774,7 +43838,7 @@ const TopNavigationMainBar = ({
         )}
         {!showLogs && !isLoading && (
             <TopNavigationRightPanel
-                isSearchActive={isSearchActive} isSidebarVisible={isSidebarVisible} sidebarWidth={sidebarWidth}
+                isSearchActive={isSearchActive} isSidebarVisible={isSidebarVisible} sidebarWidth={sidebarWidth} isCompactViewport={isCompactViewport}
                 activeSearchBar={<TopNavigationActiveSearchBar {...activeProps} />}
                 inactiveToolbar={<TopNavigationInactiveToolbar {...inactiveProps} />}
             />
@@ -43873,7 +43937,7 @@ const TopNavigation = (props) => {
         showAI, setShowAI, canGoBack, canGoForward, onGoBack, onGoForward, isAILoading, handleExportImage, isExporting,
         handleExportStandaloneApp, isExportingApp, handleExportA4Print, isExportingA4,
         showMap, setShowMap, onAiSubmitQuery, omniSelectedIndex, setOmniSelectedIndex,
-        setIsSidebarVisible = () => {}, setActiveFilter = () => {}
+        setIsSidebarVisible = () => {}, setActiveFilter = () => {}, isCompactViewport = false
     } = props;
     const isStandalone = isStandaloneExportMode();
     const setFocusId = handleSetFocusId;
@@ -43889,7 +43953,7 @@ const TopNavigation = (props) => {
         <div className="absolute top-4 left-0 right-0 z-50 flex flex-col gap-3 pointer-events-none">
             <TopNavigationMainBar
                 isStandalone={isStandalone} showLogs={showLogs} isLoading={isLoading}
-                isSearchActive={isSearchActive} isSidebarVisible={isSidebarVisible} sidebarWidth={sidebarWidth}
+                isSearchActive={isSearchActive} isSidebarVisible={isSidebarVisible} sidebarWidth={sidebarWidth} isCompactViewport={isCompactViewport}
                 activeProps={activeProps} inactiveProps={inactiveProps}
             />
             <TopNavigationErrorBanner errorMsg={errorMsg} onClear={() => setErrorMsg('')} />
@@ -43931,7 +43995,7 @@ const BUTTON_DOCUMENTATION_CATALOG = {
         summary: 'Opens the **Appearance** tab of Settings: ten **Material 3 tonal palettes** — `Classic Forest`, `Soft Pastels`, `Earthy & Warm`, `Ocean Breeze`, `Lavender Dusk`, `Solarized Light`, `Dark Forest`, `Midnight Black`, `Solarized Dark` and `High Contrast`. Picking a card applies it **instantly** and stores it in the `ft_color_theme` cookie.',
         examples: [
             { label: 'Solarized', detail: 'Choose **Solarized Light** for the cream base3 canvas by day and **Solarized Dark** for the teal base03 canvas at night.' },
-            { label: 'Back to Default', detail: 'Click **Reset to Classic** in the footer; the cookie keeps `classic` so the next visit starts there.' }
+            { label: 'Back to Default', detail: 'Click **Reset to Solarized Dark** in the footer; the cookie keeps `solarized-dark` (the default) so the next visit starts there.' }
         ]
     },
     'Clear stored data (cookies & local storage)': {
@@ -44283,7 +44347,7 @@ function resolveThemeCardDoc(name) {
         title: `Colour theme: ${theme.name}`, badge: `Appearance • ${theme.mode === 'dark' ? 'Dark' : 'Light'} palette`,
         summary: `${theme.blurb} Clicking applies the **${theme.name}** palette **instantly** to every screen and remembers it in the \`ft_color_theme\` cookie on this device.`,
         examples: [
-            { label: 'Try It', detail: `Click the card; the canvas, person cards and buttons repaint at once. Pick **Classic Forest** (or **Reset to Classic**) to go back.` },
+            { label: 'Try It', detail: `Click the card; the canvas, person cards and buttons repaint at once. Pick **Solarized Dark** (or **Reset to Solarized Dark**) to go back to the default.` },
             { label: 'Material 3', detail: 'Every theme is a tonal palette generated from a few seed colours, so text keeps its contrast on the new surfaces.' }
         ]
     };
@@ -44600,6 +44664,7 @@ const ButtonDocTooltipOverlay = () => {
  * @param {string|null} props.rootId - ID of active tree root
  * @param {Function} props.setIsSidebarVisible - Toggle for details sidebar panel
  * @param {Function} [props.closeAllPanels] - Optional callback to close all overlay panels
+ * @param {{ bottom: string }} [props.bottomDockLift] - Inline offset lifting the bar above a bottom-docked details panel (phones)
  * @returns {React.ReactNode}
  *
  * @example
@@ -44625,20 +44690,21 @@ const ButtonDocTooltipOverlay = () => {
  *   setIsSidebarVisible={() => {}}
  * />
  */
-const ZoomControls = ({ setCamera, clampCamera, centerOnPerson, fitToScreen, focusId, rootId, setIsSidebarVisible, closeAllPanels }) => {
+const ZoomControls = ({ setCamera, clampCamera, centerOnPerson, fitToScreen, focusId, rootId, setIsSidebarVisible, closeAllPanels, bottomDockLift }) => {
     const handleZoom = (delta) => {
         setCamera(cam => clampCamera({ ...cam, z: cam.z + delta }));
     };
 
     return (
-        <div className="absolute bottom-6 left-16 z-50 flex gap-2 pointer-events-auto bg-white/95 backdrop-blur-md p-1.5 rounded-2xl shadow-md border border-slate-200">
-            <button onClick={() => handleZoom(0.15)} className="p-2 hover:bg-slate-100 rounded-xl text-slate-700 transition-colors" title="Zoom In"><Icons.ZoomIn /></button>
+        <div className="absolute bottom-6 left-16 z-50 flex gap-2 pointer-events-auto bg-white/95 backdrop-blur-md p-1.5 rounded-2xl shadow-md border border-slate-200" style={bottomDockLift}>
+            {/* p-3 below the `sm` breakpoint gives phones 44px touch targets; desktop keeps the tighter 36px buttons. */}
+            <button onClick={() => handleZoom(0.15)} className="p-3 sm:p-2 hover:bg-slate-100 rounded-xl text-slate-700 transition-colors" title="Zoom In"><Icons.ZoomIn /></button>
             <div className="w-px bg-slate-200 my-1"></div>
-            <button onClick={() => handleZoom(-0.15)} className="p-2 hover:bg-slate-100 rounded-xl text-slate-700 transition-colors" title="Zoom Out"><Icons.ZoomOut /></button>
+            <button onClick={() => handleZoom(-0.15)} className="p-3 sm:p-2 hover:bg-slate-100 rounded-xl text-slate-700 transition-colors" title="Zoom Out"><Icons.ZoomOut /></button>
             <div className="w-px bg-slate-200 my-1"></div>
-            <button onClick={() => fitToScreen()} className="p-2 hover:bg-slate-100 rounded-xl text-slate-700 transition-colors" title="Fit to Screen"><Icons.Maximize /></button>
+            <button onClick={() => fitToScreen()} className="p-3 sm:p-2 hover:bg-slate-100 rounded-xl text-slate-700 transition-colors" title="Fit to Screen"><Icons.Maximize /></button>
             <div className="w-px bg-slate-200 my-1"></div>
-            <button onClick={() => { centerOnPerson(focusId || rootId, 0.80); setIsSidebarVisible(true); }} className="p-2 hover:bg-slate-100 rounded-xl text-slate-700 transition-colors" title="Center Focus"><Icons.Target /></button>
+            <button onClick={() => { centerOnPerson(focusId || rootId, 0.80); setIsSidebarVisible(true); }} className="p-3 sm:p-2 hover:bg-slate-100 rounded-xl text-slate-700 transition-colors" title="Center Focus"><Icons.Target /></button>
         </div>
     );
 };
@@ -44669,6 +44735,8 @@ const HISTORICAL_GENERATION_COHORTS = Object.freeze([
 
 /**
  * Renders vertical generational era bands and milestone year labels on the timeline margin.
+ * Below 48px (the phone gutter, see `resolveTimelineGutterWidth`) only the year labels fit, so
+ * the era bands are dropped.
  *
  * @param {object} props
  * @param {number[]} props.dynamicYears - Array of timeline interval years to render
@@ -44676,6 +44744,7 @@ const HISTORICAL_GENERATION_COHORTS = Object.freeze([
  * @param {number} props.maxYear - Maximum year represented in tree
  * @param {object} props.camera - Active camera coordinate and zoom transform
  * @param {number} props.ppy - Pixels per calendar year scaling factor
+ * @param {number} [props.gutterWidth=48] - Gutter width in px (32 on phones)
  * @returns {React.ReactNode}
  *
  * @example
@@ -44694,14 +44763,16 @@ const HISTORICAL_GENERATION_COHORTS = Object.freeze([
  *   maxYear={1980}
  *   camera={{ x: 100, y: 50, z: 0.8 }}
  *   ppy={15}
+ *   gutterWidth={32}
  * />
  */
-const TimelineLabels = ({ dynamicYears, rootNodeYob, maxYear, camera, ppy }) => {
+const TimelineLabels = ({ dynamicYears, rootNodeYob, maxYear, camera, ppy, gutterWidth = 48 }) => {
     const GENERATIONS = HISTORICAL_GENERATION_COHORTS;
+    const showEraBands = gutterWidth >= 48;
 
     return (
-        <div className="absolute top-0 left-0 bottom-0 w-12 pointer-events-none z-20 border-r border-slate-200 bg-slate-50/90 backdrop-blur-sm shadow-[2px_0_4px_rgba(0,0,0,0.02)] font-sans overflow-hidden">
-            {GENERATIONS.map(gen => {
+        <div className="absolute top-0 left-0 bottom-0 pointer-events-none z-20 border-r border-slate-200 bg-slate-50/90 backdrop-blur-sm shadow-[2px_0_4px_rgba(0,0,0,0.02)] font-sans overflow-hidden" style={{ width: gutterWidth }}>
+            {showEraBands && GENERATIONS.map(gen => {
                 if (maxYear && gen.start > maxYear) return null;
                 const effectiveEnd = maxYear ? Math.min(gen.end, maxYear) : gen.end;
                 const startY = ((gen.start - rootNodeYob) * ppy + 24) * camera.z + camera.y;
@@ -44715,7 +44786,7 @@ const TimelineLabels = ({ dynamicYears, rootNodeYob, maxYear, camera, ppy }) => 
                 );
             })}
             {dynamicYears.map(year => (
-                <div key={`label-${year}`} className="absolute w-full text-right pr-1 text-[10px] tracking-wider font-bold text-slate-600 py-1 z-10" style={{ top: ((year - rootNodeYob) * ppy + 24) * camera.z + camera.y, transform: 'translateY(-50%)' }}>{year}</div>
+                <div key={`label-${year}`} className={`absolute w-full text-right pr-1 font-bold text-slate-600 py-1 z-10 ${showEraBands ? 'text-[10px] tracking-wider' : 'text-[9px]'}`} style={{ top: ((year - rootNodeYob) * ppy + 24) * camera.z + camera.y, transform: 'translateY(-50%)' }}>{year}</div>
             ))}
         </div>
     );
@@ -44731,6 +44802,7 @@ TimelineLabels.GENERATIONS = HISTORICAL_GENERATION_COHORTS;
  * @param {object} props.camera - Canvas viewport camera state
  * @param {number} props.ppy - Pixels per year layout scale
  * @param {boolean} [props.isStandalone=false] - Whether running in standalone mode (adjusts left padding)
+ * @param {number} [props.gutterWidth=48] - Timeline gutter width the lines start after (ignored in standalone mode)
  * @returns {React.ReactNode}
  *
  * @example
@@ -44751,10 +44823,10 @@ TimelineLabels.GENERATIONS = HISTORICAL_GENERATION_COHORTS;
  *   isStandalone={true}
  * />
  */
-const TimelineGrid = ({ dynamicYears, rootNodeYob, camera, ppy, isStandalone = false }) => (
+const TimelineGrid = ({ dynamicYears, rootNodeYob, camera, ppy, isStandalone = false, gutterWidth = 48 }) => (
     <div className="absolute inset-0 pointer-events-none z-0 overflow-hidden">
         {dynamicYears.map(year => (
-            <div key={`line-${year}`} className={`absolute w-full ${isStandalone ? 'pl-4' : 'pl-12'}`} style={{ top: ((year - rootNodeYob) * ppy + 24) * camera.z + camera.y, transform: 'translateY(-50%)' }}>
+            <div key={`line-${year}`} className="absolute w-full" style={{ paddingLeft: isStandalone ? 16 : gutterWidth, top: ((year - rootNodeYob) * ppy + 24) * camera.z + camera.y, transform: 'translateY(-50%)' }}>
                 <div className="w-full border-t border-slate-300 border-dashed"></div>
             </div>
         ))}
@@ -47271,6 +47343,131 @@ function useSubtreeCollapseAnchor({ treeRef, setCamera, centerOnPerson, rootId, 
 }
 
 /**
+ * Returns a copy of `set` with every id in `ids` added (`shouldInclude` true) or removed (false).
+ *
+ * @template T
+ * @param {Set<T>} set - Original set (left untouched)
+ * @param {Iterable<T>} ids - Members to add or remove
+ * @param {boolean} shouldInclude - true to add, false to remove
+ * @returns {Set<T>} New Set
+ *
+ * @example
+ * withSetMembers(new Set(['a']), ['b', 'c'], true);   // => Set {'a', 'b', 'c'}
+ *
+ * @example
+ * withSetMembers(new Set(['a', 'b', 'c']), ['b', 'zzz'], false);   // => Set {'a', 'c'}
+ */
+function withSetMembers(set, ids, shouldInclude) {
+    const next = new Set(set);
+    for (const id of ids) {
+        if (shouldInclude) {
+            next.add(id);
+        } else {
+            next.delete(id);
+        }
+    }
+    return next;
+}
+
+/**
+ * Decides what a click on a sibling bus-bar does. The bar is a toggle over the siblings that
+ * have branches of their own (`bar.foldableIds`):
+ *
+ *  - not all collapsed → FOLD: collapse the open ones and remember the camera so that the
+ *    next click can bring the previous view back;
+ *  - all collapsed → UNFOLD: re-open exactly the branches an earlier fold closed (siblings the
+ *    user had collapsed by hand before stay collapsed) and go back to the remembered camera.
+ *    Without a remembered fold (e.g. the user collapsed every sibling with its own +/- button,
+ *    or the state came from a shared URL) every foldable sibling re-opens and the camera stays.
+ *
+ * @param {{ foldableIds: string[] }} bar - Bar descriptor from `FamilyTree._describeSiblingBar`
+ * @param {Set<string>} collapsedNodes - Currently collapsed node IDs
+ * @param {{ addedIds: string[], camera: Object }|null} fold - What an earlier fold of this bar remembered
+ * @param {{ x: number, y: number, z: number }} camera - Camera right now (remembered when folding)
+ * @returns {{ action: 'fold'|'unfold', ids: string[], camera: (Object|null) }}
+ *
+ * @example
+ * planSiblingBarToggle({ foldableIds: ['a', 'b'] }, new Set(['b']), null, { x: 0, y: 0, z: 1 });
+ * // => { action: 'fold', ids: ['a'], camera: { x: 0, y: 0, z: 1 } }   ('b' was already collapsed)
+ *
+ * @example
+ * planSiblingBarToggle({ foldableIds: ['a', 'b'] }, new Set(['a', 'b']), { addedIds: ['a'], camera: { x: 9, y: 9, z: 0.5 } }, { x: 0, y: 0, z: 1 });
+ * // => { action: 'unfold', ids: ['a'], camera: { x: 9, y: 9, z: 0.5 } }
+ *
+ * @example
+ * planSiblingBarToggle({ foldableIds: ['a', 'b'] }, new Set(['a', 'b']), null, { x: 0, y: 0, z: 1 });
+ * // => { action: 'unfold', ids: ['a', 'b'], camera: null }
+ */
+function planSiblingBarToggle(bar, collapsedNodes, fold, camera) {
+    const isFolded = bar.foldableIds.length > 0 && bar.foldableIds.every(id => collapsedNodes.has(id));
+    if (isFolded) {
+        return { action: 'unfold', ids: fold ? fold.addedIds : bar.foldableIds, camera: fold ? fold.camera : null };
+    }
+    const opening = bar.foldableIds.filter(id => !collapsedNodes.has(id));
+    // Re-folding a bar the user partially re-opened by hand keeps the ORIGINAL camera, so the
+    // eventual unfold still returns to the view from before the first fold.
+    const ids = fold ? [...new Set([...fold.addedIds, ...opening])] : opening;
+    return { action: 'fold', ids, camera: fold ? fold.camera : { ...camera } };
+}
+
+/** Framing used after a sibling-bar fold: tight padding so the sibling row fills the viewport. */
+const SIBLING_BAR_FRAME_OPTIONS = Object.freeze({ targetPadX: 40, targetPadY: 90 });
+
+/**
+ * Makes sibling bus-bars act as fold/unfold toggles for the whole sibling row. Folding
+ * collapses every open sibling branch and, once the collapsed layout is in the DOM, frames
+ * the siblings so they all fit on screen; unfolding restores the collapsed set and the camera
+ * from before the fold (see {@link planSiblingBarToggle}). Fold memory is per bar and is
+ * dropped when another tree is loaded.
+ *
+ * @param {object} params
+ * @param {Set<string>} params.collapsedNodes - Collapsed node IDs
+ * @param {Function} params.setCollapsedNodes - Collapsed set state setter
+ * @param {React.MutableRefObject<{x: number, y: number, z: number}>} params.cameraRef - Latest camera (read, never subscribed, so panning does not rebuild the layout)
+ * @param {Function} params.setCamera - Camera state setter
+ * @param {Function} params.framePeople - `(ids, options) => void` camera framing from useCanvasControls
+ * @param {string|null} params.rootId - Active tree root (fold memory resets when it changes)
+ * @returns {{ toggleSiblingBar: (bar: Object) => void }}
+ *
+ * @example
+ * const { toggleSiblingBar } = useSiblingBarFold({ collapsedNodes, setCollapsedNodes, cameraRef, setCamera, framePeople, rootId });
+ * toggleSiblingBar({ parentId: 'p', siblingIds: ['a', 'b', 'c'], foldableIds: ['a', 'c'] });
+ *
+ * @example
+ * // Second click on the same bar: branches 'a' and 'c' re-open and the camera returns to where it was.
+ * toggleSiblingBar({ parentId: 'p', siblingIds: ['a', 'b', 'c'], foldableIds: ['a', 'c'] });
+ */
+function useSiblingBarFold({ collapsedNodes, setCollapsedNodes, cameraRef, setCamera, framePeople, rootId }) {
+    const foldsRef = useRef(new Map());
+    const pendingFrameIdsRef = useRef(null);
+
+    useEffect(() => { foldsRef.current = new Map(); }, [rootId]);
+
+    const toggleSiblingBar = useCallback((bar) => {
+        const plan = planSiblingBarToggle(bar, collapsedNodes, foldsRef.current.get(bar.parentId) || null, cameraRef.current);
+        if (plan.action === 'fold') {
+            foldsRef.current.set(bar.parentId, { addedIds: plan.ids, camera: plan.camera });
+            pendingFrameIdsRef.current = bar.siblingIds;
+        } else {
+            foldsRef.current.delete(bar.parentId);
+            if (plan.camera) setCamera(plan.camera);
+        }
+        setCollapsedNodes(prev => withSetMembers(prev, plan.ids, plan.action === 'fold'));
+    }, [collapsedNodes, setCollapsedNodes, cameraRef, setCamera]);
+
+    // Frame the siblings only after React has committed the collapsed layout, so the
+    // measured card positions are the post-fold ones.
+    useLayoutEffect(() => {
+        if (!pendingFrameIdsRef.current) return;
+        const ids = pendingFrameIdsRef.current;
+        pendingFrameIdsRef.current = null;
+        framePeople(ids, SIBLING_BAR_FRAME_OPTIONS);
+    }, [collapsedNodes, framePeople]);
+
+    return { toggleSiblingBar };
+}
+
+/**
  * Subscribes to global window 'focusPerson' CustomEvents (dispatched by external controls,
  * dialogs, or embedded widgets) to coordinate person focus and camera centering.
  * 
@@ -47843,6 +48040,8 @@ const GlobalAppStyles = React.memo(() => (
             .tf-tree li:only-child::before { display: none; }
             .family-unit { display: inline-flex; align-items: stretch; justify-content: center; padding: 0 12px; }
             .disable-transitions, .disable-transitions * { transition: none !important; animation: none !important; }
+            .app-shell { height: 100vh; height: 100dvh; } /* 100dvh tracks the visible area as mobile browser chrome shows/hides; 100vh is the fallback */
+            .app-shell button, .app-shell a, .app-shell input { touch-action: manipulation; } /* no 300ms double-tap-zoom delay on controls (the canvas sets touch-action: none itself) */
             .custom-scrollbar::-webkit-scrollbar { width: 6px; }
             .custom-scrollbar::-webkit-scrollbar-track { background: transparent; margin: 4px; }
             .custom-scrollbar::-webkit-scrollbar-thumb { background-color: rgb(var(--tw-slate-300, 203 213 225)); border-radius: 10px; }
@@ -48546,6 +48745,11 @@ function useAppCanvasViewportManager({
         focusId
     });
 
+    const siblingFold = useSiblingBarFold({
+        collapsedNodes: collapse.collapsedNodes, setCollapsedNodes: collapse.setCollapsedNodes,
+        cameraRef: canvas.cameraRef, setCamera: canvas.setCamera, framePeople: canvas.framePeople, rootId
+    });
+
     const handleFitToScreen = useCallback(() => {
         canvas.fitToScreen(true);
     }, [canvas.fitToScreen]);
@@ -48553,6 +48757,7 @@ function useAppCanvasViewportManager({
     return {
         ...canvas,
         ...collapse,
+        ...siblingFold,
         handleFitToScreen
     };
 }
@@ -48632,6 +48837,7 @@ function useAppAiCoordinator({
  * @param {Set<string>} params.visibleNodes - Currently uncollapsed visible node IDs
  * @param {Set<string>} params.collapsedNodes - Currently collapsed node IDs
  * @param {function} params.toggleCollapse - Callback to toggle node collapse state
+ * @param {function} [params.toggleSiblingBar] - Callback folding/unfolding a whole sibling row (receives the bus-bar descriptor)
  * @param {number} params.ppy - Pixels per year scale factor
  * @param {number} params.siblingGap - Dynamic horizontal spacing between sibling cards
  * @param {function} params.handleSetFocusId - Handler to set focused person ID
@@ -48669,7 +48875,7 @@ function useAppAiCoordinator({
  */
 function useTreeLayoutConfig({
     tree, activeFilter, focusId, aiHighlightedIds, rootNodeYob,
-    visibleNodes, collapsedNodes, toggleCollapse, ppy, siblingGap, handleSetFocusId
+    visibleNodes, collapsedNodes, toggleCollapse, toggleSiblingBar, ppy, siblingGap, handleSetFocusId
 }) {
     const filterHighlightedIds = useMemo(() => (
         FamilyTreeBuilder.computeFilterHighlightedIds(tree, activeFilter)
@@ -48681,9 +48887,9 @@ function useTreeLayoutConfig({
 
     return useMemo(() => ({
         focusId, aiHighlightedIds, filterHighlightedIds, filterHighlightClass,
-        rootNodeYob, visibleNodes, collapsedNodes, toggleCollapse,
+        rootNodeYob, visibleNodes, collapsedNodes, toggleCollapse, toggleSiblingBar,
         ppy, siblingGap, onFocus: handleSetFocusId
-    }), [focusId, aiHighlightedIds, filterHighlightedIds, filterHighlightClass, rootNodeYob, visibleNodes, collapsedNodes, toggleCollapse, ppy, siblingGap, handleSetFocusId]);
+    }), [focusId, aiHighlightedIds, filterHighlightedIds, filterHighlightClass, rootNodeYob, visibleNodes, collapsedNodes, toggleCollapse, toggleSiblingBar, ppy, siblingGap, handleSetFocusId]);
 }
 
 /**
@@ -48806,7 +49012,7 @@ function resolveCanvasDisplayMode(tree, isLoading) {
 
 const TreeCanvasContent = ({
     tree, isStandalone, dynamicYears, treeStats, camera, ppy,
-    isDragging, isShifting, treeRef, layoutConfig, isLoading
+    isDragging, isShifting, treeRef, layoutConfig, isLoading, timelineGutterWidth = 48
 }) => {
     const mode = resolveCanvasDisplayMode(tree, isLoading);
     if (mode === 'loading-splash') {
@@ -48823,9 +49029,10 @@ const TreeCanvasContent = ({
 
     return (
         <>
-            {!isStandalone && <TimelineLabels dynamicYears={dynamicYears} rootNodeYob={treeStats.rootNodeYob} maxYear={treeStats.maxYear} camera={camera} ppy={ppy} />}
-            <TimelineGrid dynamicYears={dynamicYears} rootNodeYob={treeStats.rootNodeYob} camera={camera} ppy={ppy} isStandalone={isStandalone} />
-            <div className={`absolute top-0 left-0 w-full h-full ${isDragging || isShifting ? '' : 'transition-transform duration-300 ease-out'} z-10`} style={{ transform: `translate(${camera.x}px, ${camera.y}px) scale(${camera.z})`, transformOrigin: '0 0' }}>
+            {!isStandalone && <TimelineLabels dynamicYears={dynamicYears} rootNodeYob={treeStats.rootNodeYob} maxYear={treeStats.maxYear} camera={camera} ppy={ppy} gutterWidth={timelineGutterWidth} />}
+            <TimelineGrid dynamicYears={dynamicYears} rootNodeYob={treeStats.rootNodeYob} camera={camera} ppy={ppy} isStandalone={isStandalone} gutterWidth={timelineGutterWidth} />
+            {/* `--camera-z` lets zoom-independent hit areas (sibling bus-bars) size themselves in screen pixels. */}
+            <div className={`absolute top-0 left-0 w-full h-full ${isDragging || isShifting ? '' : 'transition-transform duration-300 ease-out'} z-10`} style={{ transform: `translate(${camera.x}px, ${camera.y}px) scale(${camera.z})`, transformOrigin: '0 0', '--camera-z': camera.z }}>
                 <div className={`min-w-max min-h-max relative inline-block ${isShifting ? 'disable-transitions' : ''}`} ref={treeRef}>
                     <CompactTreeView tree={tree} layout={layoutConfig} />
                 </div>
@@ -49016,10 +49223,10 @@ const MainCanvasViewport = (props) => {
         handlePointerUp, handleWheel, tree, activeFilter, handleFilterBy,
         handleExportMapCSV, setShowMap, sidebarWidth, isAnySidebarOpen,
         isStandalone, dynamicYears, treeStats, camera, ppy, isShifting,
-        treeRef, layoutConfig, isLoading
+        treeRef, layoutConfig, isLoading, timelineGutterWidth
     } = props;
     const mapOverlayProps = { showMap, tree, activeFilter, handleFilterBy, handleExportMapCSV, setShowMap, sidebarWidth, isAnySidebarOpen };
-    const canvasContentProps = { tree, isStandalone, dynamicYears, treeStats, camera, ppy, isDragging, isShifting, treeRef, layoutConfig, isLoading };
+    const canvasContentProps = { tree, isStandalone, dynamicYears, treeStats, camera, ppy, isDragging, isShifting, treeRef, layoutConfig, isLoading, timelineGutterWidth };
 
     return (
         <div 
@@ -51180,7 +51387,7 @@ const ColorThemePicker = ({ themeId, onThemeChange }) => {
 };
 
 /**
- * Appearance tab: the theme picker plus a footer with "Reset to Classic" and "Done".
+ * Appearance tab: the theme picker plus a footer with "Reset to default" (the default theme's name) and "Done".
  *
  * @param {object} props
  * @param {string} props.themeId - Active theme id
@@ -51205,7 +51412,7 @@ const AppearanceSettingsTab = ({ themeId, onThemeChange, onClose }) => (
         </div>
         <div className="flex items-center gap-2 border-t border-slate-200 px-5 py-3">
             <button type="button" onClick={() => onThemeChange(DEFAULT_COLOR_THEME_ID)} disabled={themeId === DEFAULT_COLOR_THEME_ID}
-                className="text-xs font-semibold text-slate-500 hover:text-slate-700 disabled:opacity-40">Reset to Classic</button>
+                className="text-xs font-semibold text-slate-500 hover:text-slate-700 disabled:opacity-40">Reset to {getColorThemeDefinition(DEFAULT_COLOR_THEME_ID).name}</button>
             <span className="flex-1" />
             <button type="button" onClick={onClose} className="h-9 rounded-lg bg-primary px-4 text-sm font-semibold text-on-primary shadow-sm hover:bg-primary-hover">Done</button>
         </div>
@@ -51562,6 +51769,7 @@ const RadialFabAction = ({ action, offset, index, total = 3, isOpen, onSelect })
  * @param {boolean} [props.isAILoading=false] - Whether AI assistant is processing
  * @param {boolean} [props.isExportingApp=false] - Whether standalone HTML export is running
  * @param {boolean} [props.isExportingA4=false] - Whether A4 print export is running
+ * @param {{ bottom: string }} [props.bottomDockLift] - Inline offset lifting the FAB above a bottom-docked details panel (phones)
  * @returns {React.ReactNode}
  *
  * @example
@@ -51579,7 +51787,7 @@ const SettingsRadialFab = (props) => {
     return (
         <>
             {isOpen && <div className="fixed inset-0 z-[79]" onPointerDown={close} aria-hidden="true" />}
-            <div data-testid="settings-fab" className="fixed bottom-6 right-6 z-[80] h-14 w-14" role="menu" aria-label="Settings">
+            <div data-testid="settings-fab" className="fixed bottom-6 right-6 z-[80] h-14 w-14" role="menu" aria-label="Settings" style={props.bottomDockLift}>
                 {actions.map((action, index) => (
                     <RadialFabAction key={action.id} action={action} offset={offsets[index]} index={index} total={actions.length} isOpen={isOpen} onSelect={select} />
                 ))}
@@ -51684,7 +51892,15 @@ function useAppCoreState() {
     const shell = useAppShellPanels(isStandalone);
     const treeStats = useMemo(() => data.tree.getStats(), [data.tree]);
     const [sheetUrl, setSheetUrl] = useState(() => (hasInitialSheetToLoad() ? resolveInitialSheetUrl() : ''));
-    return { isStandalone, ...theme, ...data, ...nav, ...panels, ...sidebar, ...shell, treeStats, sheetUrl, setSheetUrl };
+    // Phone layout: the details panel docks BELOW the canvas, so it reserves no width beside it
+    // and the timeline gutter narrows to year labels only.
+    const isCompactViewport = useCompactViewport();
+    const dockedSidebarWidth = resolveDockedSidebarWidth(sidebar.sidebarWidth, isCompactViewport);
+    const timelineGutterWidth = resolveTimelineGutterWidth({ isStandalone, isCompact: isCompactViewport });
+    return {
+        isStandalone, ...theme, ...data, ...nav, ...panels, ...sidebar, ...shell, treeStats, sheetUrl, setSheetUrl,
+        isCompactViewport, dockedSidebarWidth, timelineGutterWidth
+    };
 }
 
 /**
@@ -51823,7 +52039,8 @@ function useAppLayoutAndExports(params) {
         tree: params.tree, activeFilter: params.activeFilter, focusId: params.focusId,
         aiHighlightedIds: params.aiHighlightedIds, rootNodeYob: params.treeStats.rootNodeYob,
         visibleNodes: params.visibleNodes, collapsedNodes: params.collapsedNodes,
-        toggleCollapse: params.toggleCollapse, ppy: params.ppy, siblingGap: params.siblingGap,
+        toggleCollapse: params.toggleCollapse, toggleSiblingBar: params.toggleSiblingBar,
+        ppy: params.ppy, siblingGap: params.siblingGap,
         handleSetFocusId: params.handleSetFocusId
     });
 
@@ -51866,6 +52083,7 @@ function useAppLayoutAndExports(params) {
 function buildTopNavProps(core, viewport, focusNav, layoutExp) {
     return {
         tree: core.tree, isSidebarVisible: core.isAnySidebarOpen, sidebarWidth: core.sidebarWidth,
+        isCompactViewport: core.isCompactViewport,
         isResizing: core.isResizingSidebar, sheetUrl: core.sheetUrl, setSheetUrl: core.setSheetUrl,
         isLoading: core.isLoading, searchQuery: viewport.searchQuery,
         setSearchQuery: viewport.setSearchQuery, handleSetFocusId: focusNav.handleSetFocusId,
@@ -51904,10 +52122,11 @@ function buildViewportProps(core, viewport, focusNav, layoutExp) {
         handlePointerUp: viewport.handlePointerUp, handleWheel: viewport.handleWheel, tree: core.tree,
         activeFilter: core.activeFilter, handleFilterBy: focusNav.handleFilterBy,
         handleExportMapCSV: layoutExp.handleExportMapCSV, setShowMap: core.setShowMap,
-        sidebarWidth: core.sidebarWidth, isAnySidebarOpen: core.isAnySidebarOpen,
+        sidebarWidth: core.dockedSidebarWidth, isAnySidebarOpen: core.isAnySidebarOpen,
         isStandalone: core.isStandalone, dynamicYears: viewport.dynamicYears, treeStats: core.treeStats,
         camera: viewport.camera, ppy: viewport.ppy, isShifting: viewport.isShifting,
-        treeRef: viewport.treeRef, layoutConfig: layoutExp.layoutConfig, isLoading: core.isLoading
+        treeRef: viewport.treeRef, layoutConfig: layoutExp.layoutConfig, isLoading: core.isLoading,
+        timelineGutterWidth: core.timelineGutterWidth
     };
 }
 
@@ -51928,7 +52147,7 @@ function buildViewportProps(core, viewport, focusNav, layoutExp) {
 function buildSidebarProps(core, viewport, focusNav) {
     return {
         focusPerson: core.tree.get(core.focusId), activeFilter: core.activeFilter,
-        onFilterBy: focusNav.handleFilterBy, sidebarWidth: core.sidebarWidth,
+        onFilterBy: focusNav.handleFilterBy, sidebarWidth: core.sidebarWidth, dockBottom: core.isCompactViewport,
         onResizeStart: core.handleResizeStart, isResizing: core.isResizingSidebar,
         tree: core.tree, setFocusId: focusNav.handleSetFocusId, isVisible: core.isAnySidebarOpen,
         centerOnPerson: viewport.centerOnPerson, showLogs: core.showLogs, setShowLogs: core.setShowLogs,
@@ -51957,7 +52176,8 @@ function buildZoomProps(core, viewport) {
     return {
         setCamera: viewport.setCamera, clampCamera: viewport.clampCamera, centerOnPerson: viewport.centerOnPerson,
         fitToScreen: viewport.handleFitToScreen, focusId: core.focusId, rootId: core.tree.rootId,
-        setIsSidebarVisible: core.setIsSidebarVisible, closeAllPanels: core.closeAllPanels
+        setIsSidebarVisible: core.setIsSidebarVisible, closeAllPanels: core.closeAllPanels,
+        bottomDockLift: resolveBottomDockLift(core.isCompactViewport, core.isAnySidebarOpen)
     };
 }
 
@@ -52046,7 +52266,8 @@ function buildShellProps(core, viewport, focusNav, layoutExp, applyDemographicSe
             onSelect: (actionId) => dispatchRadialFabAction(actionId, { core, layoutExp, clearAllStoredData }),
             isHomeOpen: core.isHomeOpen, isStandalone: core.isStandalone, hasTree: Boolean(core.tree?.root),
             isLoading: core.isLoading, showMap: core.showMap, showAI: core.showAI, showLogs: core.showLogs,
-            isAILoading: viewport.isAILoading, isExportingApp: layoutExp.isExportingApp, isExportingA4: layoutExp.isExportingA4
+            isAILoading: viewport.isAILoading, isExportingApp: layoutExp.isExportingApp, isExportingA4: layoutExp.isExportingA4,
+            bottomDockLift: resolveBottomDockLift(core.isCompactViewport, core.isAnySidebarOpen)
         },
         settingsPanelProps: {
             isOpen: core.isSettingsOpen, initialTab: core.settingsTab,
@@ -52073,7 +52294,7 @@ function useAppViewModel() {
     const core = useAppCoreState();
     const viewport = useAppViewportState({
         tree: core.tree, focusId: core.focusId, treeStats: core.treeStats,
-        isAnySidebarOpen: core.isAnySidebarOpen, sidebarWidth: core.sidebarWidth,
+        isAnySidebarOpen: core.isAnySidebarOpen, sidebarWidth: core.dockedSidebarWidth,
         closeAllPanels: core.closeAllPanels, openAiPanel: core.openAiPanel,
         setShowMap: core.setShowMap, setTree: core.setTree
     });
@@ -52092,6 +52313,7 @@ function useAppViewModel() {
 
     return {
         showZoom: !core.showMap && !core.showLogs && !core.isLoading,
+        isCompactViewport: core.isCompactViewport,
         topNavProps: buildTopNavProps(core, viewport, focusNav, layoutExp),
         zoomProps: buildZoomProps(core, viewport),
         viewportProps: buildViewportProps(core, viewport, focusNav, layoutExp),
@@ -52104,6 +52326,8 @@ function useAppViewModel() {
  * Main application visual layout shell containing top navigation, zoom controls,
  * main canvas viewport, collateral sidebar panels, and the shell overlays
  * (Home emblem button, sheet-chooser home screen, radial settings FAB, and settings panel).
+ * Desktop lays the canvas and the details panel out side by side; phones
+ * (`isCompactViewport`) stack them, canvas above panel.
  *
  * @param {object} props
  * @param {object} props.topNavProps - Props for TopNavigation component
@@ -52112,6 +52336,7 @@ function useAppViewModel() {
  * @param {object} props.sidebarProps - Props for PersonSidebar component
  * @param {object} props.shellProps - Props for the home button, home screen, radial FAB and settings panel
  * @param {boolean} props.showZoom - Whether zoom controls should be displayed
+ * @param {boolean} [props.isCompactViewport=false] - Phone layout: stack canvas and details panel vertically
  * @returns {React.ReactNode}
  *
  * @example
@@ -52132,10 +52357,11 @@ function useAppViewModel() {
  *   sidebarProps={{}}
  *   shellProps={{ isHomeOpen: true, homeButtonProps: {}, homeScreenProps: { isOpen: true }, settingsFabProps: {}, settingsPanelProps: {} }}
  *   showZoom={false}
+ *   isCompactViewport={true}
  * />
  */
-const AppRootView = ({ topNavProps, zoomProps, viewportProps, sidebarProps, shellProps, showZoom }) => (
-    <div className="flex h-screen w-screen bg-white overflow-hidden text-slate-800 relative" style={{ fontFamily: '"Google Sans", system-ui, -apple-system, sans-serif' }}>
+const AppRootView = ({ topNavProps, zoomProps, viewportProps, sidebarProps, shellProps, showZoom, isCompactViewport = false }) => (
+    <div className={`app-shell flex ${isCompactViewport ? 'flex-col' : ''} w-screen bg-white overflow-hidden text-slate-800 relative`} style={{ fontFamily: '"Google Sans", system-ui, -apple-system, sans-serif' }}>
         <GlobalAppStyles />
         <ButtonDocTooltipOverlay />
         <TopNavigation {...topNavProps} />

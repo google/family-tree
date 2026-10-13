@@ -82,7 +82,17 @@ const M3_ROLE_TONES = {
     }
 };
 
-const DEFAULT_COLOR_THEME_ID = 'classic';
+/** Theme applied when nothing (or an unknown id) is stored; also the fallback for retired ids. */
+const DEFAULT_COLOR_THEME_ID = 'solarized-dark';
+/** Cookie holding the id of the chosen colour theme (see COLOR_THEMES). */
+const COLOR_THEME_COOKIE = 'ft_color_theme';
+/**
+ * Theme whose colours back the stamped Tailwind config fallbacks. Pinned to Classic rather than
+ * the default theme because the Tailwind *family* fallbacks are the stock palette (= Classic);
+ * mixing them with another theme's Material roles would paint a two-tone page in the instant
+ * before `applyColorTheme()` sets the real CSS variables.
+ */
+const TAILWIND_FALLBACK_THEME_ID = 'classic';
 const COLOR_THEME_PREVIEW_SHADES = { cardFill: 100, cardBorder: 300, cardText: 950 };
 
 // ─── Colour maths (sRGB ⇄ CIELAB ⇄ LCh) ────────────────────────────────────────
@@ -445,15 +455,16 @@ const COLOR_THEMES = [
 ];
 
 /**
- * Looks a theme definition up by id, falling back to Classic for unknown / missing ids.
+ * Looks a theme definition up by id, falling back to the default theme for unknown / missing ids.
  *
  * @example getColorThemeDefinition('dark').mode // → 'dark'
- * @example getColorThemeDefinition('does-not-exist').id // → 'classic'
+ * @example getColorThemeDefinition('does-not-exist').id // → DEFAULT_COLOR_THEME_ID
  * @param {string} id
  * @returns {Object}
  */
 function getColorThemeDefinition(id) {
-    return COLOR_THEMES.find((theme) => theme.id === id) || COLOR_THEMES[0];
+    const byId = (themeId) => COLOR_THEMES.find((theme) => theme.id === themeId);
+    return byId(id) || byId(DEFAULT_COLOR_THEME_ID) || COLOR_THEMES[0];
 }
 
 /**
@@ -713,7 +724,7 @@ function tailwindVarColor(variable, fallbackHex) {
  * @returns {string[]} indented source lines
  */
 function buildTailwindColorConfigLines() {
-    const classicRoles = resolveColorTheme(DEFAULT_COLOR_THEME_ID).roles;
+    const classicRoles = resolveColorTheme(TAILWIND_FALLBACK_THEME_ID).roles;
     const lines = TAILWIND_THEME_FAMILIES.map((family) => {
         const shades = TAILWIND_SHADES.map((shade) => shade + ': ' + tailwindVarColor('--tw-' + family + '-' + shade, TAILWIND_DEFAULT_PALETTE[family][shade]));
         return '        ' + family + ': { ' + shades.join(', ') + ' },';
@@ -724,6 +735,36 @@ function buildTailwindColorConfigLines() {
         lines.push("        '" + token + "': " + tailwindVarColor('--md-sys-color-' + token, classicRoles[role]) + ',');
     }
     return lines;
+}
+
+/**
+ * Builds the tiny inline boot script that index.html (and the standalone export) run ahead
+ * of React: it reads the theme cookie — or its localStorage mirror, which is what `file://`
+ * exports have — falls back to the default theme, and pre-paints `--tw-white` /
+ * `color-scheme` on `<html>`. Without it a dark theme flashes white for the second or two
+ * Babel needs to compile the app; `applyColorTheme()` later replaces these two properties.
+ *
+ * @example buildThemeBootScript().includes("'solarized-dark':['0 43 54','dark']") // → true (base03 canvas)
+ * @example buildThemeBootScript().includes("'ft_pref_ft_color_theme'") // → true (the localStorage mirror key)
+ * @returns {string}
+ */
+function buildThemeBootScript() {
+    const canvases = COLOR_THEMES.map((theme) => {
+        const resolved = resolveColorTheme(theme.id);
+        return "'" + theme.id + "':['" + rgbTriplet(themeFamilyHex(resolved, 'white')) + "','" + resolved.mode + "']";
+    });
+    return [
+        '(function () {',
+        '  try {',
+        "    var match = document.cookie.match(/(?:^|; )" + COLOR_THEME_COOKIE + "=([^;]*)/);",
+        "    var stored = match ? decodeURIComponent(match[1]) : (window.localStorage && localStorage.getItem('ft_pref_" + COLOR_THEME_COOKIE + "'));",
+        '    var canvases = {' + canvases.join(',') + '};',
+        "    var entry = canvases[stored] || canvases['" + DEFAULT_COLOR_THEME_ID + "'];",
+        "    document.documentElement.style.setProperty('--tw-white', entry[0]);",
+        '    document.documentElement.style.colorScheme = entry[1];',
+        '  } catch (e) {}',
+        '})();'
+    ].join('\n');
 }
 
 /**
@@ -758,4 +799,5 @@ function buildTailwindThemeConfigScript() {
     ].join('\n');
 }
 
+const THEME_BOOT_SCRIPT = buildThemeBootScript();
 const TAILWIND_THEME_CONFIG_SCRIPT = buildTailwindThemeConfigScript();

@@ -211,6 +211,7 @@ const RadialFabAction = ({ action, offset, index, total = 3, isOpen, onSelect })
  * @param {boolean} [props.isAILoading=false] - Whether AI assistant is processing
  * @param {boolean} [props.isExportingApp=false] - Whether standalone HTML export is running
  * @param {boolean} [props.isExportingA4=false] - Whether A4 print export is running
+ * @param {{ bottom: string }} [props.bottomDockLift] - Inline offset lifting the FAB above a bottom-docked details panel (phones)
  * @returns {React.ReactNode}
  *
  * @example
@@ -228,7 +229,7 @@ const SettingsRadialFab = (props) => {
     return (
         <>
             {isOpen && <div className="fixed inset-0 z-[79]" onPointerDown={close} aria-hidden="true" />}
-            <div data-testid="settings-fab" className="fixed bottom-6 right-6 z-[80] h-14 w-14" role="menu" aria-label="Settings">
+            <div data-testid="settings-fab" className="fixed bottom-6 right-6 z-[80] h-14 w-14" role="menu" aria-label="Settings" style={props.bottomDockLift}>
                 {actions.map((action, index) => (
                     <RadialFabAction key={action.id} action={action} offset={offsets[index]} index={index} total={actions.length} isOpen={isOpen} onSelect={select} />
                 ))}

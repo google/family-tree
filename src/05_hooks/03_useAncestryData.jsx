@@ -565,6 +565,11 @@ function calculateTwoPointGeometry(p1, p2) {
  * @example
  * resolveViewportDimensions({ isSidebarOpen: true, sidebarWidth: 400 });
  * // => { contW: 624, contH: 768 }
+ *
+ * @example
+ * // Phone layout: the panel is docked BELOW the canvas, so it reserves no width (0 is a real value, not "unset").
+ * resolveViewportDimensions({ container, isSidebarOpen: true, sidebarWidth: 0 });
+ * // => { contW: 390, contH: container.clientHeight }
  */
 function resolveViewportDimensions({
     container,
@@ -574,7 +579,7 @@ function resolveViewportDimensions({
 }) {
     const hasWindow = typeof window !== 'undefined';
     const effectiveContW = (isSidebarOpen && hasWindow)
-        ? (window.innerWidth - (sidebarWidth || 360))
+        ? (window.innerWidth - sidebarWidth)
         : (container ? container.clientWidth : (hasWindow ? window.innerWidth : 1000));
     const contW = (forceFullWindow && hasWindow) ? window.innerWidth : effectiveContW;
     const contH = (forceFullWindow || !isSidebarOpen) && hasWindow
@@ -792,7 +797,7 @@ function applyFramedCamera({
 
     setCamera(cam => {
         const nextCam = computeFramedCamera({
-            box, contW: effectiveContW, contH, preferredZ,
+            box, contW: effectiveContW, contH, preferredZ, timelineWidth: resolveTimelineGutterWidth(),
             currentZ: cam.z, targetPadX, targetPadY, treeW: currentTreeW
         });
         return clampCamera(nextCam);

@@ -20,6 +20,8 @@ const INDEX_FILE = 'index.html';
 const THEME_MODULE_SUFFIX = '08_ColorThemes.jsx';
 const THEME_CONFIG_BEGIN = '<!-- FT_TAILWIND_THEME_CONFIG:BEGIN -->';
 const THEME_CONFIG_END = '<!-- FT_TAILWIND_THEME_CONFIG:END -->';
+const THEME_BOOT_BEGIN = '<!-- FT_THEME_BOOT:BEGIN -->';
+const THEME_BOOT_END = '<!-- FT_THEME_BOOT:END -->';
 
 // ANSI colors
 const GREEN = '\x1b[32m';
@@ -55,38 +57,54 @@ function discoverSourceFiles(dir) {
 }
 
 /**
- * Evaluates the (JSX-free, side-effect free) colour theme module and returns the generated
- * `tailwind.config = {…}` script that maps every Tailwind colour onto a CSS variable.
+ * Evaluates the (JSX-free, side-effect free) colour theme module and returns the two scripts
+ * stamped into index.html: the generated `tailwind.config = {…}` that maps every Tailwind
+ * colour onto a CSS variable, and the pre-React boot script that pre-paints the stored theme.
  *
  * @param {Array<string>} sourceFiles - Discovered source files.
- * @returns {string|null} Script body, or null when the module is absent.
+ * @returns {{ config: string, boot: string }|null} Script bodies, or null when the module is absent.
  */
-function buildThemeConfigScript(sourceFiles) {
+function buildThemeScripts(sourceFiles) {
     const themeFile = sourceFiles.find((file) => file.endsWith(THEME_MODULE_SUFFIX));
     if (!themeFile) return null;
     const source = fs.readFileSync(themeFile, 'utf8');
-    return new Function(`${source}\n;return TAILWIND_THEME_CONFIG_SCRIPT;`)();
+    return new Function(`${source}\n;return { config: TAILWIND_THEME_CONFIG_SCRIPT, boot: THEME_BOOT_SCRIPT };`)();
 }
 
 /**
- * Returns the index.html text with the theme config script stamped between the markers
- * (unchanged when the markers are missing).
+ * Returns the html text with `script` stamped as a `<script>` block between the `begin` / `end`
+ * marker comments (unchanged when the markers are missing).
  *
  * @param {string} html - Current index.html content.
- * @param {string} script - Script body from buildThemeConfigScript().
+ * @param {string} begin - Opening marker comment.
+ * @param {string} end - Closing marker comment.
+ * @param {string} script - Script body.
  * @returns {string}
  */
-export function stampThemeConfigIntoHtml(html, script) {
-    const begin = html.indexOf(THEME_CONFIG_BEGIN);
-    const end = html.indexOf(THEME_CONFIG_END);
-    if (begin < 0 || end < 0 || end < begin) return html;
+function stampScriptBetweenMarkers(html, begin, end, script) {
+    const beginAt = html.indexOf(begin);
+    const endAt = html.indexOf(end);
+    if (beginAt < 0 || endAt < 0 || endAt < beginAt) return html;
     const indented = script.split('\n').map((line) => (line ? `    ${line}` : line)).join('\n');
-    const block = `${THEME_CONFIG_BEGIN}\n  <script>\n${indented}\n  </script>\n  `;
-    return html.slice(0, begin) + block + html.slice(end);
+    const block = `${begin}\n  <script>\n${indented}\n  </script>\n  `;
+    return html.slice(0, beginAt) + block + html.slice(endAt);
 }
 
 /**
- * Keeps index.html's embedded Tailwind theme config in sync with the theme module.
+ * Returns the index.html text with the theme config and boot scripts stamped between their
+ * markers (unchanged when the markers are missing).
+ *
+ * @param {string} html - Current index.html content.
+ * @param {{ config: string, boot: string }} scripts - Script bodies from buildThemeScripts().
+ * @returns {string}
+ */
+export function stampThemeConfigIntoHtml(html, scripts) {
+    const withConfig = stampScriptBetweenMarkers(html, THEME_CONFIG_BEGIN, THEME_CONFIG_END, scripts.config);
+    return stampScriptBetweenMarkers(withConfig, THEME_BOOT_BEGIN, THEME_BOOT_END, scripts.boot);
+}
+
+/**
+ * Keeps index.html's embedded Tailwind theme config and theme boot script in sync with the theme module.
  *
  * @param {Array<string>} sourceFiles - Discovered source files.
  * @param {{ silent: boolean, checkOnly: boolean }} options
@@ -94,10 +112,10 @@ export function stampThemeConfigIntoHtml(html, script) {
  */
 function syncIndexHtmlThemeConfig(sourceFiles, { silent, checkOnly }) {
     if (!fs.existsSync(INDEX_FILE)) return { success: true, changed: false };
-    const script = buildThemeConfigScript(sourceFiles);
-    if (!script) return { success: true, changed: false };
+    const scripts = buildThemeScripts(sourceFiles);
+    if (!scripts) return { success: true, changed: false };
     const html = fs.readFileSync(INDEX_FILE, 'utf8');
-    const stamped = stampThemeConfigIntoHtml(html, script);
+    const stamped = stampThemeConfigIntoHtml(html, scripts);
     if (stamped === html) return { success: true, changed: false };
     if (checkOnly) {
         if (!silent) console.error(`${RED}${BOLD}OUT OF SYNC:${RESET} ${INDEX_FILE} theme config does not match ${THEME_MODULE_SUFFIX}.`);
