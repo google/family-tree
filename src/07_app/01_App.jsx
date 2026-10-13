@@ -345,11 +345,13 @@ function buildViewportProps(core, viewport, focusNav, layoutExp) {
 function buildSidebarProps(core, viewport, focusNav) {
     return {
         focusPerson: core.tree.get(core.focusId), activeFilter: core.activeFilter,
-        onFilterBy: focusNav.handleFilterBy, sidebarWidth: core.sidebarWidth, dockBottom: core.isCompactViewport,
-        onResizeStart: core.handleResizeStart, isResizing: core.isResizingSidebar,
-        tree: core.tree, setFocusId: focusNav.handleSetFocusId, isVisible: core.isAnySidebarOpen,
-        centerOnPerson: viewport.centerOnPerson, showLogs: core.showLogs, setShowLogs: core.setShowLogs,
-        logs: core.logs, isLoading: core.isLoading, showAI: core.showAI, setShowAI: core.setShowAI,
+        onFilterBy: focusNav.handleFilterBy, sidebarWidth: core.sidebarWidth, sidebarHeight: core.sidebarHeight,
+        dockBottom: core.isCompactViewport, onResizeStart: core.handleResizeStart,
+        onVerticalResizeStart: core.handleVerticalResizeStart, onClose: core.closeAllPanels,
+        isResizing: core.isResizingSidebar, tree: core.tree, setFocusId: focusNav.handleSetFocusId,
+        isVisible: core.isAnySidebarOpen, centerOnPerson: viewport.centerOnPerson,
+        showLogs: core.showLogs, setShowLogs: core.setShowLogs, logs: core.logs,
+        isLoading: core.isLoading, showAI: core.showAI, setShowAI: core.setShowAI,
         isAILoading: viewport.isAILoading, setIsAILoading: viewport.setIsAILoading,
         onAiProfilesResponded: viewport.handleAiProfilesResponded, pendingAiQuery: viewport.pendingAiQuery,
         setPendingAiQuery: viewport.setPendingAiQuery, showMap: core.showMap, setShowMap: core.setShowMap,
@@ -375,7 +377,7 @@ function buildZoomProps(core, viewport) {
         setCamera: viewport.setCamera, clampCamera: viewport.clampCamera, centerOnPerson: viewport.centerOnPerson,
         fitToScreen: viewport.handleFitToScreen, focusId: core.focusId, rootId: core.tree.rootId,
         setIsSidebarVisible: core.setIsSidebarVisible, closeAllPanels: core.closeAllPanels,
-        bottomDockLift: resolveBottomDockLift(core.isCompactViewport, core.isAnySidebarOpen)
+        bottomDockLift: resolveBottomDockLift(core.isCompactViewport, core.isAnySidebarOpen, core.sidebarHeight)
     };
 }
 
@@ -465,7 +467,7 @@ function buildShellProps(core, viewport, focusNav, layoutExp, applyDemographicSe
             isHomeOpen: core.isHomeOpen, isStandalone: core.isStandalone, hasTree: Boolean(core.tree?.root),
             isLoading: core.isLoading, showMap: core.showMap, showAI: core.showAI, showLogs: core.showLogs,
             isAILoading: viewport.isAILoading, isExportingApp: layoutExp.isExportingApp, isExportingA4: layoutExp.isExportingA4,
-            bottomDockLift: resolveBottomDockLift(core.isCompactViewport, core.isAnySidebarOpen)
+            bottomDockLift: resolveBottomDockLift(core.isCompactViewport, core.isAnySidebarOpen, core.sidebarHeight)
         },
         settingsPanelProps: {
             isOpen: core.isSettingsOpen, initialTab: core.settingsTab,
@@ -474,6 +476,30 @@ function buildShellProps(core, viewport, focusNav, layoutExp, applyDemographicSe
             themeId: core.themeId, onThemeChange: core.changeTheme
         }
     };
+}
+
+/**
+ * Whether the floating zoom/fit controls bar (`ZoomControls`) should be rendered:
+ * hidden on phones (`isCompactViewport`, where pinch-to-zoom is used instead),
+ * while the map or log drawer is open, or while a sheet is loading.
+ *
+ * @param {object} [state={}]
+ * @param {boolean} [state.showMap=false] - Whether locations map view is active
+ * @param {boolean} [state.showLogs=false] - Whether logs drawer is open
+ * @param {boolean} [state.isLoading=false] - Whether sheet data is loading
+ * @param {boolean} [state.isCompactViewport=false] - Whether phone layout is active
+ * @returns {boolean}
+ *
+ * @example
+ * shouldShowZoomControls({ showMap: false, showLogs: false, isLoading: false, isCompactViewport: false });
+ * // => true (desktop tree view)
+ *
+ * @example
+ * shouldShowZoomControls({ showMap: false, showLogs: false, isLoading: false, isCompactViewport: true });
+ * // => false (hidden on mobile viewports)
+ */
+function shouldShowZoomControls({ showMap = false, showLogs = false, isLoading = false, isCompactViewport = false } = {}) {
+    return !showMap && !showLogs && !isLoading && !isCompactViewport;
 }
 
 /**
@@ -510,7 +536,7 @@ function useAppViewModel() {
     });
 
     return {
-        showZoom: !core.showMap && !core.showLogs && !core.isLoading,
+        showZoom: shouldShowZoomControls(core),
         isCompactViewport: core.isCompactViewport,
         topNavProps: buildTopNavProps(core, viewport, focusNav, layoutExp),
         zoomProps: buildZoomProps(core, viewport),
@@ -564,7 +590,7 @@ const AppRootView = ({ topNavProps, zoomProps, viewportProps, sidebarProps, shel
         <ButtonDocTooltipOverlay />
         <TopNavigation {...topNavProps} />
         {!shellProps.isHomeOpen && <HomeButton {...shellProps.homeButtonProps} />}
-        {showZoom && <ZoomControls {...zoomProps} />}
+        {showZoom && !isCompactViewport && <ZoomControls {...zoomProps} />}
         <MainCanvasViewport {...viewportProps} />
         <PersonSidebar {...sidebarProps} />
         <AppSettingsPanel {...shellProps.settingsPanelProps} />

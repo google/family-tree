@@ -1156,20 +1156,130 @@ function setupSidebarDragListeners(startX, startWidth, setSidebarWidth, setIsRes
 }
 
 /**
- * Hook to manage sidebar width dragging, resizing constraints, cursor states,
- * and persistence to localStorage.
+ * Loads stored bottom-sheet sidebar height from localStorage or falls back to initialHeight.
+ * Clamps stored height between 160px and 1000px.
  *
- * @param {number} [initialWidth=360] - Default sidebar width in pixels
- * @returns {Object} { sidebarWidth, setSidebarWidth, isResizingSidebar, handleResizeStart }
+ * @param {number|null} [initialHeight=null]
+ * @returns {number|null}
  *
  * @example
- * const { sidebarWidth, isResizingSidebar, handleResizeStart } = useSidebarResize(360);
+ * loadStoredSidebarHeight(null);
+ * // => null (uses default 55vh until resized)
+ *
+ * @example
+ * loadStoredSidebarHeight(420);
+ * // => 420
+ */
+function loadStoredSidebarHeight(initialHeight = null) {
+    try {
+        const saved = localStorage.getItem('familyTree_sidebarHeight');
+        const parsed = saved ? parseInt(saved, 10) : Number.NaN;
+        return Number.isFinite(parsed) ? Math.max(160, Math.min(parsed, 1000)) : initialHeight;
+    } catch (e) {
+        return initialHeight;
+    }
+}
+
+/**
+ * Clamps dragged bottom-docked sidebar height within viewport bounds [160, windowHeight - 100].
+ *
+ * @param {number} startHeight - Initial sidebar height in px at drag start
+ * @param {number} deltaY - Vertical drag displacement (startY - clientY; positive = dragged up)
+ * @param {number} [windowHeight] - Total window height (defaults to window.innerHeight)
+ * @returns {number} Clamped sidebar height in px
+ *
+ * @example
+ * clampSidebarHeight(400, 80, 844)
+ * // => 480
+ *
+ * @example
+ * clampSidebarHeight(400, -300, 844)
+ * // => 160
+ */
+function clampSidebarHeight(startHeight, deltaY, windowHeight = (typeof window !== 'undefined' ? window.innerHeight : 844)) {
+    return Math.max(160, Math.min(startHeight + deltaY, Math.max(160, windowHeight - 100)));
+}
+
+/**
+ * Attaches pointermove and pointerup listeners to resize and persist bottom-sheet height during vertical drag.
+ *
+ * @param {number} startY - Initial pointer Y coordinate at drag start
+ * @param {number} startHeight - Initial sidebar height in pixels
+ * @param {Function} setSidebarHeight - State setter for sidebar height
+ * @param {Function} setIsResizingSidebar - State setter for resizing flag
+ *
+ * @example
+ * setupSidebarVerticalDragListeners(400, 460, setSidebarHeight, setIsResizingSidebar);
+ *
+ * @example
+ * setupSidebarVerticalDragListeners(350, 380, (h) => console.log(h), () => {});
+ */
+function setupSidebarVerticalDragListeners(startY, startHeight, setSidebarHeight, setIsResizingSidebar) {
+    const handlePointerMove = (moveEvent) => {
+        const newHeight = clampSidebarHeight(startHeight, startY - moveEvent.clientY);
+        setSidebarHeight(newHeight);
+    };
+
+    const handlePointerUp = (upEvent) => {
+        window.removeEventListener('pointermove', handlePointerMove);
+        window.removeEventListener('pointerup', handlePointerUp);
+        window.removeEventListener('pointercancel', handlePointerUp);
+        document.body.style.cursor = '';
+        document.body.style.userSelect = '';
+        setIsResizingSidebar(false);
+
+        const finalHeight = clampSidebarHeight(startHeight, startY - upEvent.clientY);
+        try {
+            localStorage.setItem('familyTree_sidebarHeight', String(Math.round(finalHeight)));
+        } catch (err) {}
+    };
+
+    document.body.style.cursor = 'row-resize';
+    document.body.style.userSelect = 'none';
+    window.addEventListener('pointermove', handlePointerMove);
+    window.addEventListener('pointerup', handlePointerUp);
+    window.addEventListener('pointercancel', handlePointerUp);
+}
+
+/**
+ * Resolves the starting pixel height of the bottom-docked sidebar when a vertical drag starts.
+ *
+ * @param {PointerEvent|Object} e - Pointer down event on the resize handle
+ * @param {number|null} sidebarHeight - Current configured height in px (or null for 55vh default)
+ * @returns {number} Starting height in pixels
+ *
+ * @example
+ * resolveInitialVerticalResizeHeight({}, 420);
+ * // => 420
+ *
+ * @example
+ * resolveInitialVerticalResizeHeight({ currentTarget: { parentElement: { getBoundingClientRect: () => ({ height: 464 }) } } }, null);
+ * // => 464
+ */
+function resolveInitialVerticalResizeHeight(e, sidebarHeight) {
+    const rectHeight = e?.currentTarget?.parentElement?.getBoundingClientRect?.()?.height;
+    if (typeof rectHeight === 'number' && rectHeight > 0) return Math.round(rectHeight);
+    if (typeof sidebarHeight === 'number' && sidebarHeight > 0) return sidebarHeight;
+    const winH = typeof window !== 'undefined' ? window.innerHeight : 844;
+    return Math.round(winH * 0.55);
+}
+
+/**
+ * Hook to manage sidebar width (desktop) and height (mobile bottom-sheet) dragging,
+ * resizing constraints, cursor states, and persistence to localStorage.
+ *
+ * @param {number} [initialWidth=360] - Default sidebar width in pixels
+ * @returns {Object} { sidebarWidth, setSidebarWidth, sidebarHeight, setSidebarHeight, isResizingSidebar, handleResizeStart, handleVerticalResizeStart }
+ *
+ * @example
+ * const { sidebarWidth, sidebarHeight, isResizingSidebar, handleResizeStart, handleVerticalResizeStart } = useSidebarResize(360);
  *
  * @example
  * const { sidebarWidth, setSidebarWidth } = useSidebarResize();
  */
 function useSidebarResize(initialWidth = 360) {
     const [sidebarWidth, setSidebarWidth] = useState(() => loadStoredSidebarWidth(initialWidth));
+    const [sidebarHeight, setSidebarHeight] = useState(() => loadStoredSidebarHeight(null));
     const [isResizingSidebar, setIsResizingSidebar] = useState(false);
 
     const handleResizeStart = useCallback((e) => {
@@ -1179,5 +1289,17 @@ function useSidebarResize(initialWidth = 360) {
         setupSidebarDragListeners(e.clientX, sidebarWidth, setSidebarWidth, setIsResizingSidebar);
     }, [sidebarWidth]);
 
-    return { sidebarWidth, setSidebarWidth, isResizingSidebar, handleResizeStart };
+    const handleVerticalResizeStart = useCallback((e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        const startH = resolveInitialVerticalResizeHeight(e, sidebarHeight);
+        setSidebarHeight(startH);
+        setIsResizingSidebar(true);
+        setupSidebarVerticalDragListeners(e.clientY, startH, setSidebarHeight, setIsResizingSidebar);
+    }, [sidebarHeight]);
+
+    return {
+        sidebarWidth, setSidebarWidth, sidebarHeight, setSidebarHeight,
+        isResizingSidebar, handleResizeStart, handleVerticalResizeStart
+    };
 }

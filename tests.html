@@ -296,7 +296,9 @@ try {
         extractConst(source, 'BOTTOM_DOCK_HEIGHT')
     ].concat([
         'withSetMembers', 'planSiblingBarToggle', 'isSiblingBarFolded', 'describeSiblingBarAction',
-        'isCompactViewportWidth', 'resolveTimelineGutterWidth', 'resolveDockedSidebarWidth', 'resolveSidebarDockLayout'
+        'isCompactViewportWidth', 'resolveTimelineGutterWidth', 'resolveDockedSidebarWidth', 'resolveSidebarDockLayout',
+        'loadStoredSidebarHeight', 'clampSidebarHeight', 'resolveInitialVerticalResizeHeight',
+        'resolveBottomDockLift', 'shouldShowZoomControls'
     ].map(name => extractFunction(source, name))).join('\n');
     const urlViewStateSrc = [
         'formatCompactNumber', 'encodeViewStateToken', 'decodeViewStateToken',
@@ -365,6 +367,8 @@ try {
         processPointerDown, processPointerMove, processPointerUp,
         withSetMembers, planSiblingBarToggle, isSiblingBarFolded, describeSiblingBarAction,
         isCompactViewportWidth, resolveTimelineGutterWidth, resolveDockedSidebarWidth, resolveSidebarDockLayout,
+        loadStoredSidebarHeight, clampSidebarHeight, resolveInitialVerticalResizeHeight,
+        resolveBottomDockLift, shouldShowZoomControls,
         TAILWIND_FALLBACK_THEME_ID, buildThemeBootScript, THEME_BOOT_SCRIPT, preferenceStorageKey, shouldIgnorePointerDown, BOTTOM_DOCK_HEIGHT,
         TIMELINE_GUTTER_WIDTH, TIMELINE_GUTTER_COMPACT_WIDTH, SIBLING_BAR_HIT_PX, COMPACT_VIEWPORT_MAX_WIDTH
     ] = new Function(`
@@ -561,6 +565,8 @@ try {
             processPointerDown, processPointerMove, processPointerUp,
             withSetMembers, planSiblingBarToggle, isSiblingBarFolded, describeSiblingBarAction,
             isCompactViewportWidth, resolveTimelineGutterWidth, resolveDockedSidebarWidth, resolveSidebarDockLayout,
+            loadStoredSidebarHeight, clampSidebarHeight, resolveInitialVerticalResizeHeight,
+            resolveBottomDockLift, shouldShowZoomControls,
             TAILWIND_FALLBACK_THEME_ID, buildThemeBootScript, THEME_BOOT_SCRIPT, preferenceStorageKey, shouldIgnorePointerDown, BOTTOM_DOCK_HEIGHT,
         TIMELINE_GUTTER_WIDTH, TIMELINE_GUTTER_COMPACT_WIDTH, SIBLING_BAR_HIT_PX, COMPACT_VIEWPORT_MAX_WIDTH
         ];
@@ -15541,10 +15547,11 @@ const m3 = tree.all.find(n => n.id === '3');
                 JSON.stringify([resolveSidebarDockLayout({ dockBottom: false, isVisible: true, sidebarWidth: 420 }),
                                 resolveSidebarDockLayout({ dockBottom: false, isVisible: false, sidebarWidth: 420 }).style]),
                 JSON.stringify([{ className: 'border-l', style: { width: '420px' } }, { width: 0 }]));
-            assertEqual('Test 218.04: Phone dock: full-width bottom sheet 55vh tall; hidden → 0px tall',
+            assertEqual('Test 218.04: Phone dock: full-width bottom sheet 55vh tall by default or custom px height when resized; hidden → 0px tall',
                 JSON.stringify([resolveSidebarDockLayout({ dockBottom: true, isVisible: true, sidebarWidth: 420 }),
+                                resolveSidebarDockLayout({ dockBottom: true, isVisible: true, sidebarWidth: 420, sidebarHeight: 380 }).style,
                                 resolveSidebarDockLayout({ dockBottom: true, isVisible: false, sidebarWidth: 420 }).style]),
-                JSON.stringify([{ className: 'w-full border-t rounded-t-2xl', style: { height: BOTTOM_DOCK_HEIGHT } }, { height: 0 }]));
+                JSON.stringify([{ className: 'w-full border-t rounded-t-2xl', style: { height: BOTTOM_DOCK_HEIGHT } }, { height: '380px' }, { height: 0 }]));
             assertEqual('Test 218.05: Timeline gutter: 48px desktop, 32px (year labels only) on phones, 0 in standalone exports',
                 [resolveTimelineGutterWidth({ isStandalone: false, isCompact: false }), resolveTimelineGutterWidth({ isStandalone: false, isCompact: true }),
                  resolveTimelineGutterWidth({ isStandalone: true, isCompact: false }), TIMELINE_GUTTER_WIDTH, TIMELINE_GUTTER_COMPACT_WIDTH].join('|'),
@@ -15556,8 +15563,9 @@ const m3 = tree.all.find(n => n.id === '3');
                 appCode.includes('box, contW: effectiveContW, contH, preferredZ, timelineWidth: resolveTimelineGutterWidth(),'));
             // Shell wiring: stacked layout, docked width for the camera, dvh-safe height, 44px touch targets.
             const appRootBlock = (() => { const s = appCode.indexOf('const AppRootView = ('); return appCode.slice(s, appCode.indexOf('\n);', s)); })();
-            assert('Test 218.07: AppRootView stacks canvas over the details panel on phones (flex-col) and sizes itself with 100dvh (100vh fallback)',
+            assert('Test 218.07: AppRootView stacks canvas over the details panel on phones (flex-col), hides ZoomControls on phones, and sizes itself with 100dvh (100vh fallback)',
                 appRootBlock.includes("app-shell flex ${isCompactViewport ? 'flex-col' : ''} w-screen") &&
+                appRootBlock.includes('{showZoom && !isCompactViewport && <ZoomControls {...zoomProps} />}') &&
                 appCode.includes('.app-shell { height: 100vh; height: 100dvh; }'));
             const coreBlock = (() => { const s = appCode.indexOf('function useAppCoreState()'); return appCode.slice(s, appCode.indexOf('\n}', s)); })();
             assert('Test 218.08: useAppCoreState derives isCompactViewport (matchMedia-backed), the docked sidebar width and the gutter width, and the view model feeds the DOCKED width to the camera and the map',
@@ -15567,8 +15575,11 @@ const m3 = tree.all.find(n => n.id === '3');
                 appCode.includes('isAnySidebarOpen: core.isAnySidebarOpen, sidebarWidth: core.dockedSidebarWidth,') &&
                 appCode.includes('sidebarWidth: core.dockedSidebarWidth, isAnySidebarOpen: core.isAnySidebarOpen,') &&
                 appCode.includes('dockBottom: core.isCompactViewport,'));
-            assert('Test 218.09: PersonSidebar hides its width-resize handle when docked at the bottom and TopNavigation gets the compact flag',
-                appCode.includes('{isVisible && !dockBottom && <SidebarResizeHandle onResizeStart={onResizeStart} />}') &&
+            assert('Test 218.09: PersonSidebar renders vertical/horizontal resize handle, close (x) button wired to closeAllPanels, and TopNavigation gets the compact flag',
+                appCode.includes('{isVisible && <SidebarResizeHandle onResizeStart={dockBottom ? onVerticalResizeStart : onResizeStart} dockBottom={dockBottom} />}') &&
+                appCode.includes('{showCloseBtn && <SidebarCloseButton onClose={onClose} dockBottom={dockBottom} />}') &&
+                appCode.includes('data-testid="close-details-panel"') &&
+                appCode.includes('onClose: core.closeAllPanels,') &&
                 appCode.includes('isCompactViewport: core.isCompactViewport,'));
             const zoomBlock = (() => { const s = appCode.indexOf('const ZoomControls = ('); return appCode.slice(s, appCode.indexOf('\n};', s)); })();
             assertEqual('Test 218.10: All four zoom buttons use p-3 below the sm breakpoint (44px touch targets) and p-2 on desktop',
@@ -15579,6 +15590,26 @@ const m3 = tree.all.find(n => n.id === '3');
                 appCode.includes("paddingLeft: isStandalone ? 16 : gutterWidth"));
             assert('Test 218.12: Buttons/links/inputs opt out of the 300ms double-tap zoom delay (touch-action: manipulation)',
                 appCode.includes('.app-shell button, .app-shell a, .app-shell input { touch-action: manipulation; }'));
+            assertEqual('Test 218.13: shouldShowZoomControls hides zoom/fit buttons on mobile viewports, map view, log view, and loading screen',
+                [shouldShowZoomControls({}),
+                 shouldShowZoomControls({ isCompactViewport: true }),
+                 shouldShowZoomControls({ showMap: true }),
+                 shouldShowZoomControls({ showLogs: true }),
+                 shouldShowZoomControls({ isLoading: true })].join('|'),
+                'true|false|false|false|false');
+            assertEqual('Test 218.14: clampSidebarHeight clamps vertical bottom-sheet drag within [160, windowHeight - 100]',
+                [clampSidebarHeight(320, 80, 800), clampSidebarHeight(320, -250, 800), clampSidebarHeight(320, 500, 800)].join('|'),
+                '400|160|700');
+            assertEqual('Test 218.15: resolveBottomDockLift uses default 55vh or custom pixel height when bottom sheet is open on mobile',
+                [resolveBottomDockLift(false, true, 380),
+                 resolveBottomDockLift(true, false, 380),
+                 resolveBottomDockLift(true, true, null)?.bottom,
+                 resolveBottomDockLift(true, true, 380)?.bottom].join('|'),
+                '||calc(55vh + 1.5rem)|calc(380px + 1.5rem)');
+            assertEqual('Test 218.16: resolveInitialVerticalResizeHeight reads rendered parent height or falls back to sidebarHeight',
+                [resolveInitialVerticalResizeHeight({ currentTarget: { parentElement: { getBoundingClientRect: () => ({ height: 412.4 }) } } }, null),
+                 resolveInitialVerticalResizeHeight(null, 350)].join('|'),
+                '412|350');
         } catch (e) {
             assertEqual('Test 218 execution failed', e.message, '');
         }

@@ -335,7 +335,7 @@ const SidebarSourceLink = ({ href, title, linkText }) => (
  */
 const SidebarPersonHeader = ({ focusPerson, setFocusId, centerOnPerson }) => (
     <>
-        <div className="flex justify-between items-center gap-3 mb-4">
+        <div className="flex justify-between items-center gap-3 mb-4 pr-8">
             <div className="flex items-center gap-2.5 min-w-0">
                 {focusPerson.gender === 'M' && (
                     <span className="w-2.5 h-2.5 rounded-full bg-blue-500 shrink-0" title="Male" />
@@ -522,7 +522,7 @@ const SidebarSourceCitations = ({ focusPerson, sheetNames }) => {
  *   centerOnPerson={centerOnPerson}
  * />
  */
-const SidebarPersonDetails = ({ focusPerson, tree, setFocusId, onFilterBy, centerOnPerson }) => {
+const SidebarPersonDetails = ({ focusPerson, tree, setFocusId, onFilterBy, centerOnPerson, dockBottom = false }) => {
     const siblings = useMemo(() => tree.getSiblings(focusPerson?.id), [focusPerson, tree]);
     const { dateStr, extraStr, isDeduced } = focusPerson ? focusPerson.getDateStrings() : {};
 
@@ -531,7 +531,7 @@ const SidebarPersonDetails = ({ focusPerson, tree, setFocusId, onFilterBy, cente
     );
 
     return (
-        <div className="p-6 pt-[72px] overflow-y-auto flex-1 pb-24 interactive-element w-full">
+        <div className={`p-6 ${dockBottom ? 'pt-8' : 'pt-[72px]'} overflow-y-auto flex-1 pb-24 interactive-element w-full`}>
             <SidebarPersonHeader focusPerson={focusPerson} setFocusId={setFocusId} centerOnPerson={centerOnPerson} />
             <SidebarPersonBadges focusPerson={focusPerson} tree={tree} onFilterBy={onFilterBy} dateStr={dateStr} extraStr={extraStr} isDeduced={isDeduced} />
             <div className="mt-6">
@@ -546,27 +546,67 @@ const SidebarPersonDetails = ({ focusPerson, tree, setFocusId, onFilterBy, cente
 };
 
 /**
- * Renders the vertical draggable handle on the left edge of the sidebar for width adjustments.
+ * Renders the draggable handle for adjusting the details panel size:
+ * a left-edge vertical bar (`cursor-col-resize`) on desktop, or a top-edge horizontal
+ * bottom-sheet grab handle (`cursor-row-resize`) on phones (`dockBottom`).
  *
  * @param {object} props
  * @param {Function} props.onResizeStart - Pointer down event handler to begin dragging
+ * @param {boolean} [props.dockBottom=false] - Whether the panel is docked at the bottom (phone layout)
  * @returns {React.ReactNode} Formatted resize drag handle element
  *
  * @example
- * <SidebarResizeHandle onResizeStart={handlePointerDown} />
+ * <SidebarResizeHandle onResizeStart={handlePointerDown} dockBottom={false} />
  *
  * @example
- * <SidebarResizeHandle onResizeStart={e => startResize(e)} />
+ * <SidebarResizeHandle onResizeStart={handleVerticalResizeStart} dockBottom={true} />
  */
-const SidebarResizeHandle = ({ onResizeStart }) => (
+const SidebarResizeHandle = ({ onResizeStart, dockBottom = false }) => (
     <div
+        data-testid="sidebar-resize-handle"
         onPointerDown={onResizeStart}
-        className="absolute top-0 bottom-0 left-0 w-3.5 -translate-x-1/2 cursor-col-resize z-50 group flex items-center justify-center select-none"
+        className={dockBottom
+            ? "absolute top-0 left-0 right-12 h-7 cursor-row-resize touch-none z-40 group flex items-center justify-center pl-12 select-none interactive-element"
+            : "absolute top-0 bottom-0 left-0 w-3.5 -translate-x-1/2 cursor-col-resize touch-none z-50 group flex items-center justify-center select-none interactive-element"
+        }
         title="Drag to resize panel"
     >
-        <div className="w-[3px] h-12 rounded-full bg-slate-300 group-hover:bg-blue-500 group-hover:h-20 group-hover:w-[4px] transition-all group-active:bg-blue-600 group-active:h-28 shadow-sm" />
+        <div className={dockBottom
+            ? "h-1.5 w-12 rounded-full bg-slate-300 group-hover:bg-blue-500 group-hover:w-16 transition-all group-active:bg-blue-600 group-active:w-20 shadow-sm"
+            : "w-[3px] h-12 rounded-full bg-slate-300 group-hover:bg-blue-500 group-hover:h-20 group-hover:w-[4px] transition-all group-active:bg-blue-600 group-active:h-28 shadow-sm"
+        } />
     </div>
 );
+
+/**
+ * Renders the dismiss ('x') button in the top-right corner of the details panel.
+ *
+ * @param {object} props
+ * @param {Function} [props.onClose] - Callback to close the details panel
+ * @param {boolean} [props.dockBottom=false] - Whether the panel is docked at the bottom (phone layout)
+ * @returns {React.ReactNode|null}
+ *
+ * @example
+ * <SidebarCloseButton onClose={closeAllPanels} dockBottom={true} />
+ *
+ * @example
+ * <SidebarCloseButton onClose={() => setIsSidebarVisible(false)} dockBottom={false} />
+ */
+const SidebarCloseButton = ({ onClose, dockBottom = false }) => {
+    if (typeof onClose !== 'function') return null;
+    return (
+        <button
+            type="button"
+            data-testid="close-details-panel"
+            onClick={onClose}
+            className={`absolute ${dockBottom ? 'top-2 right-3' : 'top-[68px] right-5'} z-50 p-1.5 rounded-lg text-slate-400 hover:text-slate-600 hover:bg-slate-200/60 transition-colors cursor-pointer interactive-element`}
+            title="Close Panel"
+            aria-label="Close Panel"
+        >
+            <Icons.Close />
+        </button>
+    );
+};
 
 /**
  * Renders the active primary panel within the details sidebar (AI Assistant, Logs, Filtered List, or Person Details).
@@ -585,6 +625,7 @@ const SidebarResizeHandle = ({ onResizeStart }) => (
  * @param {Function} props.setFocusId - Person focus ID setter.
  * @param {Function} props.onFilterBy - Filter dispatcher.
  * @param {Function} [props.centerOnPerson] - Center canvas on person callback.
+ * @param {boolean} [props.dockBottom=false] - Phone bottom-sheet layout flag.
  * @returns {React.ReactElement}
  *
  * @example
@@ -595,7 +636,7 @@ const SidebarResizeHandle = ({ onResizeStart }) => (
  */
 const SidebarMainPanels = ({
     aiProps, showLogs, showAI, logs, isLoading, setShowLogs,
-    activeFilter, filteredProps, focusPerson, tree, setFocusId, onFilterBy, centerOnPerson
+    activeFilter, filteredProps, focusPerson, tree, setFocusId, onFilterBy, centerOnPerson, dockBottom = false
 }) => (
     <>
         <AIAssistant {...aiProps} />
@@ -604,7 +645,7 @@ const SidebarMainPanels = ({
             <FilteredListView {...filteredProps} />
         )}
         {focusPerson && (!activeFilter || activeFilter.filterType === 'directory') && !showLogs && !showAI && (
-            <SidebarPersonDetails focusPerson={focusPerson} tree={tree} setFocusId={setFocusId} onFilterBy={onFilterBy} centerOnPerson={centerOnPerson} />
+            <SidebarPersonDetails focusPerson={focusPerson} tree={tree} setFocusId={setFocusId} onFilterBy={onFilterBy} centerOnPerson={centerOnPerson} dockBottom={dockBottom} />
         )}
     </>
 );
@@ -613,24 +654,27 @@ const SidebarMainPanels = ({
 const BOTTOM_DOCK_HEIGHT = '55vh';
 
 /**
- * Inline style that lifts a bottom-anchored control (zoom bar, settings FAB) clear of the
+ * Inline style that lifts a bottom-anchored control (settings FAB) clear of the
  * phone layout's bottom-docked details panel, so it never covers the panel's content. On
  * desktop, or while no panel is open, the control keeps its normal `bottom-6` position.
  *
  * @param {boolean} isCompactViewport - Phone layout (see `isCompactViewportWidth`)
  * @param {boolean} isAnySidebarOpen - Whether a details / filter / AI / logs panel is open
+ * @param {number|null} [sidebarHeight=null] - User-resized bottom-sheet height in px, or null for `55vh`
  * @returns {{ bottom: string }|undefined}
  *
  * @example
- * resolveBottomDockLift(true, true);    // => { bottom: 'calc(55vh + 1.5rem)' }
+ * resolveBottomDockLift(true, true);        // => { bottom: 'calc(55vh + 1.5rem)' }
+ * resolveBottomDockLift(true, true, 320);   // => { bottom: 'calc(320px + 1.5rem)' }
  *
  * @example
- * resolveBottomDockLift(false, true);   // => undefined (desktop: the panel sits beside the canvas)
- * resolveBottomDockLift(true, false);   // => undefined (nothing docked at the bottom)
+ * resolveBottomDockLift(false, true);       // => undefined (desktop: the panel sits beside the canvas)
+ * resolveBottomDockLift(true, false);       // => undefined (nothing docked at the bottom)
  */
-function resolveBottomDockLift(isCompactViewport, isAnySidebarOpen) {
+function resolveBottomDockLift(isCompactViewport, isAnySidebarOpen, sidebarHeight = null) {
     if (!isCompactViewport || !isAnySidebarOpen) return undefined;
-    return { bottom: `calc(${BOTTOM_DOCK_HEIGHT} + 1.5rem)` };
+    const heightCss = (typeof sidebarHeight === 'number' && sidebarHeight > 0) ? `${sidebarHeight}px` : BOTTOM_DOCK_HEIGHT;
+    return { bottom: `calc(${heightCss} + 1.5rem)` };
 }
 
 /**
@@ -642,6 +686,7 @@ function resolveBottomDockLift(isCompactViewport, isAnySidebarOpen) {
  * @param {boolean} options.dockBottom - Phone layout (see `isCompactViewportWidth`)
  * @param {boolean} options.isVisible - Whether the panel is open
  * @param {number} options.sidebarWidth - Configured desktop width in px
+ * @param {number|null} [options.sidebarHeight=null] - Configured phone bottom-sheet height in px (defaults to `55vh`)
  * @returns {{ className: string, style: Object }}
  *
  * @example
@@ -651,12 +696,13 @@ function resolveBottomDockLift(isCompactViewport, isAnySidebarOpen) {
  * @example
  * resolveSidebarDockLayout({ dockBottom: true, isVisible: true, sidebarWidth: 360 });
  * // => { className: 'w-full border-t rounded-t-2xl', style: { height: '55vh' } }
- * resolveSidebarDockLayout({ dockBottom: true, isVisible: false, sidebarWidth: 360 }).style;
- * // => { height: 0 }
+ * resolveSidebarDockLayout({ dockBottom: true, isVisible: true, sidebarWidth: 360, sidebarHeight: 340 });
+ * // => { className: 'w-full border-t rounded-t-2xl', style: { height: '340px' } }
  */
-function resolveSidebarDockLayout({ dockBottom, isVisible, sidebarWidth }) {
+function resolveSidebarDockLayout({ dockBottom, isVisible, sidebarWidth, sidebarHeight = null }) {
     if (dockBottom) {
-        return { className: 'w-full border-t rounded-t-2xl', style: { height: isVisible ? BOTTOM_DOCK_HEIGHT : 0 } };
+        const openHeight = (typeof sidebarHeight === 'number' && sidebarHeight > 0) ? `${sidebarHeight}px` : BOTTOM_DOCK_HEIGHT;
+        return { className: 'w-full border-t rounded-t-2xl', style: { height: isVisible ? openHeight : 0 } };
     }
     return { className: 'border-l', style: { width: isVisible ? `${sidebarWidth}px` : 0 } };
 }
@@ -673,9 +719,12 @@ function resolveSidebarDockLayout({ dockBottom, isVisible, sidebarWidth }) {
  * @param {object} props.tree - FamilyTree data model
  * @param {Function} props.setFocusId - State setter to select a person ID
  * @param {boolean} props.isVisible - Whether the sidebar is currently open/visible
- * @param {number} [props.sidebarWidth=360] - Width of sidebar in pixels
+ * @param {number} [props.sidebarWidth=360] - Width of sidebar in pixels (desktop)
+ * @param {number|null} [props.sidebarHeight=null] - Height of bottom sheet in pixels (phones)
  * @param {boolean} [props.dockBottom=false] - Phone layout: full-width bottom sheet instead of a right column
- * @param {Function} props.onResizeStart - Pointer down handler to initiate sidebar resizing
+ * @param {Function} props.onResizeStart - Pointer down handler to initiate horizontal sidebar resizing
+ * @param {Function} [props.onVerticalResizeStart] - Pointer down handler to initiate vertical bottom-sheet resizing
+ * @param {Function} [props.onClose] - Callback to dismiss/close the panel
  * @param {boolean} [props.isResizing=false] - Whether a resize drag operation is active
  * @param {boolean} props.showLogs - Whether system logs view is active
  * @param {Function} props.setShowLogs - State setter for logs view visibility
@@ -715,8 +764,8 @@ function resolveSidebarDockLayout({ dockBottom, isVisible, sidebarWidth }) {
  * />
  */
 const PersonSidebar = ({ 
-    focusPerson, activeFilter, onFilterBy, tree, setFocusId, isVisible, sidebarWidth = 360, dockBottom = false,
-    onResizeStart, isResizing = false, showLogs, setShowLogs, logs, isLoading, showAI, setShowAI,
+    focusPerson, activeFilter, onFilterBy, tree, setFocusId, isVisible, sidebarWidth = 360, sidebarHeight = null, dockBottom = false,
+    onResizeStart, onVerticalResizeStart, onClose, isResizing = false, showLogs, setShowLogs, logs, isLoading, showAI, setShowAI,
     isAILoading, setIsAILoading, onAiProfilesResponded, pendingAiQuery, setPendingAiQuery,
     showMap, setShowMap, omniSelectedIndex, setOmniSelectedIndex, centerOnPerson
 }) => {
@@ -725,7 +774,8 @@ const PersonSidebar = ({
 
     const aiProps = { isOpen: showAI, setIsOpen: setShowAI, tree, handleSetFocusId: setFocusId, isLoading: isAILoading, setIsLoading: setIsAILoading, onAiProfilesResponded, pendingAiQuery, setPendingAiQuery };
     const filteredProps = { activeFilter, tree, setFocusId, onFilterBy, setShowMap, setShowAI, setShowLogs, setPendingAiQuery, omniSelectedIndex, setOmniSelectedIndex };
-    const dock = resolveSidebarDockLayout({ dockBottom, isVisible, sidebarWidth });
+    const dock = resolveSidebarDockLayout({ dockBottom, isVisible, sidebarWidth, sidebarHeight });
+    const showCloseBtn = isVisible && !showLogs && (dockBottom || (focusPerson && !showAI && (!activeFilter || activeFilter.filterType === 'directory')));
 
     return (
         <div 
@@ -733,11 +783,12 @@ const PersonSidebar = ({
             className={`bg-white border-slate-200 shadow-2xl flex flex-col z-40 sidebar-scroll relative shrink-0 overflow-hidden ${dock.className} ${isResizing ? 'transition-none' : 'transition-all duration-300 ease-in-out'} ${isVisible ? 'opacity-100' : 'border-none opacity-0 pointer-events-none'}`}
             style={dock.style}
         >
-            {isVisible && !dockBottom && <SidebarResizeHandle onResizeStart={onResizeStart} />}
+            {isVisible && <SidebarResizeHandle onResizeStart={dockBottom ? onVerticalResizeStart : onResizeStart} dockBottom={dockBottom} />}
+            {showCloseBtn && <SidebarCloseButton onClose={onClose} dockBottom={dockBottom} />}
             <SidebarMainPanels
                 aiProps={aiProps} showLogs={showLogs} showAI={showAI} logs={logs} isLoading={isLoading}
                 setShowLogs={setShowLogs} activeFilter={activeFilter} filteredProps={filteredProps}
-                focusPerson={focusPerson} tree={tree} setFocusId={setFocusId} onFilterBy={onFilterBy} centerOnPerson={centerOnPerson}
+                focusPerson={focusPerson} tree={tree} setFocusId={setFocusId} onFilterBy={onFilterBy} centerOnPerson={centerOnPerson} dockBottom={dockBottom}
             />
             {isDirectoryMode && !focusPerson && !showLogs && !showAI && (
                 <QuickDirectorySelector
