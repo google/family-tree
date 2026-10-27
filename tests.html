@@ -15616,6 +15616,50 @@ const m3 = tree.all.find(n => n.id === '3');
     }
 
     // ══════════════════════════════════════════════════════════════════════════
+    //  219. Patrilinear Location Propagation (Father -> Son / Unmarried Daughter; Husband -> Wife)
+    // ══════════════════════════════════════════════════════════════════════════
+    {
+        section('219. Patrilinear Location Propagation (Father -> Son / Unmarried Daughter; Husband -> Wife)');
+        try {
+            const rows219 = [
+                { _sourceId: 'ckdy', _sheetRow: 2, Name: 'Chacko', Nickname: 'Kochappan', 'Year of Birth': '1924', Mother: 'Rosa', 'Year of Death': '2014', Job: 'Banker & BDO', Location: 'Chalakkudy' },
+                { _sourceId: 'ckdy', _sheetRow: 3, Name: 'Regina', 'Year of Birth': '1924', Mother: 'Acharunni', Spouse: 'Chacko', 'Year of Death': '2014', Job: 'Teacher', Location: 'Ollur' },
+                { _sourceId: 'ckdy', _sheetRow: 5, Name: 'Johny', 'Year of Birth': '1943', Mother: 'Philomena', 'Family Name at Birth': 'Chalissery', Job: 'AirForce, Banker', Location: 'Thalore' },
+                { _sourceId: 'ckdy', _sheetRow: 6, Name: 'Achama', 'Year of Birth': '1949', Mother: 'Regina', Spouse: 'Johny', Job: 'Teacher', Location: '' },
+                { _sourceId: 'ckdy', _sheetRow: 11, Name: 'Sobhana', Nickname: 'Sr.Sophy Rose', 'Year of Birth': '1950', Mother: 'Regina', Job: 'Teacher', Location: 'Vellikkulangara' },
+                { _sourceId: 'ckdy', _sheetRow: 13, Name: 'Baby', 'Year of Birth': '1952', Mother: 'Regina', Job: 'Forest', Location: '' },
+                { _sourceId: 'ckdy', _sheetRow: 14, Name: 'Mary', 'Year of Birth': '1953', Mother: 'Rosa', 'Family Name at Birth': 'Palathingal', Spouse: 'Baby', Job: 'Teacher', Location: 'Kombidi' },
+                { _sourceId: 'ckdy', _sheetRow: 22, Name: 'Anto', 'Year of Birth': '1955', Mother: 'Regina', Job: 'Banker', Location: '' },
+                { _sourceId: 'ckdy', _sheetRow: 23, Name: 'Beena', 'Year of Birth': '1958', Mother: 'Annama', 'Family Name at Birth': 'Tholath', Spouse: 'Anto', Job: 'Teacher', Location: 'Chelakkara' },
+                { _sourceId: 'ckdy', _sheetRow: 25, Name: 'Martin', 'Year of Birth': '1964', Mother: 'Regina', Job: 'Chemical Engineer', Location: 'Washington DC' },
+                { _sourceId: 'ckdy', _sheetRow: 26, Name: 'Solly', 'Year of Birth': '1965', Spouse: 'Martin', Location: '' },
+                { _sourceId: 'ckdy', _sheetRow: 28, Name: 'Dhas', 'Year of Birth': '1967', Mother: 'Regina', Job: 'Ship', Location: '' },
+                { _sourceId: 'ckdy', _sheetRow: 29, Name: 'Tessy', 'Year of Birth': '1969', 'Family Name at Birth': 'Maliyekkal', Spouse: 'Dhas', Job: 'Teacher', Location: 'Vaitila' },
+                { _sourceId: 'ckdy', _sheetRow: 30, Name: 'Leena', 'Year of Birth': '1970', Mother: 'Regina', Gender: 'F', Location: '' }
+            ];
+            const tree219 = new FamilyTreeBuilder(rows219).build();
+            const find219 = (name) => tree219.all.find(n => n.name === name && !n.isGhost);
+
+            assertEqual('Test 219.01: Sons (Anto, Baby, Dhas) inherit location from their father (Chalakkudy), never from their wives (Chelakkara, Kombidi, Vaitila)',
+                [find219('Anto')?.place, find219('Baby')?.place, find219('Dhas')?.place].join('|'),
+                'Chalakkudy|Chalakkudy|Chalakkudy');
+            assertEqual('Test 219.02: Wives with explicit birth locations (Regina, Mary, Beena, Tessy) retain their explicit locations',
+                [find219('Regina')?.place, find219('Mary')?.place, find219('Beena')?.place, find219('Tessy')?.place].join('|'),
+                'Ollur|Kombidi|Chelakkara|Vaitila');
+            assertEqual('Test 219.03: Married women without explicit locations (Achama, Solly) inherit location from their husbands (Thalore, Washington DC), not from their father',
+                [find219('Achama')?.place, find219('Solly')?.place].join('|'),
+                'Thalore|Washington DC');
+            assertEqual('Test 219.04: Unmarried women without explicit locations (Leena) inherit location from their father (Chalakkudy)',
+                find219('Leena')?.place, 'Chalakkudy');
+            assertEqual('Test 219.05: Explicit locations on sons/daughters (Martin, Sobhana) are preserved over father inheritance',
+                [find219('Martin')?.place, find219('Sobhana')?.place].join('|'),
+                'Washington DC|Vellikkulangara');
+        } catch (e) {
+            assertEqual('Test 219 execution failed', e.message, '');
+        }
+    }
+
+    // ══════════════════════════════════════════════════════════════════════════
     //  SUMMARY
     // ══════════════════════════════════════════════════════════════════════════
     const summaryPlaceholder = document.getElementById('summary-placeholder');

@@ -5000,6 +5000,8 @@ ${b64Jsx}
         this._renumberUnmergedFreeFormGhosts();
         this.ensureEveryParentHasPartner(deduplicated);
         this.mergeDisconnectedRoots(deduplicated);
+        this.inferLocations(Object.values(this.nodeMap));
+        this.inferFamilyNames(Object.values(this.nodeMap));
         this.inferDeaths(Object.values(this.nodeMap));
         Object.values(this.nodeMap).forEach(n => {
             if (n && n.partners && n.partners.length > 1) {
@@ -13731,38 +13733,42 @@ ${b64Jsx}
     }
 
     /**
-     * Resolves an inferred location for a person from valid partner or parent locations.
+     * Resolves a patrilineally inferred location for a person:
+     * - Men (and unmarried individuals) inherit their location from their father.
+     * - Married women inherit their location from their husband.
      *
      * @param {Object} n - Domain Person node
      * @param {Object<string, Object>} nodeMap - Mapping of person IDs to Person instances
      * @returns {string|null} Resolved place string or null
      *
      * @example
-     * const loc1 = FamilyTreeBuilder._resolveInferredLocation(personWithoutPlace, nodeMap);
+     * const loc1 = FamilyTreeBuilder._resolveInferredLocation(sonWithoutPlace, nodeMap);
      *
      * @example
-     * const loc2 = FamilyTreeBuilder._resolveInferredLocation(orphanNode, nodeMap);
+     * const loc2 = FamilyTreeBuilder._resolveInferredLocation(marriedWomanWithoutPlace, nodeMap);
      */
     static _resolveInferredLocation(n, nodeMap) {
-        for (const pId of n.partners || []) {
-            const p = nodeMap[pId];
-            if (p && p.place && !FamilyTreeBuilder.isInvalidLocation(p.place)) {
-                return p.place;
+        if (!n || !nodeMap) return null;
+        const isMarried = Boolean((n.partners && n.partners.length > 0) || (n.spouse && String(n.spouse).trim()));
+        if (n.gender === 'F' && isMarried) {
+            for (const pId of n.partners || []) {
+                const p = nodeMap[pId];
+                if (p && p.place && !FamilyTreeBuilder.isInvalidLocation(p.place)) {
+                    return p.place;
+                }
             }
+            return null;
         }
         const dad = nodeMap[n.fatherId];
         if (dad && dad.place && !FamilyTreeBuilder.isInvalidLocation(dad.place)) {
             return dad.place;
         }
-        const mom = nodeMap[n.momId];
-        if (mom && mom.place && !FamilyTreeBuilder.isInvalidLocation(mom.place)) {
-            return mom.place;
-        }
         return null;
     }
 
     /**
-     * Deduces geographical location from spouses or parents across multiple convergent passes.
+     * Deduces geographical location patrilineally across multiple convergent passes:
+     * men and unmarried women inherit from their father; married women inherit from their husband.
      * 
      * @param {Object[]} nodes - List of domain nodes
      *
@@ -13774,10 +13780,11 @@ ${b64Jsx}
      */
     inferLocations(nodes) {
         FamilyTreeBuilder._runConvergentPass(nodes, (n) => {
-            if (n.place && !FamilyTreeBuilder.isInvalidLocation(n.place)) return false;
-            const newPlace = FamilyTreeBuilder._resolveInferredLocation(n, this.nodeMap);
-            if (newPlace) {
+            if (n.place && !n._inferredPlace && !FamilyTreeBuilder.isInvalidLocation(n.place)) return false;
+            const newPlace = FamilyTreeBuilder._resolveInferredLocation(n, this.nodeMap) || '';
+            if ((n.place || '') !== newPlace) {
                 n.place = newPlace;
+                n._inferredPlace = Boolean(newPlace);
                 return true;
             }
             return false;
