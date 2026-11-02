@@ -54,21 +54,21 @@ Every `<button>` across the UI displays a speech-balloon rich-text documentation
 
 ---
 
-## 3. Startup: Home Screen vs. URL Query Parameter Loading (`?id=...`)
+## 3. Startup: Home Screen vs. URL Query Parameter Loading (`?<sheetId>` / `?d`)
 
-`resolveInitialSheetUrl(searchStr)` in `src/06_ui/11_CanvasViewport.jsx` inspects `window.location.search` on startup so users can open any root Google Sheet via URL parameters:
+`extractSheetQueryValue(searchStr)` and `resolveInitialSheetUrl(searchStr)` in `src/06_ui/11_CanvasViewport.jsx` inspect `window.location.search` on startup so users can open any root Google Sheet via keyless ultra-short parameters (`?d` or `?<sheetId>`) or legacy named parameters (`?id=`, `?sheet=`, `?url=`, `?sheetId=`):
 
 ```javascript
-// Example 1: Passing a Google Spreadsheet ID via ?id=
-resolveInitialSheetUrl('?id=1BQvyFoA_-u4MG-r1SRDel93F1TwEaN3I6v6p-kOH8z0');
-// => 'https://docs.google.com/spreadsheets/d/1BQvyFoA_-u4MG-r1SRDel93F1TwEaN3I6v6p-kOH8z0/edit'
+// Example 1: Ultra-short keyless Google Spreadsheet ID (or ?d for DEMO_SHEET_ID)
+resolveInitialSheetUrl('?1SvPspyHtIV2E9UHwpZON8sUTf3FxIuqJZO-wx0WPl3k');
+// => 'https://docs.google.com/spreadsheets/d/1SvPspyHtIV2E9UHwpZON8sUTf3FxIuqJZO-wx0WPl3k/edit'
 
-// Example 2: Passing a full URL via ?url=
+// Example 2: Legacy ?id= or ?url= remains supported on read
 resolveInitialSheetUrl('?url=https://docs.google.com/spreadsheets/d/1BxiMVs0XRA5nFMdKvBdBZjgmUUqptlbs74OgvE2upms/edit');
 // => 'https://docs.google.com/spreadsheets/d/1BxiMVs0XRA5nFMdKvBdBZjgmUUqptlbs74OgvE2upms/edit'
 ```
 
-No spreadsheet is hard-coded any more. During bootstrap (`initializeTreeDataset`) an embedded standalone dataset wins; otherwise the app auto-loads **only** when `hasExplicitSheetQueryParam()` is true (`?id=`, `?sheet=`, `?url=`, `?sheetId=`). Without such a parameter `useAppShellPanels()` starts with `isHomeOpen = true` and `sheetUrl = ''` (so the 20-second live-sync poller stays idle) and the user picks a sheet on the home screen. `DEFAULT_URL` (`src/01_core/04_Icons.jsx`) now points at the public demo spreadsheet (`Ancestry Browser: Demo`, ID `1BQvyFoA_-u4MG-r1SRDel93F1TwEaN3I6v6p-kOH8z0`) and is used solely as the last-resort prefill.
+No spreadsheet is hard-coded any more. During bootstrap an embedded standalone dataset wins; otherwise the app auto-loads when `hasInitialSheetToLoad()` is true (`hasExplicitSheetQueryParam()` or a previously opened sheet in cookie history). Without either, `useAppShellPanels()` starts with `isHomeOpen = true` and `sheetUrl = ''` (so the 20-second live-sync poller stays idle) and the user picks a sheet on the home screen. `DEFAULT_URL` (`src/01_core/04_Icons.jsx`) points at the public demo spreadsheet (`Ancestry Browser: Demo`, ID `1BQvyFoA_-u4MG-r1SRDel93F1TwEaN3I6v6p-kOH8z0`) and is used solely as the last-resort fallback.
 
 ### 3.0 Home Screen, Cookie History, Radial Settings FAB & Material 3 Colour Themes — `src/01_core/08_ColorThemes.jsx`, `src/05_hooks/00_BrowserPreferences.jsx`, `src/06_ui/13_HomeScreen.jsx`, `src/06_ui/14_SettingsPanel.jsx`, `src/06_ui/15_SettingsFab.jsx`
 
@@ -106,41 +106,41 @@ isLikelySheetReference('1BQvyFoA_-u4MG-r1SRDel93F1TwEaN3I6v6p-kOH8z0'); // => tr
 
 **Spreadsheet titles.** Google's CSV export answers with `Content-Disposition: attachment; filename="…"; filename*=UTF-8''<Title>%20-%20<Tab>.csv` and exposes the header via CORS. `fetchCSVData` calls `rememberSheetTitleFromResponse(sheetId, response)` for the default tab; `parseContentDispositionFilename` prefers the RFC 5987 `filename*` form, `deriveSpreadsheetTitle` strips `.csv` and only the **last** ` - <tab>` segment (so `Smith - Jones Family - Sheet1.csv` → `Smith - Jones Family`). The title lives in the in-memory `sheetTitleRegistry` until `commitSuccessfulSheetImport` copies it into the cookie. When the gviz fallback served the CSV there is no such header and the dropdown shows *Untitled sheet*.
 
-**Address bar.** After every successful import `syncSheetIdIntoLocation(sheetId)` rewrites the URL to `buildSheetDeepLinkUrl(location, sheetId)` — path and `#hash` kept, legacy `sheet`/`url`/`sheetId` aliases dropped, `?id=` set — via `history.replaceState`, so a refresh reopens the sheet and the Home emblem (`HomeButton`, `fixed left-4 top-4 z-[60]`, hidden in standalone exports) returns to the chooser. A failed import reopens the home screen with the error (`useTreeImportHandler` → `setIsHomeOpen(true)`).
+**Address bar.** After every successful import `syncSheetIdIntoLocation(sheetId)` rewrites the URL to `buildSheetDeepLinkUrl(location, sheetId)` — path, unrelated query params, and `#hash` kept, legacy `id`/`i`/`sheet`/`url`/`sheetId` aliases stripped, and `?d` (for `DEMO_SHEET_ID`) or bare `?<sheetId>` appended — via `history.replaceState`, upgrading legacy `?id=` links in-place without reloading. A failed import reopens the home screen with the error (`useTreeImportHandler` → `setIsHomeOpen(true)`).
 
 **Material 3 Colour Engine (`08_ColorThemes.jsx`), Radial Settings FAB (`15_SettingsFab.jsx`) & Tabbed Settings Panel (`14_SettingsPanel.jsx`).**
 - `08_ColorThemes.jsx` is a pure JS module (shared by the browser bundle and `scripts/bundle.mjs`) that synthesizes 11-shade (`50..950`) Tailwind palettes from CIE LCh seed hues (`lchToHex`, `buildTonalShadeScale`, `resolveColorTheme`) across 9 colour families (`slate`, `sky`, `rose`, `amber`, `emerald`, `purple`, `indigo`, `orange`, `red`) plus Material 3 role tokens (`--ft-primary`, `--ft-primary-hover`, `--ft-on-primary`, `--ft-primary-container`, `--ft-on-primary-container`, `--ft-canvas`, `--ft-surface`, `--ft-connector`, `--ft-watermark-opacity`). `scripts/bundle.mjs` stamps `TAILWIND_THEME_CONFIG_SCRIPT` directly into `index.html` between `<!-- FT_TAILWIND_THEME_CONFIG:BEGIN/END -->` (and `_getStandaloneTailwindConfig` emits it into standalone `.html` exports) so every Tailwind utility (`bg-white`, `text-slate-800`, `bg-sky-100`, `bg-primary`, etc.) reads live `rgb(var(--tw-c-*) / <alpha-value>)` CSS variables without duplicating classes across components.
 - `SettingsRadialFab` (`fixed bottom-6 right-6 z-[80]`, above the `z-50` home screen) renders the circular gear button (`data-testid="settings-fab-toggle"`) on both the home screen and the tree/map views and fans out 3 satellite actions (`theme`, `deduction`, `privacy`) along a quarter-circle arc (`computeRadialMenuOffsets(3, 84)` → `90°`, `135°`, `180°`).
 - `AppSettingsPanel` (`data-testid="app-settings-panel"`) combines the **Appearance** tab (`AppearanceSettingsTab` + `ColorThemePicker` with 10 miniature `ThemePreviewArt` cards) and the **Deduction rules** tab (`DeductionSettingsTab` with `MarriageAgeAnchorsTable`, `MarriageAgePreview`, `DemographicScalarFields`, and `rebuildTreeFromCachedRows`). Both the home screen's **clear stored data** link and the radial FAB's `privacy` satellite invoke `clearStoredPreferences()`, resetting all three cookies, their `localStorage` mirrors, the demographic model, and the colour theme back to `Classic Forest`.
 
-### 3.1 Shareable View State Hash (`#p=…&z=…&a=…&o=…`) — `src/06_ui/12_UrlViewState.jsx`
+### 3.1 Shareable View State Hash (`#<bitPacket>[.<filterSuffix>]`) — `src/06_ui/12_UrlViewState.jsx`
 
-The query string selects *which* spreadsheet is loaded; the hash fragment captures *what the user is looking at* (Google-Maps style). `useUrlViewStateSync({ ...core, ...viewport, ...focusNav })` is mounted once from `useAppViewModel()` in `src/07_app/01_App.jsx` and does two jobs: it restores the view described by the initial hash after the dataset is ready, and it mirrors every later UI change back into the address bar with `history.replaceState` (no reload, no extra history entries).
+The query string selects *which* spreadsheet is loaded; the hash fragment captures *what the user is looking at* (Google-Maps style). `useUrlViewStateSync({ ...core, ...viewport, ...focusNav })` is mounted once from `useAppViewModel()` in `src/07_app/01_App.jsx`: it restores the view described by the initial hash after the dataset is ready, and mirrors every later UI change into a bit-packed Base64url `#hash` via `history.replaceState` while continuing to accept legacy `#p=...&z=...&o=...` hashes via `parseLegacyViewStateHash`.
 
-| Key | State field | Encoder / Decoder | Sample |
+| Segment | Bit / Token Layout | Encoder / Decoder | Sample |
 | :--- | :--- | :--- | :--- |
-| `p=` | `focusId` (person ID `<Name>_<YOB>_<row>`) | `encodePersonIdToken` / `decodeViewStateToken` (percent-encoding, spaces as `+`, sheet IDs as `~N`) | `p=Joseph_1920_152` |
-| `s=0` | `isSidebarVisible === false` while a person is focused | `encodeSelectionHashParts` | `p=Joseph_1920_152&s=0` |
-| `f=` | `activeFilter` as `<filterType>:<value>` (`place`, `job`, `family`, `search`, `directory`) | `parseViewStateFilterToken` | `f=place:New+York` |
-| `v=map` | `showMap` | `encodeSelectionHashParts` | `v=map&f=place:Chalissery` |
-| `z=` | `camera.z` (2 decimals via `formatCompactNumber`) | `applyViewStateHashEntry` | `z=0.8` |
-| `a=` | Camera **anchor** card (`chooseViewStateAnchor`); omitted when it is the focused person | `encodeCameraHashParts` | `a=Antu_1931_12` |
-| `o=` | Visible-centre **offset** from the anchor card `<tree px>,<years>`; omitted when both round to `0` | `computeAnchorOffset` / `computeCenterFromAnchorOffset` | `o=-320,12.5` |
-| `k=` | `collapsedNodes` IDs, comma separated | `resolveRestoredCollapsedIds` | `k=Antu_1931_12,Elsy_1935_13` |
+| **Header** | 6 bits `[hasFocus, sidebarClosed, hasZoom, hasOffset, showMap, hasExtra]` (+ 2 extra bits `[hasAnchor, hasCollapsed]` when `hasExtra=1`) | `encodeBitPacket` / `decodeBitPacket` (`VIEW_STATE_B64`) | `#2` (map only, 1 char) |
+| **Person ref** | 26-bit fingerprint `(isGhost<<25) \| (nameHash11<<14) \| (yobTag4<<10) \| row10` (`@xxxxx` in memory) | `encodePersonCode26` / `decodePersonCode26` | 26 bits per focus or explicit anchor |
+| **Zoom** | `1` (1 bit) for default `z=0.8`, `00` + 8-bit `z*100` (`<= 2.55`), or `01` + 12-bit `z*100` (`<= 40.95`) | `writeZoomBits` / `readZoomBits` | 1 bit at `z=0.8` (`#eKT4c8`, 6 chars total with focus) |
+| **Offset** | ZigZag-encoded `<dx tree px>` (`1+10` or `1+16` bits) and `<dy*10 years>` (`1+9` or `1+15` bits) | `writeOffsetBits` / `readOffsetBits` | 21 bits for typical pans (`<= 9` chars total) |
+| **Collapsed** | Count (`0`+4b or `1`+10b) + 27-bit `[isGroup, code26]` entries (`^@xxxxx` folds all foldable children of a sibling bus-bar parent into 1 entry) | `encodeCollapsedEntries`, `writeCollapsedBits` / `readCollapsedBits` | `<= 7` chars for an entire folded sibling row |
+| **Filter suffix** | Optional `.` + `p<place>`, `j<job>`, `f<family>`, `s<search>`, or `dp`/`dj`/`df` directory tabs | `encodeFilterSuffix` / `decodeFilterSuffix` | `#.pNew+York`, `#2.pChalissery`, `#.dp` |
 
 ```javascript
-// Example 1: Encoding is lossless and only emits non-default keys (short URLs)
-encodeViewStateHash({ focusId: 'Joseph_1920_152', isSidebarVisible: true, zoom: 0.8, anchorId: 'Joseph_1920_152', offset: { dx: 0, dy: 0 } });
-// => 'p=Joseph_1920_152&z=0.8'
-encodeViewStateHash({ zoom: 0.12, anchorId: 'Antu_1931_12', offset: { dx: -320.4, dy: 12.46 }, collapsedIds: ['Elsy_1935_13'] });
-// => 'z=0.12&a=Antu_1931_12&o=-320,12.5&k=Elsy_1935_13'
+// Example 1: Bit-packed Base64url encoding (6 chars centred, <= 9 chars panned, 1 char map)
+encodeViewStateHash({ focusId: 'Anto_1955_166', isSidebarVisible: true, zoom: 0.8, anchorId: 'Anto_1955_166', offset: { dx: 164, dy: -2.6 } });
+// => 'iCzOffI0p' (9 chars vs 33 chars in legacy 'p=Anto_1955_166&z=0.8&o=164,-2.6')
+encodeViewStateHash({ activeFilter: { filterType: 'place', value: 'New York' }, showMap: true });
+// => '2.pNew+York'
 
-// Example 2: Parsing tolerates hand-edited URLs (unknown keys and bad numbers are dropped)
+// Example 2: Parsing accepts both compact bit-packed packets and legacy key=value hashes
+parseViewStateHash('#2.pNew+York');
+// => { showMap: true, activeFilter: { filterType: 'place', value: 'New York' } }
 parseViewStateHash('#p=Joseph_1920_152&s=0&z=abc&o=-320,12.5&foo=bar');
 // => { focusId: 'Joseph_1920_152', isSidebarVisible: false, offset: { dx: -320, dy: 12.5 } }
 ```
 
-**Anchor-relative camera model (resilient to spreadsheet edits).** The canvas transform is `screenX = treeX * z + camera.x`, `screenY = treeY * z + camera.y`. Absolute layout coordinates are *not* stored: any unrelated row added to the spreadsheet re-flows the layout and would move them. Instead the writer measures the visible centre (`computeViewCenterFromCamera`, the middle of the canvas right of the `48px` timeline gutter and left of any open sidebar — `measureViewStateViewport`), picks an anchor card (`chooseViewStateAnchor`: the focused person while their card is on screen, else the rendered card nearest the centre via `listRenderedPersonNodes` + `pickNearestAnchor`), measures that card with `measurePersonNodeCenter` (DOM id `node-<personId>`, through `computePeopleBoundingBox`) and stores the difference as `o=<dx>,<dy>`: `dx` in unscaled tree pixels (the horizontal layout depends only on zoom), `dy` in calendar **years** (`ppy`, pixels-per-year, stretches with the window height):
+**Anchor-relative camera model (resilient to spreadsheet edits).** The canvas transform is `screenX = treeX * z + camera.x`, `screenY = treeY * z + camera.y`. Absolute layout coordinates are *not* stored: any unrelated row added to the spreadsheet re-flows the layout and would move them. Instead the writer measures the visible centre (`computeViewCenterFromCamera`, the middle of the canvas right of the `48px` timeline gutter and left of any open sidebar — `measureViewStateViewport`), picks an anchor card (`chooseViewStateAnchor`: the focused person while their card is on screen, else the rendered card nearest the centre via `listRenderedPersonNodes` + `pickNearestAnchor`), measures that card with `measurePersonNodeCenter` (DOM id `node-<personId>`, through `computePeopleBoundingBox`) and stores the difference as `{ dx, dy }`: `dx` in unscaled tree pixels (the horizontal layout depends only on zoom), `dy` in calendar **years** (`ppy`, pixels-per-year, stretches with the window height):
 
 ```javascript
 // Example 1: writer — visible centre relative to Joseph's card at 10 px/year
@@ -153,7 +153,7 @@ computeCenterFromAnchorOffset({ anchor: { x: 1768, y: 380 }, offset: { dx: -320,
 // => { x: 1448, y: 480 }
 ```
 
-**Person ID resolution (`resolveViewStatePersonId`).** IDs are `<Name>_<YOB|unk>_<row>` where `row` is the person's index across all loaded sheets (`indexNodes`), so inserting a row above anyone renumbers everybody below. Shared IDs are resolved in tiers — exact `tree.get(id)`; else same `<Name>_<YOB>` stem with the nearest row (`parseViewStatePersonRef` + `pickNearestRowCandidate`, depth 1); else same `<Name>` with the nearest row (depth 2, covers a corrected birth year or a ghost whose source sheet moved). Ghost IDs embed their 44-char spreadsheet ID (`ghost_<Name>_<sheetId>_<n>`); `collectViewStateSheetIds(tree)` sorts the distinct `_sourceId`s (≥ `VIEW_STATE_MIN_SHEET_ID_LENGTH` = 20 chars) and `compactViewStateSheetIds` / `expandViewStateSheetIds` swap them for `~N`, so both sides derive the same abbreviation. The same resolver is used for `p=`, `a=` and every `k=` entry.
+**Person reference resolution (`resolveViewStatePersonId` & `resolveRestoredCollapsedIds`).** Compact `@xxxxx` 26-bit fingerprints resolve via `resolveCompactPersonRef` in three tiers — (1) exact 26-bit code match, (2) same `(isGhost, nameHash11, yobTag4)` with nearest spreadsheet row (`pickNearestCompactCandidate`), (3) same `(isGhost, nameHash11)` within 64 rows (for corrected birth years) — while `parseViewStatePersonRef` safely strips embedded 35 to 60 char spreadsheet IDs (including underscore-containing IDs such as `DEMO_SHEET_ID`) before splitting `_` tokens. Collapsed `^@xxxxx` sibling-bar parent groups expand back into `getFoldableChildIdsOfParent(tree, parent)`. Legacy `<Name>_<YOB>_<row>` and `~N`-compacted ghost strings continue to resolve through the same 3-tier stem fallback.
 
 **Restore timing (`useUrlViewStateRestore` → `scheduleViewStateRestore`).** The hash is parsed exactly once at mount; the restore effect fires once `tree.rootId && !isLoading` (i.e. after the cache-then-live double load and after `applyImportSuccessFocus` has reset focus/filter), then runs in two phases so it never fights the app's own startup animations:
 

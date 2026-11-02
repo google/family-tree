@@ -1014,7 +1014,7 @@ const BUTTON_DOCUMENTATION_CATALOG = {
         summary: 'Returns to the **home screen**, where you paste any **Google Sheets link or ID** (shared as *Anyone with the link can view*). Every sheet you open is remembered in a **browser cookie** and offered in a dropdown, most-used first.',
         examples: [
             { label: 'Switch Family', detail: 'Click the emblem, pick `Ancestry Browser: Demo — 1BQvy…` from the dropdown or paste another link, then press **Enter** or **Open**.' },
-            { label: 'Shareable Link', detail: 'After a sheet loads the address bar carries `?id=<sheetId>`; share it and the recipient skips the home screen entirely.' }
+            { label: 'Shareable Link', detail: 'After a sheet loads the address bar carries `?<sheetId>` (or `?d` for the demo) plus a compact `#hash` token; share it and the recipient skips the home screen entirely.' }
         ]
     },
     'Deduction Settings (marriage age by birth cohort)': {

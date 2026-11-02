@@ -454,7 +454,7 @@ if (shouldRunChrome) {
             `JSON.stringify({ home: !!${q('[data-testid="sheet-source-home"]')}, homeBtn: !!${q('[data-testid="home-button"]')},
                 fab: !!${q('[data-testid="settings-fab-toggle"]')},
                 watermark: !!${q('[data-testid="brand-watermark"]')}, search: location.search, cookie: document.cookie })`,
-            (v) => { const s = v && JSON.parse(v); return s && !s.home && s.homeBtn && s.fab && s.watermark && s.search.includes(`id=${DEMO_ID}`) && s.cookie.includes('ft_sheet_history='); }, 10, 300));
+            (v) => { const s = v && JSON.parse(v); return s && !s.home && s.homeBtn && s.fab && s.watermark && (s.search === '?d' || s.search.includes(DEMO_ID)) && s.cookie.includes('ft_sheet_history='); }, 10, 300));
         console.log(`  ${GREEN}✓${RESET} Shell after load: Home button + radial FAB + watermark mounted, address bar "${shell.search}", sheet-history cookie written.`);
 
         // 5. Hovering a button shows the speech-balloon tooltip with a tail and full title.

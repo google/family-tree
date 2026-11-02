@@ -3121,41 +3121,57 @@ function useAppPanels(isLoading) {
 }
 
 /**
- * Initializes the family tree from an embedded script dataset if present (e.g. standalone app export),
- * or falls back to importing data from the default Google Sheets URL.
- * 
- * @param {Object} options
- * @param {Function} options.setTree - Tree state updater.
- * @param {Function} options.setSheetUrl - Sheet URL state updater.
- * @param {Function} options.setFocusId - Focus person ID state updater.
- * @param {Function} options.setIsSidebarVisible - Sidebar visibility state updater.
- * @param {Function} options.centerOnPerson - Camera centering callback.
- * @param {Function} options.appendLog - Log appending callback.
- * @param {Function} options.handleImport - Sheet import callback.
- * @returns {boolean} True if embedded dataset was successfully loaded, false otherwise.
- * 
- * @example
- *   initializeTreeDataset({
- *     setTree,
- *     setSheetUrl,
- *     setFocusId,
- *     setIsSidebarVisible,
- *     centerOnPerson,
- *     appendLog,
- *     handleImport
- *   });
+ * Extracts a spreadsheet reference from URL search parameters. Supports ultra-short keyless
+ * forms (`?d` for the demo sheet and `?<sheetId>` for a bare 35-60 char Google Sheet ID) as well
+ * as legacy named parameters (`?id=`, `?i=`, `?sheet=`, `?url=`, `?sheetId=`).
  *
+ * @param {string|null} [searchString=null] - Optional search query string override.
+ * @returns {string} Extracted sheet ID or URL, or `''` when none is present.
+ *
+ * @example
+ * extractSheetQueryValue('?1SvPspyHtIV2E9UHwpZON8sUTf3FxIuqJZO-wx0WPl3k');
+ * // => '1SvPspyHtIV2E9UHwpZON8sUTf3FxIuqJZO-wx0WPl3k'
+ *
+ * @example
+ * extractSheetQueryValue('?d');
+ * // => DEMO_SHEET_ID
+ */
+function extractSheetQueryValue(searchString = null) {
+    try {
+        const query = searchString !== null
+            ? searchString
+            : (typeof window !== 'undefined' && window.location ? window.location.search : '');
+        if (!query) return '';
+        const params = new URLSearchParams(query);
+        const named = params.get('id') || params.get('i') || params.get('sheet') || params.get('url') || params.get('sheetId');
+        if (named && named.trim()) {
+            const trimmed = named.trim();
+            return trimmed === 'd' ? DEMO_SHEET_ID : trimmed;
+        }
+        for (const [key, val] of params.entries()) {
+            if (val !== '') continue;
+            const trimmed = key.trim();
+            if (trimmed === 'd') return DEMO_SHEET_ID;
+            if (isValidSheetId(trimmed)) return trimmed;
+        }
+    } catch (err) {
+        return '';
+    }
+    return '';
+}
+
 /**
- * Resolves the initial spreadsheet URL from URL search parameters ('id', 'sheet', 'url', 'sheetId'),
- * falling back to the most recently opened sheet in browser history, and finally to DEFAULT_URL.
+ * Resolves the initial spreadsheet URL from URL search parameters (`?<sheetId>`, `?d`, or legacy
+ * `id`/`sheet`/`url`/`sheetId`), falling back to the most recently opened sheet in browser
+ * history, and finally to DEFAULT_URL.
  *
  * @param {string|null} [searchString=null] - Optional search query string override
  * @param {Array<SheetHistoryEntry>} [history=readSheetHistory()] - Persisted sheet history
  * @returns {string} Fully qualified Google Sheets URL to load
  *
  * @example
- * // Given URL: https://google.github.io/family-tree/?id=1ZDpcz2ACmG63dUjHLfoHZSW7-dG51FbzaJVcqHYdkEI
- * resolveInitialSheetUrl('?id=1ZDpcz2ACmG63dUjHLfoHZSW7-dG51FbzaJVcqHYdkEI', []);
+ * // Given URL: https://google.github.io/family-tree/?1ZDpcz2ACmG63dUjHLfoHZSW7-dG51FbzaJVcqHYdkEI
+ * resolveInitialSheetUrl('?1ZDpcz2ACmG63dUjHLfoHZSW7-dG51FbzaJVcqHYdkEI', []);
  * // => 'https://docs.google.com/spreadsheets/d/1ZDpcz2ACmG63dUjHLfoHZSW7-dG51FbzaJVcqHYdkEI/edit'
  *
  * @example
@@ -3163,36 +3179,25 @@ function useAppPanels(isLoading) {
  * // => DEFAULT_URL
  */
 function resolveInitialSheetUrl(searchString = null, history = readSheetHistory()) {
-    try {
-        const query = searchString !== null
-            ? searchString
-            : (typeof window !== 'undefined' && window.location ? window.location.search : '');
-        if (query) {
-            const params = new URLSearchParams(query);
-            const rawParam = params.get('id') || params.get('sheet') || params.get('url') || params.get('sheetId');
-            if (rawParam && rawParam.trim()) {
-                const trimmed = rawParam.trim();
-                const sheetId = extractSheetIdFromUrl(trimmed);
-                if (sheetId) return `https://docs.google.com/spreadsheets/d/${sheetId}/edit`;
-                if (trimmed.startsWith('http')) return trimmed;
-            }
-        }
-    } catch (err) {
-        console.warn('Could not parse URL search parameters for spreadsheet ID:', err);
+    const rawParam = extractSheetQueryValue(searchString);
+    if (rawParam) {
+        const sheetId = extractSheetIdFromUrl(rawParam);
+        if (sheetId) return `https://docs.google.com/spreadsheets/d/${sheetId}/edit`;
+        if (rawParam.startsWith('http')) return rawParam;
     }
     const lastUsed = resolveLastUsedSheet(history);
     return lastUsed ? buildSheetUrlFromId(lastUsed.id) : DEFAULT_URL;
 }
 
 /**
- * Whether the page URL names a spreadsheet explicitly (`?id=`, `?sheet=`, `?url=` or
- * `?sheetId=`).
+ * Whether the page URL names a spreadsheet explicitly (`?<sheetId>`, `?d`, or legacy `?id=`,
+ * `?sheet=`, `?url=`, `?sheetId=`).
  *
  * @param {string|null} [searchString=null] - Optional search query override
  * @returns {boolean}
  *
  * @example
- * hasExplicitSheetQueryParam('?id=1BQvyFoA_-u4MG-r1SRDel93F1TwEaN3I6v6p-kOH8z0');
+ * hasExplicitSheetQueryParam('?1BQvyFoA_-u4MG-r1SRDel93F1TwEaN3I6v6p-kOH8z0');
  * // => true
  *
  * @example
@@ -3200,30 +3205,20 @@ function resolveInitialSheetUrl(searchString = null, history = readSheetHistory(
  * // => false
  */
 function hasExplicitSheetQueryParam(searchString = null) {
-    try {
-        const query = searchString !== null
-            ? searchString
-            : (typeof window !== 'undefined' && window.location ? window.location.search : '');
-        if (!query) return false;
-        const params = new URLSearchParams(query);
-        const rawParam = params.get('id') || params.get('sheet') || params.get('url') || params.get('sheetId');
-        return Boolean(rawParam && rawParam.trim());
-    } catch (err) {
-        return false;
-    }
+    return Boolean(extractSheetQueryValue(searchString));
 }
 
 /**
  * Whether the app should automatically open a spreadsheet on startup instead of stopping on the
- * home screen: true when the URL names a sheet (`?id=…`) OR the browser has a previously opened
- * sheet in its history.
+ * home screen: true when the URL names a sheet (`?<sheetId>` / `?d` / `?id=…`) OR the browser has
+ * a previously opened sheet in its history.
  *
  * @param {string|null} [searchString=null] - Optional search query override
  * @param {Array<SheetHistoryEntry>} [history=readSheetHistory()] - Persisted sheet history
  * @returns {boolean}
  *
  * @example
- * hasInitialSheetToLoad('?id=1BQvyFoA_-u4MG-r1SRDel93F1TwEaN3I6v6p-kOH8z0', []);
+ * hasInitialSheetToLoad('?d', []);
  * // => true
  *
  * @example
@@ -3235,48 +3230,57 @@ function hasInitialSheetToLoad(searchString = null, history = readSheetHistory()
 }
 
 /**
- * Builds the shareable page URL for a sheet: keeps the path and the `#view` hash, drops the
- * legacy `sheet`/`url`/`sheetId` aliases and sets `?id=<sheetId>`.
+ * Builds the ultra-short shareable page URL for a sheet: keeps the path, unrelated query params,
+ * and `#hash`, strips previous sheet params, and appends `?d` for the demo sheet or bare
+ * `?<sheetId>` (without `id=`) for any other spreadsheet.
  *
  * @param {{pathname?: string, search?: string, hash?: string}} location - Current location parts
  * @param {string} sheetId - Sheet ID to encode
  * @returns {string} Relative URL (path + search + hash)
  *
  * @example
- * buildSheetDeepLinkUrl({ pathname: '/family-tree/', search: '', hash: '#p=Joseph_1920' }, '1BQvyFoA_-u4MG-r1SRDel93F1TwEaN3I6v6p-kOH8z0');
- * // => '/family-tree/?id=1BQvyFoA_-u4MG-r1SRDel93F1TwEaN3I6v6p-kOH8z0#p=Joseph_1920'
+ * buildSheetDeepLinkUrl({ pathname: '/family-tree/', search: '', hash: '#e4K10p890' }, DEMO_SHEET_ID);
+ * // => '/family-tree/?d#e4K10p890'
  *
  * @example
- * buildSheetDeepLinkUrl({ pathname: '/', search: '?sheet=old&x=1', hash: '' }, 'NEWID_000000000000000000000000000000000');
- * // => '/?x=1&id=NEWID_000000000000000000000000000000000'
+ * buildSheetDeepLinkUrl({ pathname: '/', search: '?sheet=old&x=1', hash: '' }, '1SvPspyHtIV2E9UHwpZON8sUTf3FxIuqJZO-wx0WPl3k');
+ * // => '/?x=1&1SvPspyHtIV2E9UHwpZON8sUTf3FxIuqJZO-wx0WPl3k'
  */
 function buildSheetDeepLinkUrl(location, sheetId) {
     const params = new URLSearchParams((location && location.search) || '');
-    ['sheet', 'url', 'sheetId'].forEach(key => params.delete(key));
-    params.set('id', sheetId);
-    return `${(location && location.pathname) || '/'}?${params.toString()}${(location && location.hash) || ''}`;
+    for (const [key, val] of Array.from(params.entries())) {
+        if (['id', 'i', 'sheet', 'url', 'sheetId', 'd'].includes(key) || (val === '' && isValidSheetId(key))) {
+            params.delete(key);
+        }
+    }
+    const rest = params.toString();
+    const token = sheetId === DEMO_SHEET_ID ? 'd' : encodeURIComponent(sheetId);
+    const query = rest ? `${rest}&${token}` : token;
+    return `${(location && location.pathname) || '/'}?${query}${(location && location.hash) || ''}`;
 }
 
 /**
- * Rewrites the address bar (no reload, no history entry) so the current sheet is bookmarkable
- * and a page refresh reopens it instead of the home screen.
+ * Rewrites the address bar (no reload, no history entry) so the current sheet is bookmarkable in
+ * its shortest form (`?d` or `?<sheetId>`), upgrading legacy `?id=` links in-place.
  *
  * @param {string} sheetId - Sheet ID that just loaded
  * @returns {boolean} True when the URL was changed
  *
  * @example
- * syncSheetIdIntoLocation('1BQvyFoA_-u4MG-r1SRDel93F1TwEaN3I6v6p-kOH8z0');
- * // address bar: https://google.github.io/family-tree/?id=1BQvyFoA_-u4MG-r1SRDel93F1TwEaN3I6v6p-kOH8z0
+ * syncSheetIdIntoLocation('1SvPspyHtIV2E9UHwpZON8sUTf3FxIuqJZO-wx0WPl3k');
+ * // address bar: https://google.github.io/family-tree/?1SvPspyHtIV2E9UHwpZON8sUTf3FxIuqJZO-wx0WPl3k
  *
  * @example
- * syncSheetIdIntoLocation('1BQvyFoA_-u4MG-r1SRDel93F1TwEaN3I6v6p-kOH8z0'); // already in the URL
+ * syncSheetIdIntoLocation(DEMO_SHEET_ID); // already `?d` in the URL
  * // => false
  */
 function syncSheetIdIntoLocation(sheetId) {
     if (typeof window === 'undefined' || !window.history || !window.location || !sheetId) return false;
     try {
-        if (new URLSearchParams(window.location.search).get('id') === sheetId) return false;
-        window.history.replaceState(window.history.state, '', buildSheetDeepLinkUrl(window.location, sheetId));
+        const currentUrl = `${window.location.pathname || '/'}${window.location.search || ''}${window.location.hash || ''}`;
+        const nextUrl = buildSheetDeepLinkUrl(window.location, sheetId);
+        if (currentUrl === nextUrl) return false;
+        window.history.replaceState(window.history.state, '', nextUrl);
         return true;
     } catch (err) {
         return false;

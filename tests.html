@@ -264,7 +264,7 @@ try {
         'sanitizeGeoCacheEntry', 'parseGeoLocationCacheJson', 'serializeGeoLocationCache',
         'loadGeoLocationCache', 'getCachedGeoLocation', 'saveCachedGeoLocation', 'clearGeoLocationCache',
         'clearStoredPreferences',
-        'hasExplicitSheetQueryParam', 'buildSheetDeepLinkUrl', 'syncSheetIdIntoLocation',
+        'extractSheetQueryValue', 'hasExplicitSheetQueryParam', 'buildSheetDeepLinkUrl', 'syncSheetIdIntoLocation',
         'commitSuccessfulSheetImport', 'suggestNextMarriageAnchor', 'describeMarriageAgePreview'
     ].map(name => extractFunction(source, name))).join('\n');
     const backgroundGeocoderSrc = [
@@ -301,18 +301,31 @@ try {
         'resolveBottomDockLift', 'shouldShowZoomControls'
     ].map(name => extractFunction(source, name))).join('\n');
     const urlViewStateSrc = [
+        extractConst(source, 'VIEW_STATE_B64'),
+        extractConst(source, 'VIEW_STATE_PERSON_REF_PREFIX'),
+        extractConst(source, 'VIEW_STATE_GROUP_REF_PREFIX')
+    ].concat([
         'formatCompactNumber', 'encodeViewStateToken', 'decodeViewStateToken',
-        'collectViewStateSheetIds', 'compactViewStateSheetIds', 'expandViewStateSheetIds', 'encodePersonIdToken',
-        'encodeSelectionHashParts', 'encodeCameraHashParts', 'encodeViewStateHash',
-        'parseViewStateFilterToken', 'applyViewStateHashEntry', 'parseViewStateHash',
+        'collectViewStateSheetIds', 'compactViewStateSheetIds', 'expandViewStateSheetIds',
+        'pushViewStateBits', 'readViewStateBits', 'packBitsToBase64Url', 'unpackBase64UrlToBits',
+        'encodeFixedBase64Url', 'decodeFixedBase64Url', 'zigZagEncodeInt', 'zigZagDecodeInt',
+        'hashPersonName11', 'encodePersonCode26', 'decodePersonCode26', 'formatCompactPersonRef',
+        'getPersonDirectChildIds', 'isFoldableBranchPerson', 'getFoldableChildIdsOfParent',
+        'collectCollapsibleParentGroups', 'encodeCollapsedEntries',
+        'writeZoomBits', 'readZoomBits', 'normalizeOffsetPair', 'writeOffsetBits', 'readOffsetBits',
+        'writeCollapsedBits', 'readCollapsedBits', 'encodeFilterSuffix', 'decodeFilterSuffix',
+        'encodeBitPacket', 'decodeBitPacket', 'encodeViewStateHash',
+        'parseViewStateFilterToken', 'applyViewStateHashEntry', 'parseLegacyViewStateHash', 'parseViewStateHash',
         'computeViewCenterFromCamera', 'computeCameraFromViewCenter', 'computeAnchorOffset',
         'computeCenterFromAnchorOffset', 'isAnchorInsideViewport', 'pickNearestAnchor',
-        'parseViewStatePersonRef', 'pickNearestRowCandidate', 'resolveViewStatePersonId',
+        'parseViewStatePersonRef', 'pickNearestRowCandidate',
+        'buildCompactCandidateList', 'pickNearestCompactCandidate', 'resolveCompactPersonRef',
+        'resolveViewStatePersonId',
         'resolveRestoredSidebarOpen', 'buildCurrentViewState', 'writeViewStateHash',
         'resolveInitialViewStateHash',
         'applyRestoredFocus', 'resolveRestoredCollapsedIds', 'applyRestoredSelection',
         'resolveRestoredCenter', 'applyRestoredCamera', 'resolveCanvasDisplayMode'
-    ].map(name => extractFunction(source, name)).join('\n');
+    ].map(name => extractFunction(source, name))).join('\n');
 
     const [
         CSVParser, Person, FamilyTree, FamilyTreeBuilder,
@@ -370,7 +383,8 @@ try {
         loadStoredSidebarHeight, clampSidebarHeight, resolveInitialVerticalResizeHeight,
         resolveBottomDockLift, shouldShowZoomControls,
         TAILWIND_FALLBACK_THEME_ID, buildThemeBootScript, THEME_BOOT_SCRIPT, preferenceStorageKey, shouldIgnorePointerDown, BOTTOM_DOCK_HEIGHT,
-        TIMELINE_GUTTER_WIDTH, TIMELINE_GUTTER_COMPACT_WIDTH, SIBLING_BAR_HIT_PX, COMPACT_VIEWPORT_MAX_WIDTH
+        TIMELINE_GUTTER_WIDTH, TIMELINE_GUTTER_COMPACT_WIDTH, SIBLING_BAR_HIT_PX, COMPACT_VIEWPORT_MAX_WIDTH,
+        extractSheetQueryValue, resolveRestoredCollapsedIds
     ] = new Function(`
         // Isolated cookie jar + localStorage + documentElement: preference & theme tests must never
         // touch the real browser state, and Stage 3 runs in node where neither exists. Every other
@@ -568,7 +582,8 @@ try {
             loadStoredSidebarHeight, clampSidebarHeight, resolveInitialVerticalResizeHeight,
             resolveBottomDockLift, shouldShowZoomControls,
             TAILWIND_FALLBACK_THEME_ID, buildThemeBootScript, THEME_BOOT_SCRIPT, preferenceStorageKey, shouldIgnorePointerDown, BOTTOM_DOCK_HEIGHT,
-        TIMELINE_GUTTER_WIDTH, TIMELINE_GUTTER_COMPACT_WIDTH, SIBLING_BAR_HIT_PX, COMPACT_VIEWPORT_MAX_WIDTH
+        TIMELINE_GUTTER_WIDTH, TIMELINE_GUTTER_COMPACT_WIDTH, SIBLING_BAR_HIT_PX, COMPACT_VIEWPORT_MAX_WIDTH,
+        extractSheetQueryValue, resolveRestoredCollapsedIds
         ];
     `)();
 
@@ -13822,7 +13837,7 @@ const m3 = tree.all.find(n => n.id === '3');
     // ══════════════════════════════════════════════════════════════════════════
     //  203. Dynamic Google Sheet ID Resolution from URL Query Parameters
     // ══════════════════════════════════════════════════════════════════════════
-    section('203. Dynamic Google Sheet ID Resolution from URL Query Parameters (?id=...)');
+    section('203. Dynamic Google Sheet ID Resolution from URL Query Parameters (?<sheetId>, ?d, ?id=...)');
     {
         try {
             // Test 203.01: ?id=<rootSheetId> resolves to root Google Sheets edit URL
@@ -13859,6 +13874,14 @@ const m3 = tree.all.find(n => n.id === '3');
             // Test 203.08: DEFAULT_URL is the public demo spreadsheet, not a private family sheet
             assertEqual('Test 203.08: DEFAULT_URL points at the demo spreadsheet (DEMO_SHEET_ID)',
                 extractSheetIdFromUrl(DEFAULT_URL), DEMO_SHEET_ID);
+
+            // Test 203.09: Ultra-short keyless ?<sheetId> resolves directly without "id="
+            assertEqual('Test 203.09: Keyless ?<customId> resolves to Google Sheets edit URL',
+                resolveInitialSheetUrl(`?${customId}`, []), `https://docs.google.com/spreadsheets/d/${customId}/edit`);
+
+            // Test 203.10: Ultra-short ?d resolves to the public demo spreadsheet
+            assertEqual('Test 203.10: Keyless ?d resolves to DEMO_SHEET_ID edit URL',
+                resolveInitialSheetUrl('?d', []), buildSheetUrlFromId(DEMO_SHEET_ID));
         } catch (e) {
             assertEqual('Test 203 execution failed', e.message, '');
         }
@@ -13957,35 +13980,70 @@ const m3 = tree.all.find(n => n.id === '3');
             assertEqual('Test 205.07: Malformed percent sequence is returned verbatim instead of throwing',
                 decodeViewStateToken('100%'), '100%');
 
-            // Test 205.08-13: Canonical compact hash encoding (anchor-relative camera)
+            // Test 205.08-13: Ultra-short bit-packed Base64url hash encoding (anchor-relative camera + sibling-bar group compression)
             const focusState = { focusId: 'Joseph_1920_152', isSidebarVisible: true, activeFilter: null, showMap: false,
                 zoom: 0.8, anchorId: 'Joseph_1920_152', offset: { dx: 0.3, dy: -0.02 }, collapsedIds: [] };
             const focusHash = encodeViewStateHash(focusState);
-            assertEqual('Test 205.08: Focused person centred on screen encodes as just p= and z=', focusHash, 'p=Joseph_1920_152&z=0.8');
-            assertEqual('Test 205.09: Closed sidebar adds s=0 and a panned view adds the o= offset (px, years)',
-                encodeViewStateHash({ ...focusState, isSidebarVisible: false, offset: { dx: -320.4, dy: 12.46 } }), 'p=Joseph_1920_152&s=0&z=0.8&o=-320,12.5');
-            assertEqual('Test 205.10: Filter and map view encode as f=<type>:<value> and v=map',
-                encodeViewStateHash({ activeFilter: { filterType: 'place', value: 'New York' }, showMap: true }), 'f=place:New+York&v=map');
-            assertEqual('Test 205.11: Unfocused views name their anchor card with a= and collapsed branches with k=',
-                encodeViewStateHash({ zoom: 0.12, anchorId: 'Antu_1931_12', offset: { dx: 140, dy: -3.2 }, collapsedIds: ['Antu_1931_12', 'Elsy_1935_13'] }),
-                'z=0.12&a=Antu_1931_12&o=140,-3.2&k=Antu_1931_12,Elsy_1935_13');
+            assert('Test 205.08: Focused person centred at z=0.8 encodes into 6 Base64url characters (33 bits)',
+                focusHash.length === 6 && /^[0-9A-Za-z_-]+$/.test(focusHash));
+            const pannedAntoHash = encodeViewStateHash({ focusId: 'Anto_1955_166', isSidebarVisible: true, zoom: 0.8, anchorId: 'Anto_1955_166', offset: { dx: 164, dy: -2.6 }, collapsedIds: [] });
+            const closedSidebarHash = encodeViewStateHash({ ...focusState, isSidebarVisible: false, offset: { dx: -320.4, dy: 12.46 } });
+            assert('Test 205.09: Panned focus with offset encodes in <= 9 chars (vs 33+ legacy chars), and closed sidebar + offset stays <= 10 chars',
+                pannedAntoHash.length <= 9 && closedSidebarHash.length <= 10 && closedSidebarHash !== focusHash);
+            assertEqual('Test 205.10: Map view encodes as 1 char ("2") and filters append compact ".<code+value>" suffixes',
+                [encodeViewStateHash({ showMap: true }),
+                 encodeViewStateHash({ activeFilter: { filterType: 'place', value: 'New York' } }),
+                 encodeViewStateHash({ activeFilter: { filterType: 'directory', value: 'places' } }),
+                 encodeViewStateHash({ activeFilter: { filterType: 'place', value: 'New York' }, showMap: true })].join('|'),
+                '2|.pNew+York|.dp|2.pNew+York');
+            const busBarIds = ['Baby_1952_164', 'Anto_1955_166', 'Jose_1949_162', 'Mani_1956_167', 'Paul_1980_175', 'Rotson_1982_179'];
+            const busBarNodes = { Chacko_1924_160: { id: 'Chacko_1924_160', children: busBarIds } };
+            busBarIds.forEach((cid, idx) => {
+                const leafId = `LeafChild_${1990 + idx}_${210 + idx}`;
+                busBarNodes[cid] = { id: cid, children: [leafId] };
+                busBarNodes[leafId] = { id: leafId, children: [] };
+            });
+            const busBarTree = { get: (id) => busBarNodes[id] || null, all: Object.values(busBarNodes) };
+            const foldedBusBarHash = encodeViewStateHash({ collapsedIds: busBarIds }, busBarTree);
+            assert('Test 205.11: Folding all 6 foldable siblings of a bus-bar compresses into one parent-group entry (<= 7 chars) and expands back to all 6 IDs',
+                foldedBusBarHash.length <= 7 &&
+                JSON.stringify(resolveRestoredCollapsedIds(parseViewStateHash(foldedBusBarHash), busBarTree)) === JSON.stringify(busBarIds));
             assertEqual('Test 205.12: Empty state encodes to an empty hash', encodeViewStateHash({}), '');
-            assert('Test 205.13: A typical shared URL hash stays under 40 characters', focusHash.length < 40);
+            assertEqual('Test 205.13: Parsing and re-encoding any bit-packed hash is strictly idempotent',
+                encodeViewStateHash(parseViewStateHash('#' + closedSidebarHash)), closedSidebarHash);
 
-            // Test 205.14-21: Parsing round trips and degrades gracefully on hand-edited hashes
-            const parsed = parseViewStateHash('#' + encodeViewStateHash({ ...focusState, isSidebarVisible: false, anchorId: 'Antu_1931_12', offset: { dx: -320, dy: 12.5 }, collapsedIds: ['Antu_1931_12'] }));
-            assertEqual('Test 205.14: Parsed focus ID round trips', parsed.focusId, 'Joseph_1920_152');
+            // Test 205.14-21: Parsing round trips (compact bit-packed + legacy key=value) and degrades gracefully on malformed input
+            const rtNodes = {};
+            ['Joseph_1920_152', 'Antu_1931_12', 'Elsy_1935_13', 'Anto_1955_166'].forEach((id) => { rtNodes[id] = { id, children: [] }; });
+            const rtTree = { get: (id) => rtNodes[id] || null, all: Object.values(rtNodes) };
+            const parsed = parseViewStateHash('#' + encodeViewStateHash({
+                ...focusState, isSidebarVisible: false, zoom: 1.35, anchorId: 'Antu_1931_12',
+                offset: { dx: -320.4, dy: 12.46 }, collapsedIds: ['Antu_1931_12', 'Elsy_1935_13']
+            }));
+            assertEqual('Test 205.14: Parsed compact focus reference resolves back to the focused person ID',
+                resolveViewStatePersonId(rtTree, parsed.focusId), 'Joseph_1920_152');
             assertEqual('Test 205.15: Parsed sidebar flag round trips', parsed.isSidebarVisible, false);
-            assertEqual('Test 205.16: Parsed zoom, anchor and offset round trip',
-                JSON.stringify([parsed.zoom, parsed.anchorId, parsed.offset]), JSON.stringify([0.8, 'Antu_1931_12', { dx: -320, dy: 12.5 }]));
-            assertEqual('Test 205.17: Parsed collapsed IDs round trip', JSON.stringify(parsed.collapsedIds), JSON.stringify(['Antu_1931_12']));
-            const filterParsed = parseViewStateHash('f=place:New+York&v=map');
-            assertEqual('Test 205.18: Parsed filter decodes "+" back to a space',
-                JSON.stringify(filterParsed.activeFilter), JSON.stringify({ filterType: 'place', value: 'New York' }));
-            assertEqual('Test 205.19: Parsed map flag', filterParsed.showMap, true);
-            const malformed = parseViewStateHash('#z=abc&o=12&f=place&foo=bar&p=&a=');
-            assert('Test 205.20: Malformed zoom/offset/filter/unknown keys are ignored without throwing',
-                malformed.zoom === undefined && malformed.offset === undefined && malformed.activeFilter === undefined && !malformed.focusId && !malformed.anchorId);
+            const wideParsed = parseViewStateHash(encodeViewStateHash({ zoom: 3.25, anchorId: 'Antu_1931_12', offset: { dx: 2400, dy: -85.4 } }));
+            assertEqual('Test 205.16: Parsed zoom (default, 8-bit, and 12-bit), anchor, and ZigZag offset (narrow and wide) round trip',
+                JSON.stringify([parsed.zoom, resolveViewStatePersonId(rtTree, parsed.anchorId), parsed.offset, wideParsed.zoom, wideParsed.offset]),
+                JSON.stringify([1.35, 'Antu_1931_12', { dx: -320, dy: 12.5 }, 3.25, { dx: 2400, dy: -85.4 }]));
+            assertEqual('Test 205.17: Parsed collapsed branch references resolve back to exact person IDs',
+                JSON.stringify(resolveRestoredCollapsedIds(parsed, rtTree)), JSON.stringify(['Antu_1931_12', 'Elsy_1935_13']));
+            const filterParsed = parseViewStateHash('#2.pNew+York');
+            const legacyParsed = parseViewStateHash('#p=Anto_1955_166&s=0&z=0.8&o=164,-2.6&f=place:New+York');
+            assertEqual('Test 205.18: Both compact ".pNew+York" and legacy "#p=...&f=place:New+York" hashes decode cleanly',
+                JSON.stringify([filterParsed.activeFilter, legacyParsed.focusId, legacyParsed.isSidebarVisible, legacyParsed.zoom, legacyParsed.offset, legacyParsed.activeFilter]),
+                JSON.stringify([{ filterType: 'place', value: 'New York' }, 'Anto_1955_166', false, 0.8, { dx: 164, dy: -2.6 }, { filterType: 'place', value: 'New York' }]));
+            assertEqual('Test 205.19: Compact map flag and directory tab suffixes (.dp, .dj, .df) round trip',
+                JSON.stringify([filterParsed.showMap, parseViewStateHash('#.dp').activeFilter.value, parseViewStateHash('#.dj').activeFilter.value, parseViewStateHash('#.df').activeFilter.value]),
+                JSON.stringify([true, 'places', 'jobs', 'families']));
+            const malformedLegacy = parseViewStateHash('#z=abc&o=12&f=place&foo=bar&p=&a=');
+            const malformedCompact = parseViewStateHash('#!bad!');
+            const truncatedCompact = parseViewStateHash('#8');
+            assert('Test 205.20: Malformed legacy keys and invalid/truncated bit-packed hashes are ignored without throwing',
+                malformedLegacy.zoom === undefined && malformedLegacy.offset === undefined && malformedLegacy.activeFilter === undefined &&
+                !malformedLegacy.focusId && !malformedLegacy.anchorId &&
+                Object.keys(malformedCompact).length === 0 && truncatedCompact.zoom === undefined);
             assertEqual('Test 205.21: Empty hash parses to an empty state', JSON.stringify(parseViewStateHash('')), '{}');
 
             // Test 205.22-24: Visible-centre ↔ camera math is exactly invertible on one screen
@@ -14010,7 +14068,8 @@ const m3 = tree.all.find(n => n.id === '3');
             const centreB = computeCenterFromAnchorOffset({ anchor: anchorOnB, offset: stateAB.offset, ppy: 8 });
             const cameraB = computeCameraFromViewCenter({ center: centreB, zoom: stateAB.zoom, ...screenB });
             const expectedCentreA = computeViewCenterFromCamera({ camera: { x: -1412.3, y: -317.9, z: 0.8 }, visibleWidth: 1440, visibleHeight: 900, timelineWidth: 48 });
-            assert('Test 205.25: The hash names the anchor card and its offset instead of absolute coordinates', stateAB.anchorId === 'Antu_1931_12' && Number.isFinite(stateAB.offset.dx));
+            assert('Test 205.25: The hash encodes the anchor card fingerprint and its offset instead of absolute coordinates',
+                resolveViewStatePersonId(rtTree, stateAB.anchorId) === 'Antu_1931_12' && Number.isFinite(stateAB.offset.dx));
             assert('Test 205.26: Horizontal offset from the anchor survives the layout shift and screen change (±0.5px)',
                 Math.abs((centreB.x - anchorOnB.x) - (expectedCentreA.x - anchorOnA.x)) < 0.5);
             const screenAnchorB = { x: anchorOnB.x * cameraB.z + cameraB.x, y: anchorOnB.y * cameraB.z + cameraB.y };
@@ -14019,27 +14078,40 @@ const m3 = tree.all.find(n => n.id === '3');
                 Math.abs((screenAnchorB.x - (48 + (screenB.visibleWidth - 48) / 2)) - (screenAnchorA.x - (48 + (1440 - 48) / 2))) < 0.5 &&
                 Math.abs((screenAnchorB.y - screenB.visibleHeight / 2) / (8 * 0.8) - (screenAnchorA.y - 450) / (9.37 * 0.8)) < 0.05);
 
-            // Test 205.28-34: Person ID resolution survives inserted rows, namesakes, corrected birth years and moved sheets
+            // Test 205.28-34: Person ID resolution survives inserted rows, namesakes, corrected birth years and moved sheets (for both compact and legacy refs)
             const sheetA = '1ZDpcz2ACmG63dUjHLfoHZSW7-dG51FbzaJVcqHYdkEI';
             const sheetB = '1o11yWxLZJjXJzlFvmn13z00OQ5dvYISvxnTmo6DThUs';
             const mockNodes = {};
             ['Joseph_1920_153', 'Mary_1924_7', 'Jose_1950_10', 'Jose_1950_60', 'Joseph_Son_1950_12', 'Thomas_1931_40',
-                `ghost_George_Daughter_${sheetB}_650`].forEach((id) => { mockNodes[id] = { id, _sourceId: id.includes(sheetB) ? sheetB : sheetA }; });
+                `ghost_George_Daughter_${sheetB}_650`, `ghost_Paul_Son_1_${DEMO_SHEET_ID}_94`].forEach((id) => {
+                const src = id.includes(sheetB) ? sheetB : (id.includes(DEMO_SHEET_ID) ? DEMO_SHEET_ID : sheetA);
+                mockNodes[id] = { id, _sourceId: src };
+            });
             const mockTree = { get: (id) => mockNodes[id] || null, all: Object.values(mockNodes) };
-            assertEqual('Test 205.28: Exact person ID resolves to itself', resolveViewStatePersonId(mockTree, 'Mary_1924_7'), 'Mary_1924_7');
+            const roundTripFocusRef = (id) => parseViewStateHash(encodeViewStateHash({ focusId: id }, mockTree)).focusId;
+            assertEqual('Test 205.28: Exact person ID resolves to itself (both compact and legacy)',
+                [resolveViewStatePersonId(mockTree, roundTripFocusRef('Mary_1924_7')), resolveViewStatePersonId(mockTree, 'Mary_1924_7')].join('|'),
+                'Mary_1924_7|Mary_1924_7');
             assertEqual('Test 205.29: A row inserted above shifts the trailing row number; same name + birth year still resolves',
-                resolveViewStatePersonId(mockTree, 'Joseph_1920_152'), 'Joseph_1920_153');
+                [resolveViewStatePersonId(mockTree, roundTripFocusRef('Joseph_1920_152')), resolveViewStatePersonId(mockTree, 'Joseph_1920_152')].join('|'),
+                'Joseph_1920_153|Joseph_1920_153');
             assertEqual('Test 205.30: Namesakes with the same birth year resolve to the nearest spreadsheet row, not the first match',
-                resolveViewStatePersonId(mockTree, 'Jose_1950_58'), 'Jose_1950_60');
+                [resolveViewStatePersonId(mockTree, roundTripFocusRef('Jose_1950_58')), resolveViewStatePersonId(mockTree, 'Jose_1950_58')].join('|'),
+                'Jose_1950_60|Jose_1950_60');
             assertEqual('Test 205.31: A corrected birth year falls back to the same name with the nearest row ("Joseph Son" is not confused with "Joseph")',
-                resolveViewStatePersonId(mockTree, 'Thomas_1930_40'), 'Thomas_1931_40');
-            assertEqual('Test 205.32: Ghost IDs with the sheet abbreviated to ~N resolve, tolerating a shifted ghost counter',
-                resolveViewStatePersonId(mockTree, 'ghost_George_Daughter_~1_642'), `ghost_George_Daughter_${sheetB}_650`);
-            assertEqual('Test 205.33: Unknown person resolves to null', resolveViewStatePersonId(mockTree, 'Nobody_unk_0'), null);
-            assertEqual('Test 205.34: Sheet IDs are compacted to ~N (sorted) in the hash and expanded on the way back',
-                JSON.stringify([collectViewStateSheetIds(mockTree), compactViewStateSheetIds(`ghost_George_Daughter_${sheetB}_650`, [sheetA, sheetB]),
-                    expandViewStateSheetIds('ghost_George_Daughter_~1_650', [sheetA, sheetB])]),
-                JSON.stringify([[sheetA, sheetB], 'ghost_George_Daughter_~1_650', `ghost_George_Daughter_${sheetB}_650`]));
+                [resolveViewStatePersonId(mockTree, roundTripFocusRef('Thomas_1930_40')), resolveViewStatePersonId(mockTree, 'Thomas_1930_40')].join('|'),
+                'Thomas_1931_40|Thomas_1931_40');
+            assertEqual('Test 205.32: Ghost IDs (including underscore-containing sheet IDs) resolve across shifted ghost counters',
+                [resolveViewStatePersonId(mockTree, roundTripFocusRef(`ghost_George_Daughter_${sheetB}_642`)),
+                 resolveViewStatePersonId(mockTree, roundTripFocusRef(`ghost_Paul_Son_1_${DEMO_SHEET_ID}_88`)),
+                 resolveViewStatePersonId(mockTree, 'ghost_George_Daughter_~2_642')].join('|'),
+                `${`ghost_George_Daughter_${sheetB}_650`}|${`ghost_Paul_Son_1_${DEMO_SHEET_ID}_94`}|${`ghost_George_Daughter_${sheetB}_650`}`);
+            assertEqual('Test 205.33: Unknown person resolves to null',
+                [resolveViewStatePersonId(mockTree, roundTripFocusRef('Nobody_unk_0')), resolveViewStatePersonId(mockTree, 'Nobody_unk_0')].join('|'), '|');
+            assertEqual('Test 205.34: Sheet IDs are compacted to ~N (sorted) and expanded on the way back',
+                JSON.stringify([collectViewStateSheetIds(mockTree), compactViewStateSheetIds(`ghost_George_Daughter_${sheetB}_650`, [DEMO_SHEET_ID, sheetA, sheetB]),
+                    expandViewStateSheetIds('ghost_George_Daughter_~2_650', [DEMO_SHEET_ID, sheetA, sheetB])]),
+                JSON.stringify([[DEMO_SHEET_ID, sheetA, sheetB], 'ghost_George_Daughter_~2_650', `ghost_George_Daughter_${sheetB}_650`]));
 
             // Test 205.35-37: End-to-end with the real builder — an unrelated row inserted at the top of the sheet
             const baseRows = [
@@ -14049,6 +14121,7 @@ const m3 = tree.all.find(n => n.id === '3');
             ];
             const treeBefore = buildTree(baseRows);
             const sharedThomasId = findPerson(treeBefore, 'Thomas').id;
+            const sharedCompactHash = encodeViewStateHash({ focusId: sharedThomasId, zoom: 0.8 }, treeBefore);
             const treeAfterInsert = buildTree([
                 { _sourceId: 's1', _sheetRow: 2, Name: 'Zacharias', Sex: 'M', 'Year of Birth': '1905' },
                 ...baseRows.map((row) => ({ ...row, _sheetRow: row._sheetRow + 1 }))
@@ -14056,11 +14129,16 @@ const m3 = tree.all.find(n => n.id === '3');
             const thomasAfterInsert = findPerson(treeAfterInsert, 'Thomas');
             assert('Test 205.35: Inserting an unrelated row above changes the generated person ID (why exact matching is not enough)',
                 thomasAfterInsert.id !== sharedThomasId && sharedThomasId.startsWith('Thomas_1930_'));
-            assertEqual('Test 205.36: The shared URL ID still resolves to Thomas in the rebuilt tree',
-                resolveViewStatePersonId(treeAfterInsert, sharedThomasId), thomasAfterInsert.id);
+            assertEqual('Test 205.36: Both the compact 6-char URL hash and legacy ID still resolve to Thomas in the rebuilt tree',
+                [resolveViewStatePersonId(treeAfterInsert, parseViewStateHash(sharedCompactHash).focusId),
+                 resolveViewStatePersonId(treeAfterInsert, sharedThomasId)].join('|'),
+                `${thomasAfterInsert.id}|${thomasAfterInsert.id}`);
             const treeAfterYobFix = buildTree(baseRows.map((row) => (row.Name === 'Thomas' ? { ...row, 'Year of Birth': '1931' } : row)));
-            assertEqual('Test 205.37: Correcting Thomas\'s birth year in the sheet keeps the shared URL pointing at Thomas',
-                resolveViewStatePersonId(treeAfterYobFix, sharedThomasId), findPerson(treeAfterYobFix, 'Thomas').id);
+            const thomasAfterYobFixId = findPerson(treeAfterYobFix, 'Thomas').id;
+            assertEqual('Test 205.37: Correcting Thomas\'s birth year in the sheet keeps both compact and legacy shared URLs pointing at Thomas',
+                [resolveViewStatePersonId(treeAfterYobFix, parseViewStateHash(sharedCompactHash).focusId),
+                 resolveViewStatePersonId(treeAfterYobFix, sharedThomasId)].join('|'),
+                `${thomasAfterYobFixId}|${thomasAfterYobFixId}`);
 
             // Test 205.38-40: Sidebar prediction drives the visible width used on restore
             assertEqual('Test 205.38: Focused person implies an open sidebar', resolveRestoredSidebarOpen({ focusId: 'Joseph_1920_152' }), true);
@@ -14070,15 +14148,21 @@ const m3 = tree.all.find(n => n.id === '3');
             // Test 205.41-44: Live state capture is anchor-relative (identical hash after a layout shift); map view omits camera details
             const liveState = buildCurrentViewState({ focusId: 'Joseph_1920_152', isSidebarVisible: true, activeFilter: null, showMap: false,
                 camera: { x: -600, y: -200, z: 1 }, ppy: 10, viewport: screenA, anchor: { id: 'Joseph_1920_152', x: 1468, y: 475 }, collapsedNodes: new Set(['Antu_1931_12']) });
-            assertEqual('Test 205.41: buildCurrentViewState + encode yields the canonical hash',
-                encodeViewStateHash(liveState), 'p=Joseph_1920_152&z=1&o=-320,12.5&k=Antu_1931_12');
+            const liveHash = encodeViewStateHash(liveState);
+            const liveParsed = parseViewStateHash(liveHash);
+            assert('Test 205.41: buildCurrentViewState + encode yields a compact hash whose focus, zoom, offset, and collapsed branch round trip',
+                liveHash.length <= 17 &&
+                resolveViewStatePersonId(rtTree, liveParsed.focusId) === 'Joseph_1920_152' &&
+                liveParsed.zoom === 1 &&
+                JSON.stringify(liveParsed.offset) === JSON.stringify({ dx: -320, dy: 12.5 }) &&
+                JSON.stringify(resolveRestoredCollapsedIds(liveParsed, rtTree)) === JSON.stringify(['Antu_1931_12']));
             const shiftedState = buildCurrentViewState({ focusId: 'Joseph_1920_152', isSidebarVisible: true, activeFilter: null, showMap: false,
                 camera: { x: -900, y: -200, z: 1 }, ppy: 10, viewport: screenA, anchor: { id: 'Joseph_1920_152', x: 1768, y: 475 }, collapsedNodes: new Set(['Antu_1931_12']) });
             assertEqual('Test 205.42: Moving the whole layout 300px (an unrelated row re-flowed the tree) leaves the hash unchanged',
-                encodeViewStateHash(shiftedState), encodeViewStateHash(liveState));
-            assertEqual('Test 205.43: Map view encodes only v=map (tree canvas is hidden)',
+                encodeViewStateHash(shiftedState), liveHash);
+            assertEqual('Test 205.43: Map view encodes only "2" (1 char; tree canvas camera details are omitted)',
                 encodeViewStateHash(buildCurrentViewState({ focusId: null, isSidebarVisible: true, activeFilter: null, showMap: true,
-                    camera: { x: 0, y: 0, z: 1 }, ppy: 10, viewport: screenA, anchor: { id: 'Joseph_1920_152', x: 1468, y: 475 }, collapsedNodes: new Set() })), 'v=map');
+                    camera: { x: 0, y: 0, z: 1 }, ppy: 10, viewport: screenA, anchor: { id: 'Joseph_1920_152', x: 1468, y: 475 }, collapsedNodes: new Set() })), '2');
             assert('Test 205.44: Anchor choice helpers: on-screen test and nearest-card pick',
                 isAnchorInsideViewport({ anchor: { x: 1148, y: 600 }, camera: { x: -600, y: -200, z: 1 }, ...screenA }) === true &&
                 isAnchorInsideViewport({ anchor: { x: 5000, y: 600 }, camera: { x: -600, y: -200, z: 1 }, ...screenA }) === false &&
@@ -14628,12 +14712,16 @@ const m3 = tree.all.find(n => n.id === '3');
                 rememberSheetTitleFromResponse(ID_B, null, registry) === '');
 
             // Address-bar bookkeeping
-            assert('Test 209.45: hasExplicitSheetQueryParam is true only for a non-blank id/sheet/url/sheetId param',
+            assert('Test 209.45: hasExplicitSheetQueryParam accepts ultra-short ?d / ?<sheetId> and legacy id/sheet/url/sheetId params',
+                hasExplicitSheetQueryParam('?d') && hasExplicitSheetQueryParam(`?${ID_A}`) && hasExplicitSheetQueryParam(`?${ID_B}`) &&
                 hasExplicitSheetQueryParam(`?id=${ID_A}`) && hasExplicitSheetQueryParam(`?sheet=${ID_A}`) && hasExplicitSheetQueryParam('?url=https://x') &&
                 hasExplicitSheetQueryParam(`?sheetId=${ID_A}`) && !hasExplicitSheetQueryParam('?utm_source=mail') && !hasExplicitSheetQueryParam('') && !hasExplicitSheetQueryParam('?id=%20'));
-            assertEqual('Test 209.46: buildSheetDeepLinkUrl keeps path and hash, drops legacy aliases, sets ?id=',
-                buildSheetDeepLinkUrl({ pathname: '/family-tree/', search: '?sheet=old&x=1&sheetId=y&url=z', hash: '#p=Joseph_1920' }, ID_A), `/family-tree/?x=1&id=${ID_A}#p=Joseph_1920`);
-            assertEqual('Test 209.47: buildSheetDeepLinkUrl tolerates a missing location', buildSheetDeepLinkUrl(null, ID_B), `/?id=${ID_B}`);
+            assertEqual('Test 209.46: buildSheetDeepLinkUrl keeps path and hash, strips legacy aliases, and emits ?d for demo or bare ?<sheetId> for custom sheets',
+                [buildSheetDeepLinkUrl({ pathname: '/family-tree/', search: '?sheet=old&x=1&sheetId=y&url=z', hash: '#e4K10p890' }, ID_A),
+                 buildSheetDeepLinkUrl({ pathname: '/family-tree/', search: `?id=${ID_A}&x=1`, hash: '#e4K10p890' }, ID_B)].join('|'),
+                `/family-tree/?x=1&d#e4K10p890|/family-tree/?x=1&${ID_B}#e4K10p890`);
+            assertEqual('Test 209.47: buildSheetDeepLinkUrl tolerates a missing location',
+                [buildSheetDeepLinkUrl(null, ID_A), buildSheetDeepLinkUrl(null, ID_B)].join('|'), `/?d|/?${ID_B}`);
 
             // window.location is unforgeable in real browsers (assigning it would navigate), so it is
             // only mocked where the harness owns the window object (node); history.replaceState is
@@ -14646,18 +14734,18 @@ const m3 = tree.all.find(n => n.id === '3');
             const replaceCalls = [];
             const fakeHistory = { state: { k: 1 }, replaceState: (state, title, url) => replaceCalls.push(url) };
             if (canMockLocation) {
-                win.location = { pathname: '/family-tree/', search: '', hash: '#p=Joseph_1920' };
+                win.location = { pathname: '/family-tree/', search: `?id=${ID_A}`, hash: '#e4K10p890' };
                 win.history = fakeHistory;
             } else {
                 win.history.replaceState = fakeHistory.replaceState;
             }
             try {
                 const changed = syncSheetIdIntoLocation(ID_A);
-                assert('Test 209.48: syncSheetIdIntoLocation rewrites the address bar via history.replaceState with ?id=<sheetId> (no reload, no new history entry)',
-                    changed === true && replaceCalls.length === 1 && new RegExp(`[?&]id=${ID_A}(#|$)`).test(replaceCalls[0]));
+                assert('Test 209.48: syncSheetIdIntoLocation upgrades legacy ?id= to ?d via history.replaceState (no reload, no new history entry)',
+                    changed === true && replaceCalls.length === 1 && /[?&]d(#|$)/.test(replaceCalls[0]));
                 if (canMockLocation) {
-                    win.location = { pathname: '/family-tree/', search: `?id=${ID_A}`, hash: '' };
-                    assert('Test 209.49: syncSheetIdIntoLocation is a no-op when ?id= already names that sheet',
+                    win.location = { pathname: '/family-tree/', search: '?d', hash: '' };
+                    assert('Test 209.49: syncSheetIdIntoLocation is a no-op when the shortest ?d URL is already current',
                         syncSheetIdIntoLocation(ID_A) === false && replaceCalls.length === 1);
                     win.location = { pathname: '/', search: '', hash: '' };
                 } else {
@@ -14665,7 +14753,7 @@ const m3 = tree.all.find(n => n.id === '3');
                 }
                 cookieJar.clear(); fakeLocalStorage.clear();
                 rememberSheetTitle(ID_B, 'Second');
-                assertEqual('Test 209.50: commitSuccessfulSheetImport records the sheet with its learned title and syncs the URL',
+                assertEqual('Test 209.50: commitSuccessfulSheetImport records the sheet with its learned title and syncs bare ?<sheetId> into the URL',
                     commitSuccessfulSheetImport(buildSheetUrlFromId(ID_B)) + '|' + readSheetHistory().map(e => `${e.title}:${e.uses}`).join(',') + '|' + replaceCalls.length, `${ID_B}|Second:1|2`);
                 assertEqual('Test 209.51: commitSuccessfulSheetImport ignores URLs without a sheet ID',
                     commitSuccessfulSheetImport('https://example.com/no-id') + '|' + readSheetHistory().length, 'null|1');

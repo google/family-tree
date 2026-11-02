@@ -44148,7 +44148,7 @@ const BUTTON_DOCUMENTATION_CATALOG = {
         summary: 'Returns to the **home screen**, where you paste any **Google Sheets link or ID** (shared as *Anyone with the link can view*). Every sheet you open is remembered in a **browser cookie** and offered in a dropdown, most-used first.',
         examples: [
             { label: 'Switch Family', detail: 'Click the emblem, pick `Ancestry Browser: Demo — 1BQvy…` from the dropdown or paste another link, then press **Enter** or **Open**.' },
-            { label: 'Shareable Link', detail: 'After a sheet loads the address bar carries `?id=<sheetId>`; share it and the recipient skips the home screen entirely.' }
+            { label: 'Shareable Link', detail: 'After a sheet loads the address bar carries `?<sheetId>` (or `?d` for the demo) plus a compact `#hash` token; share it and the recipient skips the home screen entirely.' }
         ]
     },
     'Deduction Settings (marriage age by birth cohort)': {
@@ -47954,41 +47954,57 @@ function useAppPanels(isLoading) {
 }
 
 /**
- * Initializes the family tree from an embedded script dataset if present (e.g. standalone app export),
- * or falls back to importing data from the default Google Sheets URL.
- * 
- * @param {Object} options
- * @param {Function} options.setTree - Tree state updater.
- * @param {Function} options.setSheetUrl - Sheet URL state updater.
- * @param {Function} options.setFocusId - Focus person ID state updater.
- * @param {Function} options.setIsSidebarVisible - Sidebar visibility state updater.
- * @param {Function} options.centerOnPerson - Camera centering callback.
- * @param {Function} options.appendLog - Log appending callback.
- * @param {Function} options.handleImport - Sheet import callback.
- * @returns {boolean} True if embedded dataset was successfully loaded, false otherwise.
- * 
- * @example
- *   initializeTreeDataset({
- *     setTree,
- *     setSheetUrl,
- *     setFocusId,
- *     setIsSidebarVisible,
- *     centerOnPerson,
- *     appendLog,
- *     handleImport
- *   });
+ * Extracts a spreadsheet reference from URL search parameters. Supports ultra-short keyless
+ * forms (`?d` for the demo sheet and `?<sheetId>` for a bare 35-60 char Google Sheet ID) as well
+ * as legacy named parameters (`?id=`, `?i=`, `?sheet=`, `?url=`, `?sheetId=`).
  *
+ * @param {string|null} [searchString=null] - Optional search query string override.
+ * @returns {string} Extracted sheet ID or URL, or `''` when none is present.
+ *
+ * @example
+ * extractSheetQueryValue('?1SvPspyHtIV2E9UHwpZON8sUTf3FxIuqJZO-wx0WPl3k');
+ * // => '1SvPspyHtIV2E9UHwpZON8sUTf3FxIuqJZO-wx0WPl3k'
+ *
+ * @example
+ * extractSheetQueryValue('?d');
+ * // => DEMO_SHEET_ID
+ */
+function extractSheetQueryValue(searchString = null) {
+    try {
+        const query = searchString !== null
+            ? searchString
+            : (typeof window !== 'undefined' && window.location ? window.location.search : '');
+        if (!query) return '';
+        const params = new URLSearchParams(query);
+        const named = params.get('id') || params.get('i') || params.get('sheet') || params.get('url') || params.get('sheetId');
+        if (named && named.trim()) {
+            const trimmed = named.trim();
+            return trimmed === 'd' ? DEMO_SHEET_ID : trimmed;
+        }
+        for (const [key, val] of params.entries()) {
+            if (val !== '') continue;
+            const trimmed = key.trim();
+            if (trimmed === 'd') return DEMO_SHEET_ID;
+            if (isValidSheetId(trimmed)) return trimmed;
+        }
+    } catch (err) {
+        return '';
+    }
+    return '';
+}
+
 /**
- * Resolves the initial spreadsheet URL from URL search parameters ('id', 'sheet', 'url', 'sheetId'),
- * falling back to the most recently opened sheet in browser history, and finally to DEFAULT_URL.
+ * Resolves the initial spreadsheet URL from URL search parameters (`?<sheetId>`, `?d`, or legacy
+ * `id`/`sheet`/`url`/`sheetId`), falling back to the most recently opened sheet in browser
+ * history, and finally to DEFAULT_URL.
  *
  * @param {string|null} [searchString=null] - Optional search query string override
  * @param {Array<SheetHistoryEntry>} [history=readSheetHistory()] - Persisted sheet history
  * @returns {string} Fully qualified Google Sheets URL to load
  *
  * @example
- * // Given URL: https://google.github.io/family-tree/?id=1ZDpcz2ACmG63dUjHLfoHZSW7-dG51FbzaJVcqHYdkEI
- * resolveInitialSheetUrl('?id=1ZDpcz2ACmG63dUjHLfoHZSW7-dG51FbzaJVcqHYdkEI', []);
+ * // Given URL: https://google.github.io/family-tree/?1ZDpcz2ACmG63dUjHLfoHZSW7-dG51FbzaJVcqHYdkEI
+ * resolveInitialSheetUrl('?1ZDpcz2ACmG63dUjHLfoHZSW7-dG51FbzaJVcqHYdkEI', []);
  * // => 'https://docs.google.com/spreadsheets/d/1ZDpcz2ACmG63dUjHLfoHZSW7-dG51FbzaJVcqHYdkEI/edit'
  *
  * @example
@@ -47996,36 +48012,25 @@ function useAppPanels(isLoading) {
  * // => DEFAULT_URL
  */
 function resolveInitialSheetUrl(searchString = null, history = readSheetHistory()) {
-    try {
-        const query = searchString !== null
-            ? searchString
-            : (typeof window !== 'undefined' && window.location ? window.location.search : '');
-        if (query) {
-            const params = new URLSearchParams(query);
-            const rawParam = params.get('id') || params.get('sheet') || params.get('url') || params.get('sheetId');
-            if (rawParam && rawParam.trim()) {
-                const trimmed = rawParam.trim();
-                const sheetId = extractSheetIdFromUrl(trimmed);
-                if (sheetId) return `https://docs.google.com/spreadsheets/d/${sheetId}/edit`;
-                if (trimmed.startsWith('http')) return trimmed;
-            }
-        }
-    } catch (err) {
-        console.warn('Could not parse URL search parameters for spreadsheet ID:', err);
+    const rawParam = extractSheetQueryValue(searchString);
+    if (rawParam) {
+        const sheetId = extractSheetIdFromUrl(rawParam);
+        if (sheetId) return `https://docs.google.com/spreadsheets/d/${sheetId}/edit`;
+        if (rawParam.startsWith('http')) return rawParam;
     }
     const lastUsed = resolveLastUsedSheet(history);
     return lastUsed ? buildSheetUrlFromId(lastUsed.id) : DEFAULT_URL;
 }
 
 /**
- * Whether the page URL names a spreadsheet explicitly (`?id=`, `?sheet=`, `?url=` or
- * `?sheetId=`).
+ * Whether the page URL names a spreadsheet explicitly (`?<sheetId>`, `?d`, or legacy `?id=`,
+ * `?sheet=`, `?url=`, `?sheetId=`).
  *
  * @param {string|null} [searchString=null] - Optional search query override
  * @returns {boolean}
  *
  * @example
- * hasExplicitSheetQueryParam('?id=1BQvyFoA_-u4MG-r1SRDel93F1TwEaN3I6v6p-kOH8z0');
+ * hasExplicitSheetQueryParam('?1BQvyFoA_-u4MG-r1SRDel93F1TwEaN3I6v6p-kOH8z0');
  * // => true
  *
  * @example
@@ -48033,30 +48038,20 @@ function resolveInitialSheetUrl(searchString = null, history = readSheetHistory(
  * // => false
  */
 function hasExplicitSheetQueryParam(searchString = null) {
-    try {
-        const query = searchString !== null
-            ? searchString
-            : (typeof window !== 'undefined' && window.location ? window.location.search : '');
-        if (!query) return false;
-        const params = new URLSearchParams(query);
-        const rawParam = params.get('id') || params.get('sheet') || params.get('url') || params.get('sheetId');
-        return Boolean(rawParam && rawParam.trim());
-    } catch (err) {
-        return false;
-    }
+    return Boolean(extractSheetQueryValue(searchString));
 }
 
 /**
  * Whether the app should automatically open a spreadsheet on startup instead of stopping on the
- * home screen: true when the URL names a sheet (`?id=…`) OR the browser has a previously opened
- * sheet in its history.
+ * home screen: true when the URL names a sheet (`?<sheetId>` / `?d` / `?id=…`) OR the browser has
+ * a previously opened sheet in its history.
  *
  * @param {string|null} [searchString=null] - Optional search query override
  * @param {Array<SheetHistoryEntry>} [history=readSheetHistory()] - Persisted sheet history
  * @returns {boolean}
  *
  * @example
- * hasInitialSheetToLoad('?id=1BQvyFoA_-u4MG-r1SRDel93F1TwEaN3I6v6p-kOH8z0', []);
+ * hasInitialSheetToLoad('?d', []);
  * // => true
  *
  * @example
@@ -48068,48 +48063,57 @@ function hasInitialSheetToLoad(searchString = null, history = readSheetHistory()
 }
 
 /**
- * Builds the shareable page URL for a sheet: keeps the path and the `#view` hash, drops the
- * legacy `sheet`/`url`/`sheetId` aliases and sets `?id=<sheetId>`.
+ * Builds the ultra-short shareable page URL for a sheet: keeps the path, unrelated query params,
+ * and `#hash`, strips previous sheet params, and appends `?d` for the demo sheet or bare
+ * `?<sheetId>` (without `id=`) for any other spreadsheet.
  *
  * @param {{pathname?: string, search?: string, hash?: string}} location - Current location parts
  * @param {string} sheetId - Sheet ID to encode
  * @returns {string} Relative URL (path + search + hash)
  *
  * @example
- * buildSheetDeepLinkUrl({ pathname: '/family-tree/', search: '', hash: '#p=Joseph_1920' }, '1BQvyFoA_-u4MG-r1SRDel93F1TwEaN3I6v6p-kOH8z0');
- * // => '/family-tree/?id=1BQvyFoA_-u4MG-r1SRDel93F1TwEaN3I6v6p-kOH8z0#p=Joseph_1920'
+ * buildSheetDeepLinkUrl({ pathname: '/family-tree/', search: '', hash: '#e4K10p890' }, DEMO_SHEET_ID);
+ * // => '/family-tree/?d#e4K10p890'
  *
  * @example
- * buildSheetDeepLinkUrl({ pathname: '/', search: '?sheet=old&x=1', hash: '' }, 'NEWID_000000000000000000000000000000000');
- * // => '/?x=1&id=NEWID_000000000000000000000000000000000'
+ * buildSheetDeepLinkUrl({ pathname: '/', search: '?sheet=old&x=1', hash: '' }, '1SvPspyHtIV2E9UHwpZON8sUTf3FxIuqJZO-wx0WPl3k');
+ * // => '/?x=1&1SvPspyHtIV2E9UHwpZON8sUTf3FxIuqJZO-wx0WPl3k'
  */
 function buildSheetDeepLinkUrl(location, sheetId) {
     const params = new URLSearchParams((location && location.search) || '');
-    ['sheet', 'url', 'sheetId'].forEach(key => params.delete(key));
-    params.set('id', sheetId);
-    return `${(location && location.pathname) || '/'}?${params.toString()}${(location && location.hash) || ''}`;
+    for (const [key, val] of Array.from(params.entries())) {
+        if (['id', 'i', 'sheet', 'url', 'sheetId', 'd'].includes(key) || (val === '' && isValidSheetId(key))) {
+            params.delete(key);
+        }
+    }
+    const rest = params.toString();
+    const token = sheetId === DEMO_SHEET_ID ? 'd' : encodeURIComponent(sheetId);
+    const query = rest ? `${rest}&${token}` : token;
+    return `${(location && location.pathname) || '/'}?${query}${(location && location.hash) || ''}`;
 }
 
 /**
- * Rewrites the address bar (no reload, no history entry) so the current sheet is bookmarkable
- * and a page refresh reopens it instead of the home screen.
+ * Rewrites the address bar (no reload, no history entry) so the current sheet is bookmarkable in
+ * its shortest form (`?d` or `?<sheetId>`), upgrading legacy `?id=` links in-place.
  *
  * @param {string} sheetId - Sheet ID that just loaded
  * @returns {boolean} True when the URL was changed
  *
  * @example
- * syncSheetIdIntoLocation('1BQvyFoA_-u4MG-r1SRDel93F1TwEaN3I6v6p-kOH8z0');
- * // address bar: https://google.github.io/family-tree/?id=1BQvyFoA_-u4MG-r1SRDel93F1TwEaN3I6v6p-kOH8z0
+ * syncSheetIdIntoLocation('1SvPspyHtIV2E9UHwpZON8sUTf3FxIuqJZO-wx0WPl3k');
+ * // address bar: https://google.github.io/family-tree/?1SvPspyHtIV2E9UHwpZON8sUTf3FxIuqJZO-wx0WPl3k
  *
  * @example
- * syncSheetIdIntoLocation('1BQvyFoA_-u4MG-r1SRDel93F1TwEaN3I6v6p-kOH8z0'); // already in the URL
+ * syncSheetIdIntoLocation(DEMO_SHEET_ID); // already `?d` in the URL
  * // => false
  */
 function syncSheetIdIntoLocation(sheetId) {
     if (typeof window === 'undefined' || !window.history || !window.location || !sheetId) return false;
     try {
-        if (new URLSearchParams(window.location.search).get('id') === sheetId) return false;
-        window.history.replaceState(window.history.state, '', buildSheetDeepLinkUrl(window.location, sheetId));
+        const currentUrl = `${window.location.pathname || '/'}${window.location.search || ''}${window.location.hash || ''}`;
+        const nextUrl = buildSheetDeepLinkUrl(window.location, sheetId);
+        if (currentUrl === nextUrl) return false;
+        window.history.replaceState(window.history.state, '', nextUrl);
         return true;
     } catch (err) {
         return false;
@@ -49508,36 +49512,31 @@ function useTreeDatasetBootstrap({
 }
 
 // ============================================================================
-// MODULE 6.12: SHAREABLE URL VIEW STATE (Google-Maps-style deep links)
+// MODULE 6.12: SHAREABLE URL VIEW STATE (Ultra-short bit-packed #hash links)
 // ============================================================================
 //
-// Every meaningful UI action is mirrored into a compact `#hash` fragment so the
-// address bar can be copied to another computer and reproduce the same view:
+// Every meaningful UI action is mirrored into an ultra-short Base64url `#hash`
+// packet (with full backward-compatibility parsing for legacy `#p=...&z=...`
+// URLs) so the address bar reproduces the exact view in ~6 to 10 characters:
 //
-//   https://google.github.io/family-tree/?id=1ZDpcz2…#p=Joseph_1920_152&z=0.8
+//   https://google.github.io/family-tree/?1SvPspyHtIV2E9UHwpZON8sUTf3FxIuqJZO-wx0WPl3k#e4K10p890
+//   https://google.github.io/family-tree/?d#o4K10G           (Demo sheet, focused person at z=0.8)
+//   https://google.github.io/family-tree/?d#2                (Demo sheet, world map)
 //
-//   Key  Meaning                                         Sample
-//   ---  ----------------------------------------------  ------------------------------
-//   p    Focused person ID                               p=Joseph_1920_152
-//   s    Sidebar closed while a person is focused        s=0
-//   f    Active filter `<type>:<value>`                  f=place:Kochi
-//   v    Alternate view (world map)                      v=map
-//   z    Camera zoom level (2 decimals)                  z=0.8
-//   a    Camera anchor person (omitted when it is `p`)   a=Antu_1931_12
-//   o    Viewport-centre offset from the anchor card     o=-320,12.5
-//        (`<tree px>,<years>`; omitted when centred)
-//   k    Collapsed branch IDs (comma separated)          k=Antu_1931_12,Elsy_1935_13
+// Packet layout (`#<bitPacket>[.<filterSuffix>]`):
+//   • 6-bit header: [hasFocus, sidebarClosed, hasZoom, hasOffset, showMap, hasExtra]
+//     (when `hasExtra=1`, 2 extra bits follow: [hasExplicitAnchor, hasCollapsed])
+//   • 26-bit person fingerprint: `(isGhost<<25) | (nameHash11<<14) | (yobTag4<<10) | row10`
+//   • Variable-width zoom (`1` bit for default `z=0.8`, else 10 or 14 bits)
+//   • ZigZag-encoded anchor-relative offset (`<dx tree px>, <dy*10 years>`, 21 to 33 bits)
+//   • Collapsed branches with sibling bus-bar parent-group compression (`^@xxxxx`)
+//   • Optional `.` filter suffix (`p<place>`, `j<job>`, `f<family>`, `s<search>`, `dp`/`dj`/`df`)
 //
-// Resilience to spreadsheet edits: the camera is never stored as absolute layout
-// coordinates (those shift whenever an unrelated row re-flows the tree) but as an
-// offset from a person card, horizontally in unscaled tree pixels and vertically
-// in calendar years (pixels-per-year stretches with the viewport height). Person
-// IDs (`<Name>_<YOB>_<row>`) are resolved exactly first, then by the same name and
-// birth year with the nearest row, then by the same name with the nearest row, so
-// inserted rows, namesakes, and corrected birth years keep pointing at the right
-// person. Long spreadsheet IDs embedded in ghost IDs are compacted to `~N`.
-// `?id=<sheetId>` stays a regular query parameter so sheet selection and view
-// state never interfere with each other.
+// Resilience to spreadsheet edits: the camera is stored relative to an anchor
+// card in tree pixels + calendar years, and 26-bit person fingerprints resolve
+// in 3 tiers (exact 26-bit match -> same name hash + birth-year tag + nearest
+// row -> same name hash + nearest row within 64 rows), surviving inserted rows,
+// namesakes, and corrected birth years.
 
 /** Debounce applied before mirroring UI state into the URL hash. */
 const VIEW_STATE_WRITE_DEBOUNCE_MS = 300;
@@ -49549,6 +49548,12 @@ const VIEW_STATE_CAMERA_DELAY_MS = 1000;
 const VIEW_STATE_CAMERA_REFINE_DELAYS_MS = [150, 450, 750];
 /** Minimum length for a `_sourceId` to be treated as a spreadsheet ID worth compacting. */
 const VIEW_STATE_MIN_SHEET_ID_LENGTH = 20;
+/** URL-safe 64-character alphabet (6 bits per char, no `.` or `=` so separators stay unambiguous). */
+const VIEW_STATE_B64 = '0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz-_';
+/** In-memory prefix marking a parsed 26-bit compact person reference (`@xxxxx`). */
+const VIEW_STATE_PERSON_REF_PREFIX = '@';
+/** In-memory prefix marking a collapsed sibling-bar parent group reference (`^@xxxxx`). */
+const VIEW_STATE_GROUP_REF_PREFIX = '^';
 
 /**
  * Formats a number compactly for URL use by rounding to a fixed number of decimals
@@ -49640,7 +49645,7 @@ function collectViewStateSheetIds(tree) {
 
 /**
  * Replaces every full spreadsheet ID inside a person ID with its `~N` abbreviation so ghost IDs
- * (which embed their source sheet) stay short in shared URLs.
+ * (which embed their source sheet) stay short and sheet-underscore-safe.
  *
  * @param {string} text - Person ID or ID list.
  * @param {Array<string>} sheetIds - Sorted spreadsheet IDs from collectViewStateSheetIds.
@@ -49679,121 +49684,794 @@ function expandViewStateSheetIds(text, sheetIds) {
 }
 
 /**
- * Encodes a person ID for the hash: spreadsheet IDs are abbreviated first, then the result is
- * percent-encoded.
+ * Appends `width` bits of a non-negative integer (`width <= 26`) MSB-first onto a bit array.
  *
- * @param {string} personId - Raw person ID.
- * @param {Array<string>} sheetIds - Sorted spreadsheet IDs from collectViewStateSheetIds.
- * @returns {string} URL-safe compact person token.
- *
- * @example
- * encodePersonIdToken('Joseph_1920_152', []);
- * // => 'Joseph_1920_152'
+ * @param {Array<number>} bits - Mutable bit array (`0` or `1` entries).
+ * @param {number} value - Non-negative integer to append.
+ * @param {number} width - Number of bits to emit.
+ * @returns {Array<number>} The same `bits` array for chaining.
  *
  * @example
- * encodePersonIdToken('ghost_George_Daughter_1o11yWxLZJjXJzlFvmn13z00OQ5dvYISvxnTmo6DThUs_642', ['1o11yWxLZJjXJzlFvmn13z00OQ5dvYISvxnTmo6DThUs']);
- * // => 'ghost_George_Daughter_~0_642'
+ * pushViewStateBits([], 5, 4);
+ * // => [0, 1, 0, 1]
+ *
+ * @example
+ * pushViewStateBits([1], 2, 2);
+ * // => [1, 1, 0]
  */
-function encodePersonIdToken(personId, sheetIds) {
-    return encodeViewStateToken(compactViewStateSheetIds(personId, sheetIds));
+function pushViewStateBits(bits, value, width) {
+    const clean = Math.max(0, Math.trunc(value));
+    for (let shift = width - 1; shift >= 0; shift--) {
+        bits.push((clean >>> shift) & 1);
+    }
+    return bits;
 }
 
 /**
- * Encodes the selection half of the view state (focused person, sidebar, filter, map).
+ * Reads `width` bits MSB-first from a bit cursor, returning `null` if fewer than `width` bits remain.
+ *
+ * @param {{bits: Array<number>, pos: number}|null} cursor - Bit reader cursor.
+ * @param {number} width - Number of bits to consume.
+ * @returns {number|null} Unsigned integer value, or `null` on underflow.
+ *
+ * @example
+ * readViewStateBits({ bits: [0, 1, 0, 1], pos: 0 }, 4);
+ * // => 5
+ *
+ * @example
+ * readViewStateBits({ bits: [1, 0], pos: 0 }, 4);
+ * // => null
+ */
+function readViewStateBits(cursor, width) {
+    if (!cursor || cursor.pos + width > cursor.bits.length) return null;
+    let value = 0;
+    for (let i = 0; i < width; i++) {
+        value = value * 2 + cursor.bits[cursor.pos++];
+    }
+    return value;
+}
+
+/**
+ * Packs a bit array into Base64url characters (6 bits per character, zero-padded on the right).
+ *
+ * @param {Array<number>} bits - Bit stream (`0` or `1` per element).
+ * @returns {string} Compact URL-safe token.
+ *
+ * @example
+ * packBitsToBase64Url([0, 0, 0, 0, 1, 0]);
+ * // => '2'
+ *
+ * @example
+ * packBitsToBase64Url([]);
+ * // => ''
+ */
+function packBitsToBase64Url(bits) {
+    if (!bits || bits.length === 0) return '';
+    let out = '';
+    for (let i = 0; i < bits.length; i += 6) {
+        let chunk = 0;
+        for (let b = 0; b < 6; b++) {
+            chunk = (chunk << 1) | (bits[i + b] || 0);
+        }
+        out += VIEW_STATE_B64[chunk];
+    }
+    return out;
+}
+
+/**
+ * Unpacks a Base64url packet back into a bit cursor, returning `null` if any character lies
+ * outside `VIEW_STATE_B64`.
+ *
+ * @param {string} text - Base64url string.
+ * @returns {{bits: Array<number>, pos: number}|null} Bit cursor, or `null` when invalid.
+ *
+ * @example
+ * unpackBase64UrlToBits('2');
+ * // => { bits: [0, 0, 0, 0, 1, 0], pos: 0 }
+ *
+ * @example
+ * unpackBase64UrlToBits('bad=char');
+ * // => null
+ */
+function unpackBase64UrlToBits(text) {
+    const bits = [];
+    for (let i = 0; i < text.length; i++) {
+        const idx = VIEW_STATE_B64.indexOf(text[i]);
+        if (idx < 0) return null;
+        pushViewStateBits(bits, idx, 6);
+    }
+    return { bits, pos: 0 };
+}
+
+/**
+ * Encodes a non-negative integer into a fixed-width Base64url string.
+ *
+ * @param {number} value - Non-negative integer.
+ * @param {number} length - Number of Base64url characters to emit.
+ * @returns {string} Fixed-length Base64url string.
+ *
+ * @example
+ * encodeFixedBase64Url(65, 2);
+ * // => '11'
+ *
+ * @example
+ * encodeFixedBase64Url(0, 5);
+ * // => '00000'
+ */
+function encodeFixedBase64Url(value, length) {
+    let rem = Math.max(0, Math.trunc(value));
+    let out = '';
+    for (let i = 0; i < length; i++) {
+        out = VIEW_STATE_B64[rem & 63] + out;
+        rem = Math.floor(rem / 64);
+    }
+    return out;
+}
+
+/**
+ * Decodes a Base64url integer produced by `encodeFixedBase64Url`, returning `null` on invalid input.
+ *
+ * @param {string} token - Base64url integer token.
+ * @returns {number|null} Decoded non-negative integer, or `null`.
+ *
+ * @example
+ * decodeFixedBase64Url('11');
+ * // => 65
+ *
+ * @example
+ * decodeFixedBase64Url('!bad');
+ * // => null
+ */
+function decodeFixedBase64Url(token) {
+    if (!token) return null;
+    let value = 0;
+    for (let i = 0; i < token.length; i++) {
+        const idx = VIEW_STATE_B64.indexOf(token[i]);
+        if (idx < 0) return null;
+        value = value * 64 + idx;
+    }
+    return value;
+}
+
+/**
+ * ZigZag-maps a signed integer onto non-negative integers (`0 -> 0, -1 -> 1, 1 -> 2, -2 -> 3`)
+ * so small positive and negative camera offsets fit in narrow bit fields.
+ *
+ * @param {number} value - Signed integer.
+ * @returns {number} Non-negative ZigZag integer.
+ *
+ * @example
+ * zigZagEncodeInt(-26);
+ * // => 51
+ *
+ * @example
+ * zigZagEncodeInt(164);
+ * // => 328
+ */
+function zigZagEncodeInt(value) {
+    const n = Math.trunc(value);
+    return n >= 0 ? n * 2 : (-n) * 2 - 1;
+}
+
+/**
+ * Inverse of `zigZagEncodeInt`: restores the signed integer from a ZigZag-encoded value.
+ *
+ * @param {number} encoded - Non-negative ZigZag integer.
+ * @returns {number} Signed integer.
+ *
+ * @example
+ * zigZagDecodeInt(51);
+ * // => -26
+ *
+ * @example
+ * zigZagDecodeInt(328);
+ * // => 164
+ */
+function zigZagDecodeInt(encoded) {
+    return (encoded & 1) === 0 ? encoded / 2 : -((encoded + 1) / 2);
+}
+
+/**
+ * Computes an 11-bit case-insensitive FNV-1a XOR-folded fingerprint of a person's name stem.
+ *
+ * @param {string} name - Clean person name stem (without `ghost_`, birth year, or row).
+ * @returns {number} Unsigned 11-bit hash (`0..2047`).
+ *
+ * @example
+ * hashPersonName11('Joseph') === hashPersonName11('joseph');
+ * // => true
+ *
+ * @example
+ * hashPersonName11('Joseph') !== hashPersonName11('Joseph_Son');
+ * // => true
+ */
+function hashPersonName11(name) {
+    const lower = String(name || '').toLowerCase();
+    let h = 0x811c9dc5;
+    for (let i = 0; i < lower.length; i++) {
+        h ^= lower.charCodeAt(i);
+        h = Math.imul(h, 0x01000193);
+    }
+    const u = h >>> 0;
+    return ((u >>> 21) ^ (u >>> 10) ^ u) & 0x7ff;
+}
+
+/**
+ * Encodes a person ID (or an already-parsed `@xxxxx` compact token) into a 26-bit fingerprint:
+ * `(isGhost << 25) | (nameHash11 << 14) | (yobTag4 << 10) | row10`.
+ *
+ * @param {string} personId - Full person ID or `@xxxxx` compact token.
+ * @param {Array<string>} [sheetIds=[]] - Sorted spreadsheet IDs from `collectViewStateSheetIds`.
+ * @returns {number|null} Unsigned 26-bit code, or `null` when malformed.
+ *
+ * @example
+ * Number.isInteger(encodePersonCode26('Anto_1955_166'));
+ * // => true
+ *
+ * @example
+ * encodePersonCode26('');
+ * // => null
+ */
+function encodePersonCode26(personId, sheetIds = []) {
+    const raw = String(personId || '').replace(/^\^/, '');
+    if (raw.startsWith(VIEW_STATE_PERSON_REF_PREFIX)) {
+        const parsed = decodeFixedBase64Url(raw.slice(1));
+        return parsed !== null ? (parsed & 0x03ffffff) : null;
+    }
+    const ref = parseViewStatePersonRef(compactViewStateSheetIds(raw, sheetIds));
+    if (!ref || !ref.nameStem) return null;
+    const isGhost = ref.nameStem.startsWith('ghost_') ? 1 : 0;
+    const cleanName = isGhost ? ref.nameStem.slice(6) : ref.nameStem;
+    const nameHash = hashPersonName11(cleanName);
+    const yobTag = /^\d{3,4}$/.test(ref.midToken) ? ((((parseInt(ref.midToken, 10) % 15) + 15) % 15) + 1) : 0;
+    const row10 = ref.row !== null && ref.row >= 0 ? Math.min(1022, ref.row) : 1023;
+    return ((isGhost << 25) | (nameHash << 14) | (yobTag << 10) | row10) >>> 0;
+}
+
+/**
+ * Unpacks a 26-bit person fingerprint into its `(isGhost, nameHash, yobTag, row)` fields.
+ *
+ * @param {number} code - Unsigned 26-bit person code.
+ * @returns {{code: number, isGhost: number, nameHash: number, yobTag: number, row: number}}
+ *
+ * @example
+ * decodePersonCode26(encodePersonCode26('Anto_1955_166')).row;
+ * // => 166
+ *
+ * @example
+ * decodePersonCode26(encodePersonCode26('ghost_Paul_Wife_~0_88')).isGhost;
+ * // => 1
+ */
+function decodePersonCode26(code) {
+    return {
+        code,
+        isGhost: (code >>> 25) & 1,
+        nameHash: (code >>> 14) & 0x7ff,
+        yobTag: (code >>> 10) & 0x0f,
+        row: code & 0x3ff
+    };
+}
+
+/**
+ * Formats a 26-bit person code into the in-memory `@xxxxx` compact reference token.
+ *
+ * @param {number} code - Unsigned 26-bit person code.
+ * @returns {string} 6-character `@xxxxx` token.
+ *
+ * @example
+ * formatCompactPersonRef(0);
+ * // => '@00000'
+ *
+ * @example
+ * encodePersonCode26(formatCompactPersonRef(123456));
+ * // => 123456
+ */
+function formatCompactPersonRef(code) {
+    return `${VIEW_STATE_PERSON_REF_PREFIX}${encodeFixedBase64Url(code, 5)}`;
+}
+
+/**
+ * Lists the direct child IDs of a person in `tree`, supporting both `Person` instances and
+ * plain stub objects in unit tests.
+ *
+ * @param {FamilyTree|null} tree - Loaded tree.
+ * @param {Object|null} person - Person node.
+ * @returns {Array<string>} Direct child IDs present in `tree`.
+ *
+ * @example
+ * getPersonDirectChildIds(tree, tree.get('Anto_1955_166'));
+ * // => ['Rupak_1984_168', 'Innez_1989_170']
+ *
+ * @example
+ * getPersonDirectChildIds(null, null);
+ * // => []
+ */
+function getPersonDirectChildIds(tree, person) {
+    if (!person || !tree) return [];
+    if (typeof person.getValidDisplayChildren === 'function') {
+        return person.getValidDisplayChildren(tree).map((child) => child.id);
+    }
+    return (person.children || []).filter((id) => Boolean(tree.get(id)));
+}
+
+/**
+ * Whether a person's family unit lays out at least one child (the exact predicate for showing a
+ * `+/-` collapse button and participating in a foldable sibling bus-bar).
+ *
+ * @param {FamilyTree|null} tree - Loaded tree.
+ * @param {Object|null} person - Candidate person node.
+ * @returns {boolean} True when collapsing `person` hides at least one child branch.
+ *
+ * @example
+ * isFoldableBranchPerson(tree, parentPerson);
+ * // => true
+ *
+ * @example
+ * isFoldableBranchPerson(tree, childlessLeafPerson);
+ * // => false
+ */
+function isFoldableBranchPerson(tree, person) {
+    if (!person || !tree) return false;
+    if (getPersonDirectChildIds(tree, person).length > 0) return true;
+    return (person.partners || []).some((pid) => getPersonDirectChildIds(tree, tree.get(pid)).length > 0);
+}
+
+/**
+ * Returns the IDs of all foldable children of `parent` (the exact set toggled when clicking
+ * `parent`'s horizontal sibling bus-bar).
+ *
+ * @param {FamilyTree|null} tree - Loaded tree.
+ * @param {Object|null} parent - Parent person node.
+ * @returns {Array<string>} Foldable child IDs.
+ *
+ * @example
+ * getFoldableChildIdsOfParent(tree, chackoPerson);
+ * // => ['Baby_1952_164', 'Anto_1955_166', 'Jose_1949_162']
+ *
+ * @example
+ * getFoldableChildIdsOfParent(tree, null);
+ * // => []
+ */
+function getFoldableChildIdsOfParent(tree, parent) {
+    return getPersonDirectChildIds(tree, parent).filter((cid) => isFoldableBranchPerson(tree, tree.get(cid)));
+}
+
+/**
+ * Collects all parents in `tree` with `>= 2` foldable children, ordered concrete-parents-first
+ * and largest sibling sets first so bus-bar folds compress greedily into single 27-bit entries.
+ *
+ * @param {FamilyTree|null} tree - Loaded tree.
+ * @returns {Array<{person: Object, foldable: Array<string>}>}
+ *
+ * @example
+ * collectCollapsibleParentGroups(tree).every((g) => g.foldable.length >= 2);
+ * // => true
+ *
+ * @example
+ * collectCollapsibleParentGroups(null);
+ * // => []
+ */
+function collectCollapsibleParentGroups(tree) {
+    if (!tree || !Array.isArray(tree.all)) return [];
+    const groups = [];
+    for (const person of tree.all) {
+        if (!person || typeof person.id !== 'string') continue;
+        const foldable = getFoldableChildIdsOfParent(tree, person);
+        if (foldable.length >= 2) groups.push({ person, foldable });
+    }
+    groups.sort((a, b) => (Number(Boolean(a.person.isGhost)) - Number(Boolean(b.person.isGhost)))
+        || (b.foldable.length - a.foldable.length));
+    return groups;
+}
+
+/**
+ * Compresses collapsed branch IDs into `{isGroup, code}` bit entries, folding full sibling
+ * bus-bar child sets into a single `{isGroup: 1, code: parentCode}` entry when `tree` is supplied.
+ *
+ * @param {Array<string>} collapsedIds - Collapsed IDs (or `^@xxxxx` group tokens).
+ * @param {FamilyTree|null} tree - Loaded tree (optional).
+ * @param {Array<string>} sheetIds - Sorted spreadsheet IDs.
+ * @returns {Array<{isGroup: number, code: number}>}
+ *
+ * @example
+ * encodeCollapsedEntries(['Elsy_1935_13'], null, []);
+ * // => [{ isGroup: 0, code: encodePersonCode26('Elsy_1935_13') }]
+ *
+ * @example
+ * encodeCollapsedEntries([], null, []);
+ * // => []
+ */
+function encodeCollapsedEntries(collapsedIds, tree, sheetIds) {
+    if (!Array.isArray(collapsedIds) || collapsedIds.length === 0) return [];
+    const remaining = new Set(collapsedIds.filter(Boolean));
+    const entries = [];
+    for (const id of Array.from(remaining)) {
+        if (String(id).startsWith(VIEW_STATE_GROUP_REF_PREFIX)) {
+            const code = encodePersonCode26(String(id).slice(1), sheetIds);
+            if (code !== null) entries.push({ isGroup: 1, code });
+            remaining.delete(id);
+        }
+    }
+    for (const { person, foldable } of collectCollapsibleParentGroups(tree)) {
+        if (!foldable.every((cid) => remaining.has(cid))) continue;
+        const code = encodePersonCode26(person.id, sheetIds);
+        if (code === null) continue;
+        entries.push({ isGroup: 1, code });
+        foldable.forEach((cid) => remaining.delete(cid));
+    }
+    for (const id of remaining) {
+        const code = encodePersonCode26(id, sheetIds);
+        if (code !== null) entries.push({ isGroup: 0, code });
+    }
+    return entries.slice(0, 1024);
+}
+
+/**
+ * Appends a prefix-free variable-width zoom code (`1` for the standard `0.8` reading zoom,
+ * `00` + 8-bit `z*100` up to `2.55`, or `01` + 12-bit `z*100` up to `40.95`).
+ *
+ * @param {Array<number>} bits - Target bit buffer.
+ * @param {number} zoom - Positive zoom level.
+ * @returns {Array<number>} The same `bits` buffer.
+ *
+ * @example
+ * writeZoomBits([], 0.8);
+ * // => [1]
+ *
+ * @example
+ * writeZoomBits([], 0.12).length;
+ * // => 10
+ */
+function writeZoomBits(bits, zoom) {
+    const z100 = Math.max(1, Math.min(4095, Math.round(zoom * 100)));
+    if (z100 === 80) return pushViewStateBits(bits, 1, 1);
+    if (z100 <= 255) {
+        pushViewStateBits(bits, 0, 2);
+        return pushViewStateBits(bits, z100, 8);
+    }
+    pushViewStateBits(bits, 1, 2);
+    return pushViewStateBits(bits, z100, 12);
+}
+
+/**
+ * Reads a variable-width zoom level written by `writeZoomBits`.
+ *
+ * @param {{bits: Array<number>, pos: number}} cursor - Bit cursor.
+ * @returns {number|null} Zoom level rounded to 2 decimals, or `null` when truncated/zero.
+ *
+ * @example
+ * readZoomBits({ bits: writeZoomBits([], 0.8), pos: 0 });
+ * // => 0.8
+ *
+ * @example
+ * readZoomBits({ bits: writeZoomBits([], 1.25), pos: 0 });
+ * // => 1.25
+ */
+function readZoomBits(cursor) {
+    const isDefault = readViewStateBits(cursor, 1);
+    if (isDefault === null) return null;
+    if (isDefault === 1) return 0.8;
+    const isWide = readViewStateBits(cursor, 1);
+    if (isWide === null) return null;
+    const z100 = readViewStateBits(cursor, isWide ? 12 : 8);
+    if (z100 === null || z100 <= 0) return null;
+    return Number((z100 / 100).toFixed(2));
+}
+
+/**
+ * Rounds an anchor offset to integer tree pixels (`dx`) and tenths of a calendar year (`dy10`),
+ * returning `null` when both round to `0` so centred views omit the offset field.
+ *
+ * @param {{dx: number, dy: number}|null|undefined} offset - Raw camera offset.
+ * @returns {{dx: number, dy10: number}|null}
+ *
+ * @example
+ * normalizeOffsetPair({ dx: 0.3, dy: -0.02 });
+ * // => null
+ *
+ * @example
+ * normalizeOffsetPair({ dx: -320.4, dy: 12.46 });
+ * // => { dx: -320, dy10: 125 }
+ */
+function normalizeOffsetPair(offset) {
+    if (!offset || !Number.isFinite(offset.dx) || !Number.isFinite(offset.dy)) return null;
+    const dx = Math.max(-32767, Math.min(32767, Math.round(offset.dx)));
+    const dy10 = Math.max(-16380, Math.min(16380, Math.round(offset.dy * 10)));
+    if (dx === 0 && dy10 === 0) return null;
+    return { dx, dy10 };
+}
+
+/**
+ * Appends a ZigZag-encoded camera offset (`1+10` or `1+16` bits for `dx`, `1+9` or `1+15` bits
+ * for `dy*10`).
+ *
+ * @param {Array<number>} bits - Target bit buffer.
+ * @param {{dx: number, dy10: number}} pair - Normalized non-zero offset pair.
+ * @returns {Array<number>} The same `bits` buffer.
+ *
+ * @example
+ * writeOffsetBits([], { dx: 164, dy10: -26 }).length;
+ * // => 21
+ *
+ * @example
+ * writeOffsetBits([], { dx: 2500, dy10: 10 }).length;
+ * // => 27
+ */
+function writeOffsetBits(bits, pair) {
+    const zDx = zigZagEncodeInt(pair.dx);
+    const zDy = zigZagEncodeInt(pair.dy10);
+    pushViewStateBits(bits, zDx < 1024 ? 0 : 1, 1);
+    pushViewStateBits(bits, zDx, zDx < 1024 ? 10 : 16);
+    pushViewStateBits(bits, zDy < 512 ? 0 : 1, 1);
+    return pushViewStateBits(bits, zDy, zDy < 512 ? 9 : 15);
+}
+
+/**
+ * Reads a ZigZag-encoded camera offset written by `writeOffsetBits`.
+ *
+ * @param {{bits: Array<number>, pos: number}} cursor - Bit cursor.
+ * @returns {{dx: number, dy: number}|null} Decoded `{dx, dy}`, or `null` when truncated.
+ *
+ * @example
+ * readOffsetBits({ bits: writeOffsetBits([], { dx: 164, dy10: -26 }), pos: 0 });
+ * // => { dx: 164, dy: -2.6 }
+ *
+ * @example
+ * readOffsetBits({ bits: [0], pos: 0 });
+ * // => null
+ */
+function readOffsetBits(cursor) {
+    const dxWide = readViewStateBits(cursor, 1);
+    if (dxWide === null) return null;
+    const zDx = readViewStateBits(cursor, dxWide ? 16 : 10);
+    const dyWide = readViewStateBits(cursor, 1);
+    if (zDx === null || dyWide === null) return null;
+    const zDy = readViewStateBits(cursor, dyWide ? 15 : 9);
+    if (zDy === null) return null;
+    return { dx: zigZagDecodeInt(zDx), dy: Number((zigZagDecodeInt(zDy) / 10).toFixed(1)) };
+}
+
+/**
+ * Appends collapsed branch entries (`0` + 4-bit count up to 16, or `1` + 10-bit count up to 1024,
+ * followed by 27 bits `[isGroup, code26]` per entry).
+ *
+ * @param {Array<number>} bits - Target bit buffer.
+ * @param {Array<{isGroup: number, code: number}>} entries - Non-empty collapsed entry list.
+ * @returns {Array<number>} The same `bits` buffer.
+ *
+ * @example
+ * writeCollapsedBits([], [{ isGroup: 0, code: 42 }]).length;
+ * // => 32
+ *
+ * @example
+ * writeCollapsedBits([], [{ isGroup: 1, code: 42 }, { isGroup: 0, code: 99 }]).length;
+ * // => 59
+ */
+function writeCollapsedBits(bits, entries) {
+    const countMinusOne = entries.length - 1;
+    const wide = countMinusOne >= 16 ? 1 : 0;
+    pushViewStateBits(bits, wide, 1);
+    pushViewStateBits(bits, countMinusOne, wide ? 10 : 4);
+    for (const entry of entries) {
+        pushViewStateBits(bits, entry.isGroup ? 1 : 0, 1);
+        pushViewStateBits(bits, entry.code, 26);
+    }
+    return bits;
+}
+
+/**
+ * Reads collapsed branch references written by `writeCollapsedBits` as `@xxxxx` / `^@xxxxx` tokens.
+ *
+ * @param {{bits: Array<number>, pos: number}} cursor - Bit cursor.
+ * @returns {Array<string>|null} Compact person/group tokens, or `null` when truncated.
+ *
+ * @example
+ * readCollapsedBits({ bits: writeCollapsedBits([], [{ isGroup: 1, code: 0 }]), pos: 0 });
+ * // => ['^@00000']
+ *
+ * @example
+ * readCollapsedBits({ bits: [0, 0], pos: 0 });
+ * // => null
+ */
+function readCollapsedBits(cursor) {
+    const wide = readViewStateBits(cursor, 1);
+    if (wide === null) return null;
+    const rawCount = readViewStateBits(cursor, wide ? 10 : 4);
+    if (rawCount === null) return null;
+    const count = rawCount + 1;
+    const ids = [];
+    for (let i = 0; i < count; i++) {
+        const isGroup = readViewStateBits(cursor, 1);
+        const code = readViewStateBits(cursor, 26);
+        if (isGroup === null || code === null) return null;
+        ids.push(`${isGroup ? VIEW_STATE_GROUP_REF_PREFIX : ''}${formatCompactPersonRef(code)}`);
+    }
+    return ids;
+}
+
+/**
+ * Encodes an active filter into a compact single-character-prefixed suffix (`p<place>`, `j<job>`,
+ * `f<family>`, `s<search>`, `dp`/`dj`/`df` for directory tabs, or `x<type>:<value>`).
+ *
+ * @param {{filterType: string, value: string}|null|undefined} filter - Active filter descriptor.
+ * @returns {string} Suffix without leading `.`, or `''` when inactive.
+ *
+ * @example
+ * encodeFilterSuffix({ filterType: 'place', value: 'New York' });
+ * // => 'pNew+York'
+ *
+ * @example
+ * encodeFilterSuffix({ filterType: 'directory', value: 'places' });
+ * // => 'dp'
+ */
+function encodeFilterSuffix(filter) {
+    if (!filter || !filter.filterType || !filter.value) return '';
+    const type = String(filter.filterType);
+    const val = String(filter.value);
+    if (type === 'directory') {
+        if (val === 'places') return 'dp';
+        if (val === 'jobs') return 'dj';
+        if (val === 'families') return 'df';
+        return `d:${encodeViewStateToken(val)}`;
+    }
+    const shortCode = { place: 'p', job: 'j', family: 'f', search: 's' }[type];
+    if (shortCode) return `${shortCode}${encodeViewStateToken(val)}`;
+    return `x${encodeViewStateToken(type)}:${encodeViewStateToken(val)}`;
+}
+
+/**
+ * Inverse of `encodeFilterSuffix`: decodes the `.` suffix back into `{filterType, value}`.
+ *
+ * @param {string} suffix - Raw filter suffix after `.`.
+ * @returns {{filterType: string, value: string}|null}
+ *
+ * @example
+ * decodeFilterSuffix('pNew+York');
+ * // => { filterType: 'place', value: 'New York' }
+ *
+ * @example
+ * decodeFilterSuffix('dp');
+ * // => { filterType: 'directory', value: 'places' }
+ */
+function decodeFilterSuffix(suffix) {
+    if (!suffix) return null;
+    const head = suffix[0];
+    const rest = suffix.slice(1);
+    if (head === 'd') {
+        const tab = { p: 'places', j: 'jobs', f: 'families' }[rest];
+        if (tab) return { filterType: 'directory', value: tab };
+        return rest.startsWith(':') && rest.length > 1
+            ? { filterType: 'directory', value: decodeViewStateToken(rest.slice(1)) }
+            : null;
+    }
+    const type = { p: 'place', j: 'job', f: 'family', s: 'search' }[head];
+    if (type) return rest ? { filterType: type, value: decodeViewStateToken(rest) } : null;
+    return head === 'x' ? parseViewStateFilterToken(rest) : null;
+}
+
+/**
+ * Encodes all non-filter view state fields into the Base64url `<bitPacket>` string.
  *
  * @param {Object} state - View state snapshot.
- * @param {string|null} [state.focusId] - Focused person ID.
- * @param {boolean} [state.isSidebarVisible] - Whether the person sidebar is open.
- * @param {{filterType: string, value: string}|null} [state.activeFilter] - Active filter.
- * @param {boolean} [state.showMap] - Whether the world map view is shown.
- * @param {Array<string>} [sheetIds=[]] - Sorted spreadsheet IDs used to abbreviate person IDs.
- * @returns {Array<string>} `key=value` fragments in canonical order.
+ * @param {FamilyTree|null} tree - Optional loaded tree for sibling-bar group compression.
+ * @param {Array<string>} sheetIds - Sorted spreadsheet IDs.
+ * @returns {string} Base64url bit packet, or `''` when all header flags are zero.
  *
  * @example
- * encodeSelectionHashParts({ focusId: 'Joseph_1920_152', isSidebarVisible: false });
- * // => ['p=Joseph_1920_152', 's=0']
+ * encodeBitPacket({ showMap: true }, null, []);
+ * // => '2'
  *
  * @example
- * encodeSelectionHashParts({ activeFilter: { filterType: 'place', value: 'Kochi' }, showMap: true });
- * // => ['f=place:Kochi', 'v=map']
+ * encodeBitPacket({}, null, []);
+ * // => ''
  */
-function encodeSelectionHashParts(state, sheetIds = []) {
-    const parts = [];
-    if (state.focusId) {
-        parts.push(`p=${encodePersonIdToken(state.focusId, sheetIds)}`);
-        if (state.isSidebarVisible === false) parts.push('s=0');
-    }
-    const filter = state.activeFilter;
-    if (filter && filter.filterType && filter.value) {
-        parts.push(`f=${encodeViewStateToken(filter.filterType)}:${encodeViewStateToken(filter.value)}`);
-    }
-    if (state.showMap) parts.push('v=map');
-    return parts;
+function encodeBitPacket(state, tree, sheetIds) {
+    const focusCode = state.focusId ? encodePersonCode26(state.focusId, sheetIds) : null;
+    const rawAnchorCode = (state.anchorId && state.anchorId !== state.focusId)
+        ? encodePersonCode26(state.anchorId, sheetIds)
+        : null;
+    const anchorCode = (rawAnchorCode !== null && rawAnchorCode !== focusCode) ? rawAnchorCode : null;
+    const hasZoom = Number.isFinite(state.zoom) && state.zoom > 0 ? 1 : 0;
+    const offsetPair = normalizeOffsetPair(state.offset);
+    const collapsed = encodeCollapsedEntries(state.collapsedIds, tree, sheetIds);
+    const hasExtra = (anchorCode !== null || collapsed.length > 0) ? 1 : 0;
+    const sidebarClosed = (focusCode !== null && state.isSidebarVisible === false) ? 1 : 0;
+    const header = ((focusCode !== null ? 1 : 0) << 5) | (sidebarClosed << 4)
+        | (hasZoom << 3) | ((offsetPair ? 1 : 0) << 2) | ((state.showMap ? 1 : 0) << 1) | hasExtra;
+    if (header === 0) return '';
+    const bits = [];
+    pushViewStateBits(bits, header, 6);
+    if (hasExtra) pushViewStateBits(bits, ((anchorCode !== null ? 1 : 0) << 1) | (collapsed.length > 0 ? 1 : 0), 2);
+    if (focusCode !== null) pushViewStateBits(bits, focusCode, 26);
+    if (hasZoom) writeZoomBits(bits, state.zoom);
+    if (anchorCode !== null) pushViewStateBits(bits, anchorCode, 26);
+    if (offsetPair) writeOffsetBits(bits, offsetPair);
+    if (collapsed.length > 0) writeCollapsedBits(bits, collapsed);
+    return packBitsToBase64Url(bits);
 }
 
 /**
- * Encodes the camera half of the view state (zoom, anchor person, centre offset, collapsed
- * branches). The anchor is omitted when it is the focused person and the offset is omitted
- * when the anchor card sits in the middle of the viewport, which keeps typical URLs short.
+ * Decodes a Base64url `<bitPacket>` string onto a mutable view state object, stopping cleanly on
+ * invalid or truncated bit streams without throwing.
+ *
+ * @param {string} packet - Base64url bit packet.
+ * @param {Object} state - Mutable view state target.
+ * @returns {Object} The populated `state` object.
+ *
+ * @example
+ * decodeBitPacket('2', {});
+ * // => { showMap: true }
+ *
+ * @example
+ * decodeBitPacket('!invalid', {});
+ * // => {}
+ */
+function decodeBitPacket(packet, state) {
+    const cursor = unpackBase64UrlToBits(packet);
+    const header = readViewStateBits(cursor, 6);
+    if (!header) return state;
+    const extra = (header & 1) ? readViewStateBits(cursor, 2) : 0;
+    if (extra === null) return state;
+    if ((header >>> 1) & 1) state.showMap = true;
+    if ((header >>> 5) & 1) {
+        const focusCode = readViewStateBits(cursor, 26);
+        if (focusCode === null) return state;
+        state.focusId = formatCompactPersonRef(focusCode);
+        if ((header >>> 4) & 1) state.isSidebarVisible = false;
+    }
+    if ((header >>> 3) & 1) {
+        const zoom = readZoomBits(cursor);
+        if (zoom === null) return state;
+        state.zoom = zoom;
+    }
+    if ((extra >>> 1) & 1) {
+        const anchorCode = readViewStateBits(cursor, 26);
+        if (anchorCode === null) return state;
+        state.anchorId = formatCompactPersonRef(anchorCode);
+    }
+    if ((header >>> 2) & 1) {
+        const offset = readOffsetBits(cursor);
+        if (offset === null) return state;
+        state.offset = offset;
+    }
+    if (extra & 1) {
+        const ids = readCollapsedBits(cursor);
+        if (ids) state.collapsedIds = ids;
+    }
+    return state;
+}
+
+/**
+ * Serialises a view state snapshot into the ultra-short URL hash body (without `#`). Accepts
+ * either a `FamilyTree` (enabling sibling bus-bar parent-group compression and sheet compaction)
+ * or a precomputed `sheetIds` array.
  *
  * @param {Object} state - View state snapshot.
- * @param {number} [state.zoom] - Camera zoom level.
- * @param {string|null} [state.focusId] - Focused person ID.
- * @param {string|null} [state.anchorId] - Camera anchor person ID.
- * @param {{dx: number, dy: number}|null} [state.offset] - Viewport-centre offset from the anchor card.
- * @param {Array<string>} [state.collapsedIds] - Collapsed branch root IDs.
- * @param {Array<string>} [sheetIds=[]] - Sorted spreadsheet IDs used to abbreviate person IDs.
- * @returns {Array<string>} `key=value` fragments in canonical order.
+ * @param {FamilyTree|Array<string>|null} [treeOrSheetIds=null] - Loaded tree or sorted sheet IDs.
+ * @returns {string} Compact hash body (e.g. `'e4K10p890'`, `'2'`, `'.pKochi'`), or `''` when empty.
  *
  * @example
- * encodeCameraHashParts({ zoom: 0.8, focusId: 'Joseph_1920_152', anchorId: 'Joseph_1920_152', offset: { dx: 0.3, dy: -0.02 } });
- * // => ['z=0.8']
- *
- * @example
- * encodeCameraHashParts({ zoom: 0.12, anchorId: 'Antu_1931_12', offset: { dx: -320.4, dy: 12.46 }, collapsedIds: ['Elsy_1935_13'] });
- * // => ['z=0.12', 'a=Antu_1931_12', 'o=-320,12.5', 'k=Elsy_1935_13']
- */
-function encodeCameraHashParts(state, sheetIds = []) {
-    const parts = [];
-    if (Number.isFinite(state.zoom) && state.zoom > 0) parts.push(`z=${formatCompactNumber(state.zoom, 2)}`);
-    if (state.anchorId && state.anchorId !== state.focusId) parts.push(`a=${encodePersonIdToken(state.anchorId, sheetIds)}`);
-    const offset = state.offset;
-    if (offset && Number.isFinite(offset.dx) && Number.isFinite(offset.dy)) {
-        const dx = Math.round(offset.dx);
-        const dy = formatCompactNumber(offset.dy, 1);
-        if (dx !== 0 || dy !== '0') parts.push(`o=${dx},${dy}`);
-    }
-    if (Array.isArray(state.collapsedIds) && state.collapsedIds.length > 0) {
-        parts.push(`k=${state.collapsedIds.map((id) => encodePersonIdToken(id, sheetIds)).join(',')}`);
-    }
-    return parts;
-}
-
-/**
- * Serialises a view state snapshot into the compact URL hash body (without the leading `#`).
- * Only non-default values are emitted so the URL stays short.
- *
- * @param {Object} state - View state snapshot (see encodeSelectionHashParts / encodeCameraHashParts).
- * @param {Array<string>} [sheetIds=[]] - Sorted spreadsheet IDs used to abbreviate person IDs.
- * @returns {string} Hash body such as `p=Joseph_1920_152&z=0.8`, or `''` when empty.
- *
- * @example
- * encodeViewStateHash({ focusId: 'Joseph_1920_152', isSidebarVisible: true, zoom: 0.8, anchorId: 'Joseph_1920_152', offset: { dx: 0, dy: 0 } });
- * // => 'p=Joseph_1920_152&z=0.8'
+ * encodeViewStateHash({ showMap: true });
+ * // => '2'
  *
  * @example
  * encodeViewStateHash({});
  * // => ''
  */
-function encodeViewStateHash(state, sheetIds = []) {
+function encodeViewStateHash(state, treeOrSheetIds = null) {
     if (!state) return '';
-    return [...encodeSelectionHashParts(state, sheetIds), ...encodeCameraHashParts(state, sheetIds)].join('&');
+    const isTree = Boolean(treeOrSheetIds && !Array.isArray(treeOrSheetIds));
+    const tree = isTree ? treeOrSheetIds : null;
+    const sheetIds = isTree ? collectViewStateSheetIds(tree) : (treeOrSheetIds || []);
+    const packet = encodeBitPacket(state, tree, sheetIds);
+    const filterSuffix = encodeFilterSuffix(state.activeFilter);
+    return filterSuffix ? `${packet}.${filterSuffix}` : packet;
 }
 
 /**
- * Parses the `f=<type>:<value>` filter entry of a view state hash.
+ * Parses the legacy `f=<type>:<value>` filter entry (and custom `x<type>:<value>` suffixes).
  *
- * @param {string} value - Raw (still encoded) filter token.
+ * @param {string} value - Raw (still encoded) `<type>:<value>` token.
  * @returns {{filterType: string, value: string}|null} Filter descriptor, or null when malformed.
  *
  * @example
@@ -49814,12 +50492,11 @@ function parseViewStateFilterToken(value) {
 }
 
 /**
- * Applies a single `key=value` hash entry onto a view state object being parsed. Person IDs keep
- * their `~N` sheet abbreviations here; they are expanded when resolved against the loaded tree.
- * Unknown keys and malformed numbers are ignored so hand-edited URLs degrade gracefully.
+ * Applies a single legacy `key=value` hash entry onto a view state object being parsed so
+ * previously shared `#p=Anto_1955_166&z=0.8&o=164,-2.6` links continue to restore cleanly.
  *
  * @param {Object} state - Mutable view state accumulator.
- * @param {string} key - Hash key (`p`, `s`, `f`, `v`, `z`, `a`, `o`, or `k`).
+ * @param {string} key - Legacy hash key (`p`, `s`, `f`, `v`, `z`, `a`, `o`, or `k`).
  * @param {string} value - Raw (still encoded) value.
  * @returns {Object} The same state object for chaining.
  *
@@ -49832,8 +50509,8 @@ function parseViewStateFilterToken(value) {
  * // => {}
  */
 function applyViewStateHashEntry(state, key, value) {
-    if (key === 'p') state.focusId = decodeViewStateToken(value);
-    else if (key === 'a') state.anchorId = decodeViewStateToken(value);
+    if (key === 'p' && value) state.focusId = decodeViewStateToken(value);
+    else if (key === 'a' && value) state.anchorId = decodeViewStateToken(value);
     else if (key === 's') state.isSidebarVisible = value !== '0';
     else if (key === 'v') state.showMap = value === 'map';
     else if (key === 'f') {
@@ -49846,33 +50523,61 @@ function applyViewStateHashEntry(state, key, value) {
         const [dx, dy] = value.split(',').map((token) => parseFloat(token));
         if (Number.isFinite(dx) && Number.isFinite(dy)) state.offset = { dx, dy };
     } else if (key === 'k') {
-        state.collapsedIds = value.split(',').filter(Boolean).map(decodeViewStateToken);
+        const ids = value.split(',').filter(Boolean).map(decodeViewStateToken);
+        if (ids.length > 0) state.collapsedIds = ids;
     }
     return state;
 }
 
 /**
- * Parses a URL hash (with or without the leading `#`) back into a view state snapshot.
+ * Parses a legacy `key=value&...` view-state hash body.
  *
- * @param {string} hash - Hash fragment such as `#p=Joseph_1920_152&z=0.8&o=-320,12.5`.
- * @returns {Object} Partial view state; empty object when the hash carries no view state.
- *
- * @example
- * parseViewStateHash('#p=Joseph_1920_152&s=0&z=0.8&o=-320,12.5');
- * // => { focusId: 'Joseph_1920_152', isSidebarVisible: false, zoom: 0.8, offset: { dx: -320, dy: 12.5 } }
+ * @param {string} body - Hash body without `#`.
+ * @returns {Object} Parsed partial view state.
  *
  * @example
- * parseViewStateHash('');
+ * parseLegacyViewStateHash('p=Joseph_1920_152&s=0&z=0.8');
+ * // => { focusId: 'Joseph_1920_152', isSidebarVisible: false, zoom: 0.8 }
+ *
+ * @example
+ * parseLegacyViewStateHash('z=abc&foo=bar');
  * // => {}
  */
-function parseViewStateHash(hash) {
-    const body = String(hash || '').replace(/^#/, '');
+function parseLegacyViewStateHash(body) {
     const state = {};
-    if (!body) return state;
     body.split('&').forEach((pair) => {
         const eq = pair.indexOf('=');
         if (eq > 0) applyViewStateHashEntry(state, pair.slice(0, eq), pair.slice(eq + 1));
     });
+    return state;
+}
+
+/**
+ * Parses a URL hash (with or without `#`) into a view state snapshot, supporting both the
+ * ultra-short bit-packed Base64url format and legacy `p=...&z=...` links.
+ *
+ * @param {string} hash - Hash fragment such as `#e4K10p890`, `#2.pKochi`, or `#p=Anto_1955_166&z=0.8`.
+ * @returns {Object} Partial view state; empty object when the hash carries no valid view state.
+ *
+ * @example
+ * parseViewStateHash('#2.pKochi');
+ * // => { showMap: true, activeFilter: { filterType: 'place', value: 'Kochi' } }
+ *
+ * @example
+ * parseViewStateHash('#p=Joseph_1920_152&s=0&z=0.8');
+ * // => { focusId: 'Joseph_1920_152', isSidebarVisible: false, zoom: 0.8 }
+ */
+function parseViewStateHash(hash) {
+    const body = String(hash || '').replace(/^#/, '').trim();
+    if (!body) return {};
+    const dot = body.indexOf('.');
+    const head = dot >= 0 ? body.slice(0, dot) : body;
+    if (head.includes('=')) return parseLegacyViewStateHash(body);
+    const state = head ? decodeBitPacket(head, {}) : {};
+    if (dot >= 0) {
+        const filter = decodeFilterSuffix(body.slice(dot + 1));
+        if (filter) state.activeFilter = filter;
+    }
     return state;
 }
 
@@ -50110,27 +50815,32 @@ function chooseViewStateAnchor({ treeElement, tree, focusId, camera, viewport })
 
 /**
  * Splits a person ID (`<Name>_<YOB|unk>_<row>` or `ghost_<Name>_<sheet>_<n>`) into the parts used
- * by the fallback matchers: the stem without the trailing row, the stem without row and birth
- * year (or sheet), and the numeric row.
+ * by the fallback matchers and 26-bit coder, pre-collapsing any embedded 35-60 char spreadsheet ID
+ * (even one containing underscores, such as `DEMO_SHEET_ID`) so `nameStem` is never corrupted.
  *
- * @param {string} personId - Person ID from a shared URL.
- * @returns {{stem: string, nameStem: string, row: number|null}|null} Reference parts, or null when too short.
+ * @param {string} personId - Person ID from a shared URL or loaded tree.
+ * @returns {{stem: string, nameStem: string, midToken: string, row: number|null}|null}
  *
  * @example
  * parseViewStatePersonRef('Joseph_1920_152');
- * // => { stem: 'Joseph_1920', nameStem: 'Joseph', row: 152 }
+ * // => { stem: 'Joseph_1920', nameStem: 'Joseph', midToken: '1920', row: 152 }
  *
  * @example
  * parseViewStatePersonRef('ghost_George_Daughter_~1_642');
- * // => { stem: 'ghost_George_Daughter_~1', nameStem: 'ghost_George_Daughter', row: 642 }
+ * // => { stem: 'ghost_George_Daughter_~1', nameStem: 'ghost_George_Daughter', midToken: '~1', row: 642 }
  */
 function parseViewStatePersonRef(personId) {
-    const tokens = String(personId).split('_');
+    const normalized = String(personId || '').replace(
+        /_(?:1[A-Za-z0-9-][A-Za-z0-9_-]{32,44}|[A-Za-z0-9-]{25,60})(?=_\d+$)/,
+        '_~0'
+    );
+    const tokens = normalized.split('_');
     if (tokens.length < 3) return null;
     const row = parseInt(tokens[tokens.length - 1], 10);
     return {
         stem: tokens.slice(0, -1).join('_'),
         nameStem: tokens.slice(0, -2).join('_'),
+        midToken: tokens[tokens.length - 2],
         row: Number.isFinite(row) ? row : null
     };
 }
@@ -50173,29 +50883,131 @@ function pickNearestRowCandidate(people, stem, depth, row) {
 }
 
 /**
- * Resolves a person ID from a shared URL against the loaded tree, surviving spreadsheet edits:
- * exact match first, then the same name and birth year with the nearest row (rows inserted above
- * shift the trailing row number), then the same name with the nearest row (corrected birth year
- * or a ghost whose source sheet moved).
+ * Precomputes the 26-bit fingerprint descriptors for all valid people in `tree`.
  *
  * @param {FamilyTree} tree - Loaded family tree.
- * @param {string|null|undefined} personId - Person ID from the URL hash (may use `~N` sheet abbreviations).
+ * @param {Array<string>} sheetIds - Sorted spreadsheet IDs.
+ * @returns {Array<{id: string, actualRow: number|null, code: number, isGhost: number, nameHash: number, yobTag: number, row: number}>}
+ *
+ * @example
+ * buildCompactCandidateList({ all: [{ id: 'Mary_1924_7' }] }, []).length;
+ * // => 1
+ *
+ * @example
+ * buildCompactCandidateList({ all: [] }, []);
+ * // => []
+ */
+function buildCompactCandidateList(tree, sheetIds) {
+    const out = [];
+    for (const person of (tree && tree.all) || []) {
+        if (!person || typeof person.id !== 'string') continue;
+        const code = encodePersonCode26(person.id, sheetIds);
+        if (code === null) continue;
+        const ref = parseViewStatePersonRef(compactViewStateSheetIds(person.id, sheetIds));
+        out.push({ id: person.id, actualRow: ref ? ref.row : null, ...decodePersonCode26(code) });
+    }
+    return out;
+}
+
+/**
+ * Selects the candidate passing `predicate` whose spreadsheet row is nearest to `targetRow`
+ * within `maxDistance` rows.
+ *
+ * @param {Array<Object>} candidates - Precomputed candidate descriptors from `buildCompactCandidateList`.
+ * @param {number} targetRow - 10-bit row from the target person fingerprint (`1023` when unknown).
+ * @param {Function} predicate - Candidate filter function.
+ * @param {number} [maxDistance=Infinity] - Maximum allowed row delta.
+ * @returns {string|null} Best matching `person.id`, or `null`.
+ *
+ * @example
+ * pickNearestCompactCandidate([{ id: 'A', actualRow: 10 }, { id: 'B', actualRow: 60 }], 58, () => true);
+ * // => 'B'
+ *
+ * @example
+ * pickNearestCompactCandidate([{ id: 'A', actualRow: 200 }], 10, () => true, 64);
+ * // => null
+ */
+function pickNearestCompactCandidate(candidates, targetRow, predicate, maxDistance = Infinity) {
+    let best = null;
+    let bestDistance = Infinity;
+    for (const cand of candidates) {
+        if (!predicate(cand)) continue;
+        const candRow = cand.actualRow !== null ? cand.actualRow : cand.row;
+        const distance = targetRow < 1023 && candRow !== null
+            ? Math.abs(candRow - targetRow)
+            : Number.MAX_SAFE_INTEGER;
+        if (distance <= maxDistance && distance < bestDistance) {
+            best = cand.id;
+            bestDistance = distance;
+        }
+    }
+    return best;
+}
+
+/**
+ * Resolves a `@xxxxx` 26-bit compact person reference against `tree` in 3 tiers:
+ * (1) exact 26-bit code match, (2) same `(isGhost, nameHash, yobTag)` + nearest row,
+ * (3) same `(isGhost, nameHash)` + nearest row within 64 rows (for corrected birth years).
+ *
+ * @param {FamilyTree} tree - Loaded family tree.
+ * @param {string} compactRef - `@xxxxx` compact person reference.
+ * @param {Array<string>} sheetIds - Sorted spreadsheet IDs.
+ * @returns {string|null} Matching `person.id` in `tree`, or `null`.
+ *
+ * @example
+ * resolveCompactPersonRef(tree, formatCompactPersonRef(encodePersonCode26('Mary_1924_7')), []);
+ * // => 'Mary_1924_7'
+ *
+ * @example
+ * resolveCompactPersonRef(tree, formatCompactPersonRef(encodePersonCode26('Nobody_unk_0')), []);
+ * // => null
+ */
+function resolveCompactPersonRef(tree, compactRef, sheetIds) {
+    const code = encodePersonCode26(compactRef, sheetIds);
+    if (code === null) return null;
+    const target = decodePersonCode26(code);
+    const candidates = buildCompactCandidateList(tree, sheetIds);
+    return pickNearestCompactCandidate(candidates, target.row, (c) => c.code === target.code)
+        || pickNearestCompactCandidate(
+            candidates,
+            target.row,
+            (c) => c.isGhost === target.isGhost && c.nameHash === target.nameHash && c.yobTag === target.yobTag
+        )
+        || pickNearestCompactCandidate(
+            candidates,
+            target.row,
+            (c) => c.isGhost === target.isGhost && c.nameHash === target.nameHash,
+            target.row < 1023 ? 64 : Infinity
+        );
+}
+
+/**
+ * Resolves a person reference from a shared URL (either a compact `@xxxxx` 26-bit fingerprint or
+ * a legacy `<Name>_<YOB>_<row>` string) against the loaded tree, surviving inserted rows,
+ * namesakes, corrected birth years, and shifted ghost counters.
+ *
+ * @param {FamilyTree} tree - Loaded family tree.
+ * @param {string|null|undefined} personId - Compact `@xxxxx` token or legacy person ID.
  * @returns {string|null} A valid person ID in `tree`, or null when nobody matches.
  *
  * @example
  * // A row was inserted above Joseph, so the tree now holds Joseph_1920_153
- * resolveViewStatePersonId(tree, 'Joseph_1920_152');
+ * resolveViewStatePersonId(tree, parseViewStateHash(encodeViewStateHash({ focusId: 'Joseph_1920_152' })).focusId);
  * // => 'Joseph_1920_153'
  *
  * @example
- * // Joseph's birth year was corrected from 1920 to 1921 in the sheet
+ * // Legacy person IDs continue to resolve with full edit tolerance
  * resolveViewStatePersonId(tree, 'Joseph_1920_152');
- * // => 'Joseph_1921_152'
+ * // => 'Joseph_1920_153'
  */
 function resolveViewStatePersonId(tree, personId) {
     if (!tree || !personId) return null;
+    const raw = String(personId);
     const sheetIds = collectViewStateSheetIds(tree);
-    const wanted = compactViewStateSheetIds(personId, sheetIds);
+    if (raw.startsWith(VIEW_STATE_PERSON_REF_PREFIX)) {
+        return resolveCompactPersonRef(tree, raw, sheetIds);
+    }
+    const wanted = compactViewStateSheetIds(raw, sheetIds);
     const exactId = expandViewStateSheetIds(wanted, sheetIds);
     if (tree.get(exactId)) return exactId;
     const ref = parseViewStatePersonRef(wanted);
@@ -50346,12 +51158,13 @@ function applyRestoredFocus(state, actions) {
 }
 
 /**
- * Resolves the collapsed branch IDs of a shared view state against the loaded tree with the same
- * row-shift tolerant matching used for the focused person, dropping duplicates and unknown people.
+ * Resolves the collapsed branch references of a shared view state against the loaded tree,
+ * expanding `^@xxxxx` sibling bus-bar parent-group entries into all foldable children of that
+ * parent and resolving individual entries with row-shift tolerance.
  *
  * @param {Object} state - Parsed view state (uses `collapsedIds`).
  * @param {FamilyTree} tree - Loaded tree.
- * @returns {Array<string>} Valid collapsed branch IDs.
+ * @returns {Array<string>} Valid deduplicated collapsed branch IDs.
  *
  * @example
  * resolveRestoredCollapsedIds({ collapsedIds: ['Antu_1931_12', 'Nobody_unk_0'] }, tree);
@@ -50362,8 +51175,19 @@ function applyRestoredFocus(state, actions) {
  * // => []
  */
 function resolveRestoredCollapsedIds(state, tree) {
-    if (!Array.isArray(state.collapsedIds)) return [];
-    const resolved = state.collapsedIds.map((id) => resolveViewStatePersonId(tree, id)).filter(Boolean);
+    if (!state || !Array.isArray(state.collapsedIds) || !tree) return [];
+    const resolved = [];
+    for (const entry of state.collapsedIds) {
+        const raw = String(entry || '');
+        if (raw.startsWith(VIEW_STATE_GROUP_REF_PREFIX)) {
+            const parentId = resolveViewStatePersonId(tree, raw.slice(1));
+            const parent = parentId ? tree.get(parentId) : null;
+            getFoldableChildIdsOfParent(tree, parent).forEach((cid) => resolved.push(cid));
+        } else {
+            const personId = resolveViewStatePersonId(tree, raw);
+            if (personId) resolved.push(personId);
+        }
+    }
     return Array.from(new Set(resolved));
 }
 
@@ -50594,18 +51418,19 @@ function useUrlViewStateWriter(params) {
 }
 
 /**
- * Captures the live view (anchor card, offset, zoom, selection) and writes it to the URL hash.
+ * Captures the live view (anchor card, offset, zoom, selection, sibling-bar folds) and writes the
+ * ultra-short bit-packed packet to the URL hash.
  *
  * @param {Object} p - Latest hook parameters (see useUrlViewStateSync).
  * @returns {boolean} True when the address bar was updated.
  *
  * @example
  * captureAndWriteViewState(latest.current);
- * // address bar => …#p=Joseph_1920_152&z=0.8
+ * // address bar => …#e4K10p890
  *
  * @example
  * captureAndWriteViewState({ ...latest.current, showMap: true });
- * // address bar => …#v=map
+ * // address bar => …#2
  */
 function captureAndWriteViewState(p) {
     const viewport = measureViewStateViewport({
@@ -50618,7 +51443,7 @@ function captureAndWriteViewState(p) {
         focusId: p.focusId, isSidebarVisible: p.isSidebarVisible, activeFilter: p.activeFilter, showMap: p.showMap,
         camera: p.camera, ppy: p.ppy, viewport, anchor, collapsedNodes: p.collapsedNodes
     });
-    return writeViewStateHash(encodeViewStateHash(state, collectViewStateSheetIds(p.tree)));
+    return writeViewStateHash(encodeViewStateHash(state, p.tree));
 }
 
 /**

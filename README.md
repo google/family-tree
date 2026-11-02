@@ -44,7 +44,7 @@ The app reconstructs multi-generational family trees directly from **Google Shee
 
 ---
 
-## 2. Quick Start & URL Parameters (`?id=...`)
+## 2. Quick Start & Shareable URLs (`?<sheetId>#<hash>`)
 
 ### Running Locally
 
@@ -65,59 +65,35 @@ The app does **not** hard-code a spreadsheet. On first visit (and whenever you c
 | Your **most-used** sheet | Whenever this browser has opened at least one sheet before | `https://docs.google.com/spreadsheets/d/<your family's id>/edit` |
 | The public **demo** sheet (`Ancestry Browser: Demo`) | Fresh browser, empty clipboard | `https://docs.google.com/spreadsheets/d/1BQvyFoA_-u4MG-r1SRDel93F1TwEaN3I6v6p-kOH8z0/edit?usp=drive_link` |
 
-Whenever the prefilled or typed link/ID matches a spreadsheet whose title is known (from your cookie history, the current session's `Content-Disposition` header, or the built-in `Ancestry Browser: Demo` title), a **sheet name chip** appears directly above the input box so you can verify which family register is selected before pressing **Open**. Every sheet you successfully open is remembered in a first-party **cookie** (`ft_sheet_history`, mirrored into `localStorage` for `file://` standalone exports) together with its spreadsheet **title**. The caret at the right of the textbox opens a dropdown listing them **most-used first** as `<Title> — <spreadsheet ID>` (the rest of the URL is deliberately trimmed), with a use counter and a `×` to forget an entry. Clicking a row opens that sheet immediately. The sheet must be shared as *Anyone with the link can view*; a failed import reopens the home screen with the error message.
+Whenever the prefilled or typed link/ID matches a spreadsheet whose title is known (from your cookie history, the current session's `Content-Disposition` header, or the built-in `Ancestry Browser: Demo` title), a **sheet name chip** appears directly above the input box so you can verify which family register is selected before pressing **Open**. Every sheet you successfully open is remembered in a first-party **cookie** (`ft_sheet_history`, mirrored into `localStorage` for `file://` standalone exports) together with its spreadsheet **title**. Below the textbox, previously opened sheets are listed **most-used first** as `<Title> — <spreadsheet ID>` with a use counter and a `×` to forget an entry. Clicking a row opens that sheet immediately. The sheet must be shared as *Anyone with the link can view*; a failed import reopens the home screen with the error message.
 
 > **Privacy (GDPR):** the home screen footer states exactly what is stored (the sheet links you open, your deduction settings, and your colour theme), where (cookies / local storage on *this device only* — nothing is sent to any server other than Google Sheets), and offers a one-click **clear stored data** link (also accessible from the bottom-right Settings radial menu) that deletes all stored cookies and their mirrors.
 
 ### Loading Any Google Sheet via URL Query Parameters
 
-You can also skip the home screen entirely: when the page URL names a sheet via `?id=`, `?sheet=`, or `?url=` the app loads it on startup (on both GitHub Pages and localhost). After **any** successful load the app writes `?id=<spreadsheet ID>` into the address bar itself (via `history.replaceState`, no reload), so a refresh reopens the same sheet and the URL is ready to share.
+You can skip the home screen by naming a spreadsheet in the query string. After **any** successful load the app rewrites the address bar (via `history.replaceState`, no reload) to the shortest form — `?d` for the built-in demo sheet or bare `?<spreadsheetId>` (without `id=`) for any other spreadsheet — while continuing to accept legacy `?id=`, `?sheet=`, and `?url=` links.
 
 | Parameter | Format | Concrete Example |
 | :--- | :--- | :--- |
-| **`?id=`** | Google Spreadsheet ID (`35–60` chars) | `https://google.github.io/family-tree/?id=1BQvyFoA_-u4MG-r1SRDel93F1TwEaN3I6v6p-kOH8z0` |
-| **`?sheet=`** | Google Spreadsheet ID or full URL | `https://google.github.io/family-tree/?sheet=1BQvyFoA_-u4MG-r1SRDel93F1TwEaN3I6v6p-kOH8z0` |
-| **`?url=`** | Full Google Sheets URL | `http://localhost:8000/?url=https://docs.google.com/spreadsheets/d/1BQvyFoA_-u4MG-r1SRDel93F1TwEaN3I6v6p-kOH8z0/edit` |
+| **`?d`** | Built-in public demo spreadsheet | `https://google.github.io/family-tree/?d` |
+| **`?<sheetId>`** | Bare Google Spreadsheet ID (`35 to 60` chars) | `https://google.github.io/family-tree/?1SvPspyHtIV2E9UHwpZON8sUTf3FxIuqJZO-wx0WPl3k` |
+| **`?id=` / `?sheet=` / `?url=`** | Legacy named parameters (upgraded in-place on load) | `https://google.github.io/family-tree/?id=1BQvyFoA_-u4MG-r1SRDel93F1TwEaN3I6v6p-kOH8z0` |
 
-> **How it works:** When `?id=<SPREADSHEET_ID>` is present in the URL, `resolveInitialSheetUrl()` automatically expands it to `https://docs.google.com/spreadsheets/d/<SPREADSHEET_ID>/edit`, bypasses stale default cache entries if a new sheet ID is supplied, fetches the main genealogical tab plus any branch sheets referenced in the `Links` tab, and renders the unified tree. Without such a parameter `hasExplicitSheetQueryParam()` is false and the home screen is shown instead.
+### Shareable View URLs (Bit-Packed `#hash`)
 
-### Shareable View URLs (Google-Maps-style `#hash`)
+Every action you take in the app — focusing a person, applying a filter, opening the map, zooming, panning, or folding a sibling bus-bar — is mirrored live into the address bar as a short Base64url `#hash` packet (`#<bitPacket>[.<filterSuffix>]`, typically `1 to 10` characters). Copy the URL to any other computer, phone, or browser window and you get **the same view**: the same person selected, the same zoom level, and the same people in the middle of the screen, even when the screen size differs or rows have since been inserted into the spreadsheet. Legacy `#p=...&z=...&o=...` links remain supported on read.
 
-Every action you take in the app — focusing a person, applying a filter, opening the map, zooming, panning, or collapsing a branch — is mirrored live into the address bar as a compact `#hash` (via `history.replaceState`, so the browser Back button and the in-app history arrows keep working as before). Copy the URL to any other computer, phone, or browser window and you get **the same view**: the same person selected, the same zoom level, and the same people in the middle of the screen, even when the screen size is different or rows have since been added to the spreadsheet.
+| View State | Hash Format | Concrete Example |
+| :--- | :--- | :--- |
+| **Focused person centred at reading zoom** | 6-char Base64url packet (6-bit header + 26-bit person fingerprint + 1-bit `z=0.8`) | `https://google.github.io/family-tree/?d#eKT4c8` |
+| **Focused person with panned camera offset** | 9-char packet adding ZigZag-packed `<dx px, dy*10 years>` | `https://google.github.io/family-tree/?1SvPspyHtIV2E9UHwpZON8sUTf3FxIuqJZO-wx0WPl3k#iCzOffI0p` |
+| **World map view** | Single Base64url flag (`#2`) | `https://google.github.io/family-tree/?d#2` |
+| **Filter or directory tab** | `.` suffix (`p<place>`, `j<job>`, `f<family>`, `s<search>`, `dp`/`dj`/`df`) | `https://google.github.io/family-tree/?d#.pKochi`, `https://google.github.io/family-tree/?d#2.pChalissery` |
+| **Folded sibling bus-bar** | Single 27-bit parent-group entry expanding to all foldable children of that parent | `https://google.github.io/family-tree/?d#94K10G1uA20` |
 
-```text
-https://google.github.io/family-tree/?id=1ZDpcz2ACmG63dUjHLfoHZSW7-dG51FbzaJVcqHYdkEI#p=Joseph_1920_152&z=0.8
-                                       └────────── which spreadsheet ──────────┘ └─ what you are looking at ─┘
-```
+> **Why the link keeps working after the spreadsheet changes:** the camera is stored relative to an anchor person card in unscaled tree pixels horizontally and calendar **years** vertically (`ppy` stretches with window height), never as absolute canvas coordinates. Each person reference is a 26-bit fingerprint `(isGhost, nameHash11, yobTag4, row10)` resolved in three tiers: exact 26-bit match first, then same name hash and birth-year tag at the nearest spreadsheet row, then same name hash within 64 rows (covering corrected birth years).
 
-| Key | Meaning | Written when… | Concrete Example |
-| :--- | :--- | :--- | :--- |
-| **`p=`** | Focused person (card ID `<Name>_<YOB>_<row>`) | A person card or search result is selected | `#p=Joseph_1920_152` |
-| **`s=0`** | Person details sidebar is closed | A person is focused but you dismissed the sidebar (e.g. by clicking the canvas) | `#p=Joseph_1920_152&s=0` |
-| **`f=`** | Active filter `<type>:<value>` (`place`, `job`, `family`, `search`, `directory`) | A location/career/family chip, search, or directory tab is active | `#f=place:Kochi`, `#f=job:Teacher`, `#f=search:Mary+Joseph` |
-| **`v=map`** | Family Locations Map is shown instead of the tree | The Map button (`📍`) is toggled on | `#v=map`, `#v=map&f=place:Chalissery` |
-| **`z=`** | Camera zoom level (2 decimals) | Always (after loading) | `#z=0.8` |
-| **`a=`** | Anchor card the camera is tied to (omitted when it is the focused person) | Nobody is focused, or you panned away from the focused person | `#z=0.12&a=Antu_1931_12` |
-| **`o=`** | Where the middle of your screen is, relative to the anchor card: `<tree px right>,<years down>` (omitted when the card is centred) | You panned so the anchor card is off-centre | `#p=Joseph_1920_152&z=0.8&o=-320,12.5` → the screen centre is `320px` left of and `12.5` years below Joseph's card |
-| **`k=`** | Collapsed branch IDs (comma separated) | One or more subtrees are collapsed with the `−` card button | `#k=Antu_1931_12,Elsy_1935_13` |
-
-Examples you can paste directly:
-
-| Goal | URL |
-| :--- | :--- |
-| Open Joseph's profile with the sidebar at reading zoom | `https://google.github.io/family-tree/#p=Joseph_1920_152&z=0.8` |
-| Same person, but sidebar hidden so the whole canvas is visible | `https://google.github.io/family-tree/#p=Joseph_1920_152&s=0&z=0.8` |
-| Joseph focused, but looking at his grandchildren two rows below him | `https://google.github.io/family-tree/#p=Joseph_1920_152&z=0.8&o=180,55` |
-| Everyone who lived in Kochi, listed in the sidebar | `https://google.github.io/family-tree/#f=place:Kochi&z=0.45` |
-| World map of the family, pre-filtered to one village | `https://google.github.io/family-tree/#v=map&f=place:Chalissery` |
-| Bird's-eye view around Antu's branch with two branches folded away | `https://google.github.io/family-tree/#z=0.12&a=Antu_1931_12&k=Antu_1931_12,Elsy_1935_13` |
-| Another family's spreadsheet, opened straight on one person | `https://google.github.io/family-tree/?id=1BxiMVs0XRA5nFMdKvBdBZjgmUUqptlbs74OgvE2upms#p=Mary_1924_7&z=0.8` |
-
-> **Why the link keeps working after the spreadsheet changes:** the view is never stored as absolute canvas coordinates (those move whenever an unrelated row re-flows the tree) but as *"this person's card, offset by so many pixels and years"*, so the same people stay in the middle of the screen even if new relatives were inserted anywhere in the sheet. Person IDs end with the spreadsheet row, which shifts when rows are inserted above; the app therefore matches the exact ID first, then the same name and birth year with the nearest row (so a namesake 50 rows away never wins), then the same name with the nearest row (in case the birth year was corrected). Horizontal offsets are in tree pixels (the layout is identical for the same zoom on every screen) and vertical offsets are in **years**, because pixels-per-year stretches with the window height. Long spreadsheet IDs embedded in auto-generated ("ghost") profile IDs are abbreviated to `~0`, `~1`, … so the URL stays short.
-
-> **What does *not* survive:** renaming the person in the sheet (the ID starts with the name), or deleting them. In both cases the app still opens the requested spreadsheet, zoom level, filter, or map — only the focus/anchor falls back to the default view.
-
-> **Tip:** The hash is only written after the dataset has loaded and the view from the URL has been restored, and never while you are dragging — so the address bar always holds a stable, copy-ready URL.
+> **Tip:** The hash is written only after the dataset has loaded and the initial URL view has restored, and never while dragging — so the address bar always holds a stable, copy-ready URL.
 
 ---
 
@@ -129,7 +105,7 @@ Every button in the application displays a speech-balloon help popover with a po
 
 | Button / Icon | Title & Shortcut | Detailed Behavior | Usage Examples |
 | :--- | :--- | :--- | :--- |
-| **Family Tree Emblem** (top-left corner) | **Family Tree Home – choose a Google Sheet** | Returns to the **home screen** where you paste any Google Sheets link or spreadsheet ID. Every sheet you open is remembered in a browser cookie and offered in a dropdown, most-used first, as `<Title> — <ID>`. Hidden inside standalone `.html` exports, which carry their own embedded dataset. | **1. Switch Family:** Click the emblem, pick `Ancestry Browser: Demo — 1BQvy…` from the dropdown or paste another link, then press **Enter** or **Open**.<br>**2. Shareable Link:** After a sheet loads the address bar carries `?id=<sheetId>`; share it and the recipient skips the home screen entirely. |
+| **Family Tree Emblem** (top-left corner) | **Family Tree Home – choose a Google Sheet** | Returns to the **home screen** where you paste any Google Sheets link or spreadsheet ID. Every sheet you open is remembered in a browser cookie and offered in a list, most-used first, as `<Title> — <ID>`. Hidden inside standalone `.html` exports, which carry their own embedded dataset. | **1. Switch Family:** Click the emblem, pick `Ancestry Browser: Demo — 1BQvy…` from the list or paste another link, then press **Enter** or **Open**.<br>**2. Shareable Link:** After a sheet loads the address bar carries `?<sheetId>` (or `?d` for the demo); share it and the recipient skips the home screen entirely. |
 | **Download Icon** (`⬇`) | **Download Standalone Interactive App (`.html`)** | Packages the entire interactive React/SVG application, Material 3 theme engine, and the currently focused lineage dataset into a single self-contained `.html` file that runs 100% offline in any browser. | **1. Full Family Archive:** Focus on the root ancestor (`Kochuvareed`) and click `⬇` to download `Kochuvareed_Interactive_App_2026-09-27.html` containing all 240+ profiles.<br>**2. Scoped Sub-Branch App:** Select a specific grandparent first to export an offline interactive tree scoped only to their ancestors and descendants. |
 | **Printer Icon** (`🖨`) | **Print Tree / Export A4 Landscape SVGs (10pt names)** | Generates a multi-page A4 landscape printable document and **Family Atlas** with vector SVG cards calibrated so every person's name renders at a readable **10pt physical font size**. | **1. Multi-Page Wall Poster:** Click `🖨` to open the A4 print preview, save as **PDF**, and tape adjacent tiled pages together using the alignment guides.<br>**2. Branch Atlas Chapters:** Deep sub-branches are automatically organized into numbered **Atlas Chapters** with cross-page reference badges. |
 | **Map Pin Icon** (`📍`) | **View Family Locations Map** / **Switch to Family Tree Diagram** | Toggles the main viewport between the chronological 2D family tree diagram and an interactive **Leaflet World Map** plotting ancestral towns, parishes, and diaspora cities with member count pins. | **1. Explore Regional Clusters:** Click `📍` to view family concentrations across **Kerala** (`Thrissur`, `Palakkad`, `Kottayam`), **Karnataka**, and global diaspora hubs.<br>**2. Pin-to-Tree Spotlight:** Click a town pin on the map (e.g., `Chalissery`), then click `📍` again to see those exact residents highlighted on the tree canvas. |
