@@ -497,11 +497,13 @@ function computeTreeSpanHeight(treeStats, targetPpy) {
  * });
  */
 function calculateViewportCameraBounds({
-    treeElement, container, isSidebarOpen, sidebarWidth, forceFullWindow, treeStats, targetPpy, z
+    treeElement, container, isSidebarOpen, sidebarWidth, forceFullWindow, treeStats, targetPpy, z, bottomSheetHeight = 0
 }) {
     if (!treeElement) return { minX: -5000, maxX: 5000, minY: -5000, maxY: 5000, minZ: 0.05, centeredX: 0 };
 
-    const { contW, contH } = resolveViewportDimensions({ container, isSidebarOpen, sidebarWidth, forceFullWindow });
+    const { contW, contH } = resolveViewportDimensions({
+        container, isSidebarOpen, sidebarWidth, forceFullWindow, bottomSheetHeight
+    });
     const treeW = getTreeElementWidth(treeElement);
     const treeH = computeTreeSpanHeight(treeStats, targetPpy);
 
@@ -514,6 +516,188 @@ const COMPACT_VIEWPORT_MAX_WIDTH = 639;
 const TIMELINE_GUTTER_WIDTH = 48;
 /** Narrow year-labels-only gutter on phones, in px (the era bands are dropped). */
 const TIMELINE_GUTTER_COMPACT_WIDTH = 32;
+/** Compact peek height of the mobile bottom sheet (`96px`), leaving ~89% of the portrait canvas open. */
+const MOBILE_SHEET_PEEK_PX = 96;
+/** Viewport-height fraction for the half-expanded mobile bottom sheet (`45vh`). */
+const MOBILE_SHEET_HALF_VH = 0.45;
+/** Viewport-height fraction for the fully-expanded mobile bottom sheet (`85vh`). */
+const MOBILE_SHEET_FULL_VH = 0.85;
+/** Pixel height threshold below which dragging down dismisses the mobile bottom sheet (`56px`). */
+const MOBILE_SHEET_DISMISS_PX = 56;
+/** Top floating toolbar clearance (`56px`) reserved when centering cards on compact viewports. */
+const MOBILE_TOP_CHROME_INSET_PX = 56;
+
+/**
+ * Resolves the pixel heights of the 3 mobile bottom-sheet snap stops (`peek`, `half`, `full`)
+ * for a given viewport height.
+ *
+ * @param {number} [windowHeight=window.innerHeight] - Viewport height in CSS pixels.
+ * @returns {{ peek: number, half: number, full: number }}
+ *
+ * @example
+ * resolveSheetSnapHeights(844);
+ * // => { peek: 96, half: 380, full: 717 }
+ *
+ * @example
+ * resolveSheetSnapHeights(667);
+ * // => { peek: 96, half: 300, full: 567 }
+ */
+function resolveSheetSnapHeights(windowHeight = (typeof window !== 'undefined' ? window.innerHeight : 844)) {
+    const winH = Number.isFinite(windowHeight) && windowHeight > 0 ? windowHeight : 844;
+    return {
+        peek: MOBILE_SHEET_PEEK_PX,
+        half: Math.max(180, Math.round(winH * MOBILE_SHEET_HALF_VH)),
+        full: Math.max(280, Math.round(winH * MOBILE_SHEET_FULL_VH))
+    };
+}
+
+/**
+ * Maps a named mobile bottom-sheet snap stop (`'peek' | 'half' | 'full'`) to its CSS height string,
+ * falling back to `'55vh'` when unset.
+ *
+ * @param {string|null|undefined} sheetSnap - Active snap stop identifier.
+ * @returns {string} CSS height token (`'96px'`, `'45vh'`, `'85vh'`, or `'55vh'`).
+ *
+ * @example
+ * resolveSheetSnapCssHeight('peek'); // => '96px'
+ * resolveSheetSnapCssHeight('half'); // => '45vh'
+ *
+ * @example
+ * resolveSheetSnapCssHeight('full'); // => '85vh'
+ * resolveSheetSnapCssHeight(null);   // => '55vh'
+ */
+function resolveSheetSnapCssHeight(sheetSnap) {
+    if (sheetSnap === 'peek') return `${MOBILE_SHEET_PEEK_PX}px`;
+    if (sheetSnap === 'half') return '45vh';
+    if (sheetSnap === 'full') return '85vh';
+    return '55vh';
+}
+
+/**
+ * Cycles a mobile bottom-sheet snap stop on handle tap (`'peek' -> 'half' -> 'full' -> 'peek'`).
+ *
+ * @param {string} [currentSnap='peek'] - Current snap stop.
+ * @returns {'peek'|'half'|'full'} Next snap stop in cycle.
+ *
+ * @example
+ * cycleSheetSnapStop('peek'); // => 'half'
+ *
+ * @example
+ * cycleSheetSnapStop('full'); // => 'peek'
+ */
+function cycleSheetSnapStop(currentSnap = 'peek') {
+    if (currentSnap === 'peek') return 'half';
+    if (currentSnap === 'half') return 'full';
+    return 'peek';
+}
+
+/**
+ * Computes the effective mobile bottom-sheet snap stop for the currently open panel:
+ * returns `null` on desktop or when closed, preserves `'peek'` when viewing a focused person,
+ * and promotes `'peek'` to `'half'` (`45vh`) for list/chat/log drawers that need vertical space.
+ *
+ * @param {Object} [options={}]
+ * @param {boolean} [options.isCompactViewport=false] - Whether compact phone layout is active.
+ * @param {boolean} [options.isAnySidebarOpen=false] - Whether any bottom panel is open.
+ * @param {string} [options.sheetSnap='peek'] - User-selected snap stop.
+ * @param {boolean} [options.hasFocusPerson=false] - Whether a person profile is currently focused.
+ * @param {boolean} [options.showLogs=false] - Whether system logs view is open.
+ * @param {boolean} [options.showAI=false] - Whether AI Assistant view is open.
+ * @param {Object|null} [options.activeFilter=null] - Active search/category filter descriptor.
+ * @returns {'peek'|'half'|'full'|null}
+ *
+ * @example
+ * resolveEffectiveSheetSnap({ isCompactViewport: true, isAnySidebarOpen: true, sheetSnap: 'peek', hasFocusPerson: true });
+ * // => 'peek'
+ *
+ * @example
+ * resolveEffectiveSheetSnap({ isCompactViewport: true, isAnySidebarOpen: true, sheetSnap: 'peek', showAI: true });
+ * // => 'half'
+ */
+function resolveEffectiveSheetSnap({
+    isCompactViewport = false, isAnySidebarOpen = false, sheetSnap = 'peek',
+    hasFocusPerson = false, showLogs = false, showAI = false, activeFilter = null
+} = {}) {
+    if (!isCompactViewport || !isAnySidebarOpen) return null;
+    const isNonDirectoryFilter = Boolean(activeFilter && activeFilter.filterType !== 'directory');
+    const canUsePeek = Boolean(hasFocusPerson && !showLogs && !showAI && !isNonDirectoryFilter);
+    const requested = (sheetSnap === 'peek' || sheetSnap === 'half' || sheetSnap === 'full') ? sheetSnap : 'peek';
+    if (!canUsePeek && requested === 'peek') return 'half';
+    return requested;
+}
+
+/**
+ * Resolves the active or predicted pixel height of the mobile bottom sheet for synchronous camera math.
+ *
+ * @param {Object} [options={}]
+ * @param {boolean} [options.isCompactViewport=false] - Whether phone layout is active.
+ * @param {boolean} [options.isSidebarOpen=false] - Whether bottom sheet is open.
+ * @param {number|null} [options.sidebarHeight=null] - Live pixel drag height override, if any.
+ * @param {string|null} [options.sheetSnap=null] - Active snap stop (`'peek' | 'half' | 'full'`).
+ * @param {number} [options.windowHeight] - Optional viewport height override.
+ * @returns {number} Reserved bottom-sheet height in pixels (`0` on desktop or when closed).
+ *
+ * @example
+ * resolveBottomSheetPixelHeight({ isCompactViewport: true, isSidebarOpen: true, sheetSnap: 'peek', windowHeight: 844 });
+ * // => 96
+ *
+ * @example
+ * resolveBottomSheetPixelHeight({ isCompactViewport: false, isSidebarOpen: true, sheetSnap: 'peek', windowHeight: 844 });
+ * // => 0
+ */
+function resolveBottomSheetPixelHeight({
+    isCompactViewport = false, isSidebarOpen = false, sidebarHeight = null, sheetSnap = null, windowHeight
+} = {}) {
+    if (!isCompactViewport || !isSidebarOpen) return 0;
+    if (typeof sidebarHeight === 'number' && sidebarHeight > 0) return Math.round(sidebarHeight);
+    const heights = resolveSheetSnapHeights(windowHeight);
+    if (sheetSnap === 'peek' || sheetSnap === 'half' || sheetSnap === 'full') {
+        return heights[sheetSnap];
+    }
+    const winH = Number.isFinite(windowHeight) && windowHeight > 0
+        ? windowHeight
+        : (typeof window !== 'undefined' ? window.innerHeight : 844);
+    return Math.round(winH * 0.55);
+}
+
+/**
+ * Aggregates mobile bottom-sheet eligibility, effective snap stop, active pixel height,
+ * and predicted person-focus pixel height for camera centering.
+ *
+ * @param {Object} [options={}]
+ * @returns {{ canPeek: boolean, effectiveSheetSnap: 'peek'|'half'|'full'|null, bottomSheetHeight: number, focusBottomSheetHeight: number }}
+ *
+ * @example
+ * resolveMobileSheetState({ isCompactViewport: true, isAnySidebarOpen: false, sheetSnap: 'peek', windowHeight: 844 });
+ * // => { canPeek: false, effectiveSheetSnap: null, bottomSheetHeight: 0, focusBottomSheetHeight: 96 }
+ *
+ * @example
+ * resolveMobileSheetState({ isCompactViewport: true, isAnySidebarOpen: true, sheetSnap: 'half', hasFocusPerson: true, windowHeight: 844 });
+ * // => { canPeek: true, effectiveSheetSnap: 'half', bottomSheetHeight: 380, focusBottomSheetHeight: 380 }
+ */
+function resolveMobileSheetState({
+    isCompactViewport = false, isAnySidebarOpen = false, sheetSnap = 'peek',
+    sidebarHeight = null, hasFocusPerson = false, showLogs = false, showAI = false,
+    activeFilter = null, windowHeight
+} = {}) {
+    const canPeek = Boolean(
+        isCompactViewport && hasFocusPerson && !showLogs && !showAI &&
+        (!activeFilter || activeFilter.filterType === 'directory')
+    );
+    const effectiveSheetSnap = resolveEffectiveSheetSnap({
+        isCompactViewport, isAnySidebarOpen, sheetSnap, hasFocusPerson, showLogs, showAI, activeFilter
+    });
+    const bottomSheetHeight = resolveBottomSheetPixelHeight({
+        isCompactViewport, isSidebarOpen: isAnySidebarOpen, sidebarHeight, sheetSnap: effectiveSheetSnap, windowHeight
+    });
+    const personTargetSnap = sheetSnap === 'half' ? 'half' : 'peek';
+    const focusBottomSheetHeight = isCompactViewport
+        ? resolveBottomSheetPixelHeight({
+            isCompactViewport: true, isSidebarOpen: true, sidebarHeight, sheetSnap: personTargetSnap, windowHeight
+        })
+        : 0;
+    return { canPeek, effectiveSheetSnap, bottomSheetHeight, focusBottomSheetHeight };
+}
 
 /**
  * Whether a viewport width calls for the phone layout: details panel docked below the canvas,
@@ -653,29 +837,31 @@ function clampCameraCoordinates(cam, getBounds) {
  *       treeRef: { current: null }
  *   });
  */
-function useCanvasCameraBounds({ treeStats, isSidebarOpen = false, sidebarWidth = 360, containerRef, treeRef }) {
-    const getPpy = useCallback((z, forceFullWindow = false) => {
-        const contH = (forceFullWindow || !isSidebarOpen) && typeof window !== 'undefined'
-            ? window.innerHeight
-            : (containerRef.current ? containerRef.current.clientHeight : (typeof window !== 'undefined' ? window.innerHeight : 800));
-        return computeDynamicPpy(treeStats, contH, z);
-    }, [treeStats, isSidebarOpen, containerRef]);
-
-    const getBounds = useCallback((z, forceFullWindow = false) => {
-        const targetPpy = getPpy(z, forceFullWindow);
-        return calculateViewportCameraBounds({
-            treeElement: treeRef.current,
-            container: containerRef.current,
-            isSidebarOpen,
-            sidebarWidth,
-            forceFullWindow,
-            treeStats,
-            targetPpy,
-            z
+function useCanvasCameraBounds({
+    treeStats, isSidebarOpen = false, sidebarWidth = 360, bottomSheetHeight = 0, containerRef, treeRef
+}) {
+    const getPpy = useCallback((z, forceFullWindow = false, sheetOverride) => {
+        const activeSheetH = sheetOverride !== undefined ? sheetOverride : bottomSheetHeight;
+        const { contH } = resolveViewportDimensions({
+            container: containerRef.current, isSidebarOpen, sidebarWidth, forceFullWindow, bottomSheetHeight: activeSheetH
         });
-    }, [treeStats, getPpy, isSidebarOpen, sidebarWidth, containerRef, treeRef]);
+        return computeDynamicPpy(treeStats, contH, z);
+    }, [treeStats, isSidebarOpen, sidebarWidth, bottomSheetHeight, containerRef]);
 
-    const clampCamera = useCallback((cam) => clampCameraCoordinates(cam, getBounds), [getBounds]);
+    const getBounds = useCallback((z, forceFullWindow = false, sheetOverride) => {
+        const activeSheetH = sheetOverride !== undefined ? sheetOverride : bottomSheetHeight;
+        const targetPpy = getPpy(z, forceFullWindow, activeSheetH);
+        return calculateViewportCameraBounds({
+            treeElement: treeRef.current, container: containerRef.current,
+            isSidebarOpen, sidebarWidth, forceFullWindow, treeStats, targetPpy, z,
+            bottomSheetHeight: activeSheetH
+        });
+    }, [treeStats, getPpy, isSidebarOpen, sidebarWidth, bottomSheetHeight, containerRef, treeRef]);
+
+    const clampCamera = useCallback(
+        (cam, sheetOverride) => clampCameraCoordinates(cam, (z) => getBounds(z, false, sheetOverride)),
+        [getBounds]
+    );
 
     return { getPpy, getBounds, clampCamera };
 }
@@ -821,14 +1007,16 @@ function executeFitToScreen({
  * @example
  * buildPersonCenterFramingOptions(null);
  */
-function buildPersonCenterFramingOptions(targetZ = null) {
+function buildPersonCenterFramingOptions(targetZ = null, bottomSheetHeight = 0, topInset = 0) {
     return {
         preferredZ: targetZ,
         targetPadX: 0,
         targetPadY: 0,
         maxAttempts: 15,
         intervalMs: 40,
-        initialDelay: 15
+        initialDelay: 15,
+        bottomSheetHeight,
+        topInset
     };
 }
 
@@ -843,10 +1031,13 @@ function buildPersonCenterFramingOptions(targetZ = null) {
  * @param {boolean} params.isSidebarOpen - Whether the sidebar panel is expanded
  * @param {number} params.sidebarWidth - Width in pixels allocated for the sidebar
  * @param {React.Dispatch<React.SetStateAction<object>>} params.setCamera - Camera state setter
- * @param {(cam: object) => object} params.clampCamera - Boundary clamping function
+ * @param {(cam: object, sheetOverride?: number) => object} params.clampCamera - Boundary clamping function
+ * @param {number} [params.bottomSheetHeight=0] - Active mobile bottom-sheet pixel height
+ * @param {number} [params.focusBottomSheetHeight=0] - Predicted mobile bottom-sheet pixel height when focusing a person
+ * @param {boolean} [params.isCompactViewport=false] - Whether compact phone layout is active
  * @returns {{
  *   framePeople: (ids: Array<string>, options?: object|null) => void,
- *   centerOnPerson: (id: string, targetZ?: number|null) => void,
+ *   centerOnPerson: (id: string, targetZ?: number|null, sheetHeightOverride?: number|null) => void,
  *   fitToScreen: (forceFullWindow?: boolean) => void
  * }}
  *
@@ -875,18 +1066,27 @@ function buildPersonCenterFramingOptions(targetZ = null) {
  * fitToScreen(true);
  */
 function useCanvasCameraFraming({
-    treeRef, containerRef, treeStats, isSidebarOpen, sidebarWidth, setCamera, clampCamera
+    treeRef, containerRef, treeStats, isSidebarOpen, sidebarWidth, setCamera, clampCamera,
+    bottomSheetHeight = 0, focusBottomSheetHeight = 0, isCompactViewport = false
 }) {
     const framePeople = useCallback((ids, options = null) => {
+        const baseOpts = typeof options === 'number' ? { preferredZ: options } : (options || {});
+        const mergedOptions = {
+            bottomSheetHeight,
+            topInset: isCompactViewport ? MOBILE_TOP_CHROME_INSET_PX : 0,
+            ...baseOpts
+        };
         pollFramePeople({
-            ids, options, treeRef, containerRef, isSidebarOpen, sidebarWidth, setCamera, clampCamera
+            ids, options: mergedOptions, treeRef, containerRef, isSidebarOpen, sidebarWidth, setCamera, clampCamera
         });
-    }, [clampCamera, isSidebarOpen, sidebarWidth, treeRef, containerRef, setCamera]);
+    }, [clampCamera, isSidebarOpen, sidebarWidth, bottomSheetHeight, isCompactViewport, treeRef, containerRef, setCamera]);
 
-    const centerOnPerson = useCallback((id, targetZ = null) => {
+    const centerOnPerson = useCallback((id, targetZ = null, sheetHeightOverride = null) => {
         if (!id) return;
-        framePeople([id], buildPersonCenterFramingOptions(targetZ));
-    }, [framePeople]);
+        const targetSheetH = sheetHeightOverride !== null ? sheetHeightOverride : (focusBottomSheetHeight || bottomSheetHeight);
+        const topInset = isCompactViewport ? MOBILE_TOP_CHROME_INSET_PX : 0;
+        framePeople([id], buildPersonCenterFramingOptions(targetZ, targetSheetH, topInset));
+    }, [framePeople, focusBottomSheetHeight, bottomSheetHeight, isCompactViewport]);
 
     const fitToScreen = useCallback((forceFullWindow = false) => {
         executeFitToScreen({
@@ -906,6 +1106,7 @@ function useCanvasCameraFraming({
  * @param {(cam: object) => object} params.clampCamera - Boundary clamping function
  * @param {boolean} params.isSidebarOpen - Whether the sidebar is visible
  * @param {number} params.sidebarWidth - Width of the sidebar in pixels
+ * @param {number} [params.bottomSheetHeight=0] - Active mobile bottom-sheet pixel height
  * @param {object|null} params.treeStats - Generational tree metrics
  * @param {React.RefObject<HTMLElement>} params.containerRef - Ref to container DOM node
  * @param {React.RefObject<HTMLElement>} params.treeRef - Ref to tree content DOM node
@@ -937,6 +1138,7 @@ function useCanvasAutoClamp({
     clampCamera,
     isSidebarOpen,
     sidebarWidth,
+    bottomSheetHeight = 0,
     treeStats,
     containerRef,
     treeRef
@@ -949,7 +1151,7 @@ function useCanvasAutoClamp({
             clearTimeout(t1);
             clearTimeout(t2);
         };
-    }, [isSidebarOpen, sidebarWidth, treeStats, clampCamera, setCamera]);
+    }, [isSidebarOpen, sidebarWidth, bottomSheetHeight, treeStats, clampCamera, setCamera]);
 
     useEffect(() => {
         return setupCanvasResizeObserver({
@@ -1041,13 +1243,14 @@ function useCanvasTouchLifecycle({ containerRef, onInteract, cameraRef, setCamer
  * @example
  * const { camera, setCamera, containerRef, treeRef, fitToScreen } = useCanvasControls();
  */
-function useCanvasControls(onInteract, treeStats, isSidebarOpen = false, sidebarWidth = 360) {
+function useCanvasControls(onInteract, treeStats, isSidebarOpen = false, sidebarWidth = 360, mobileSheetOpts = {}) {
+    const { bottomSheetHeight = 0, focusBottomSheetHeight = 0, isCompactViewport = false } = mobileSheetOpts || {};
     const { camera, setCamera, cameraRef } = useCanvasCameraState();
     const containerRef = useRef(null);
     const treeRef = useRef(null);
 
     const { getPpy, getBounds, clampCamera } = useCanvasCameraBounds({
-        treeStats, isSidebarOpen, sidebarWidth, containerRef, treeRef
+        treeStats, isSidebarOpen, sidebarWidth, bottomSheetHeight, containerRef, treeRef
     });
 
     const gestures = useCanvasPointerGestures({
@@ -1059,11 +1262,12 @@ function useCanvasControls(onInteract, treeStats, isSidebarOpen = false, sidebar
     });
 
     const { framePeople, centerOnPerson, fitToScreen } = useCanvasCameraFraming({
-        treeRef, containerRef, treeStats, isSidebarOpen, sidebarWidth, setCamera, clampCamera
+        treeRef, containerRef, treeStats, isSidebarOpen, sidebarWidth, setCamera, clampCamera,
+        bottomSheetHeight, focusBottomSheetHeight, isCompactViewport
     });
 
     useCanvasAutoClamp({
-        setCamera, clampCamera, isSidebarOpen, sidebarWidth, treeStats, containerRef, treeRef
+        setCamera, clampCamera, isSidebarOpen, sidebarWidth, bottomSheetHeight, treeStats, containerRef, treeRef
     });
 
     return {
@@ -1201,22 +1405,124 @@ function clampSidebarHeight(startHeight, deltaY, windowHeight = (typeof window !
 }
 
 /**
- * Attaches pointermove and pointerup listeners to resize and persist bottom-sheet height during vertical drag.
+ * Clamps live finger-dragged mobile bottom-sheet height within `[40, windowHeight - 64]`
+ * so users can drag smoothly between `96px` peek, `45vh` half, `85vh` full, or below `56px` to dismiss.
+ *
+ * @param {number} startHeight - Initial sheet height in px at pointerdown.
+ * @param {number} deltaY - Vertical displacement (`startY - clientY`; positive = dragged upward).
+ * @param {number} [windowHeight=window.innerHeight] - Viewport height in px.
+ * @returns {number} Clamped live drag height in px.
+ *
+ * @example
+ * clampMobileSheetDragHeight(96, 120, 844); // => 216
+ *
+ * @example
+ * clampMobileSheetDragHeight(96, -80, 844); // => 40
+ */
+function clampMobileSheetDragHeight(
+    startHeight,
+    deltaY,
+    windowHeight = (typeof window !== 'undefined' ? window.innerHeight : 844)
+) {
+    const maxH = Math.max(180, windowHeight - 64);
+    return Math.max(40, Math.min(startHeight + deltaY, maxH));
+}
+
+/**
+ * Resolves the target snap stop (`'peek' | 'half' | 'full' | 'dismiss'`) when releasing a mobile
+ * bottom-sheet drag or tapping the top grab handle (`|deltaY| <= 6` cycles stops).
+ *
+ * @param {Object} [params={}]
+ * @param {number} [params.startHeight=96] - Sheet height in px when pointerdown started.
+ * @param {number} [params.deltaY=0] - Vertical displacement (`startY - clientY`; positive = up).
+ * @param {string} [params.currentSnap='peek'] - Active snap stop before gesture started.
+ * @param {number} [params.windowHeight=844] - Viewport height in px.
+ * @returns {'peek'|'half'|'full'|'dismiss'}
+ *
+ * @example
+ * resolveReleaseSheetSnap({ startHeight: 96, deltaY: 0, currentSnap: 'peek', windowHeight: 844 });
+ * // => 'half'
+ *
+ * @example
+ * resolveReleaseSheetSnap({ startHeight: 96, deltaY: -45, currentSnap: 'peek', windowHeight: 844 });
+ * // => 'dismiss'
+ */
+function resolveReleaseSheetSnap({ startHeight = 96, deltaY = 0, currentSnap = 'peek', windowHeight = 844 } = {}) {
+    if (Math.abs(deltaY) <= 6) return cycleSheetSnapStop(currentSnap);
+    const rawH = startHeight + deltaY;
+    if ((rawH < MOBILE_SHEET_DISMISS_PX && deltaY < -16) || (currentSnap === 'peek' && deltaY < -32)) {
+        return 'dismiss';
+    }
+    const heights = resolveSheetSnapHeights(windowHeight);
+    const midPeekHalf = (heights.peek + heights.half) / 2;
+    const midHalfFull = (heights.half + heights.full) / 2;
+    if (deltaY > 28) {
+        return (rawH > midHalfFull || startHeight >= heights.half - 24) ? 'full' : 'half';
+    }
+    if (deltaY < -28) {
+        return (rawH < midPeekHalf || startHeight <= heights.half + 24) ? 'peek' : 'half';
+    }
+    if (rawH < midPeekHalf) return 'peek';
+    return rawH < midHalfFull ? 'half' : 'full';
+}
+
+/**
+ * Applies either 3-stop snap transitions (when `snapOptions` is supplied) or legacy pixel height
+ * persistence upon releasing a vertical bottom-sheet drag.
+ *
+ * @param {number} deltaY - Total vertical displacement (`startY - clientY`).
+ * @param {number} startHeight - Starting sheet height in px.
+ * @param {Function} setSidebarHeight - State setter for live pixel height.
+ * @param {Object|null} snapOptions - Optional `{ currentSnap, setSheetSnap, onDismiss }` snap callbacks.
+ *
+ * @example
+ * applyVerticalDragRelease(80, 96, setSidebarHeight, { currentSnap: 'peek', setSheetSnap });
+ *
+ * @example
+ * applyVerticalDragRelease(-50, 96, setSidebarHeight, { currentSnap: 'peek', setSheetSnap, onDismiss });
+ */
+function applyVerticalDragRelease(deltaY, startHeight, setSidebarHeight, snapOptions) {
+    if (!snapOptions) {
+        const finalHeight = clampSidebarHeight(startHeight, deltaY);
+        try { localStorage.setItem('familyTree_sidebarHeight', String(Math.round(finalHeight))); } catch (err) {}
+        return;
+    }
+    const winH = typeof window !== 'undefined' ? window.innerHeight : 844;
+    const nextSnap = resolveReleaseSheetSnap({
+        startHeight, deltaY, currentSnap: snapOptions.currentSnap || 'peek', windowHeight: winH
+    });
+    setSidebarHeight(null);
+    if (nextSnap === 'dismiss') {
+        snapOptions.setSheetSnap?.('peek');
+        snapOptions.onDismiss?.();
+    } else {
+        snapOptions.setSheetSnap?.(nextSnap);
+    }
+}
+
+/**
+ * Attaches pointermove and pointerup listeners to resize or snap the mobile bottom sheet during vertical drag.
  *
  * @param {number} startY - Initial pointer Y coordinate at drag start
  * @param {number} startHeight - Initial sidebar height in pixels
  * @param {Function} setSidebarHeight - State setter for sidebar height
  * @param {Function} setIsResizingSidebar - State setter for resizing flag
+ * @param {Object|null} [snapOptions=null] - Optional 3-stop snap configuration `{ currentSnap, setSheetSnap, onDismiss }`
  *
  * @example
  * setupSidebarVerticalDragListeners(400, 460, setSidebarHeight, setIsResizingSidebar);
  *
  * @example
- * setupSidebarVerticalDragListeners(350, 380, (h) => console.log(h), () => {});
+ * setupSidebarVerticalDragListeners(750, 96, setSidebarHeight, setIsResizingSidebar, { currentSnap: 'peek', setSheetSnap });
  */
-function setupSidebarVerticalDragListeners(startY, startHeight, setSidebarHeight, setIsResizingSidebar) {
+function setupSidebarVerticalDragListeners(
+    startY, startHeight, setSidebarHeight, setIsResizingSidebar, snapOptions = null
+) {
     const handlePointerMove = (moveEvent) => {
-        const newHeight = clampSidebarHeight(startHeight, startY - moveEvent.clientY);
+        const deltaY = startY - moveEvent.clientY;
+        const newHeight = snapOptions
+            ? clampMobileSheetDragHeight(startHeight, deltaY)
+            : clampSidebarHeight(startHeight, deltaY);
         setSidebarHeight(newHeight);
     };
 
@@ -1227,11 +1533,7 @@ function setupSidebarVerticalDragListeners(startY, startHeight, setSidebarHeight
         document.body.style.cursor = '';
         document.body.style.userSelect = '';
         setIsResizingSidebar(false);
-
-        const finalHeight = clampSidebarHeight(startHeight, startY - upEvent.clientY);
-        try {
-            localStorage.setItem('familyTree_sidebarHeight', String(Math.round(finalHeight)));
-        } catch (err) {}
+        applyVerticalDragRelease(startY - upEvent.clientY, startHeight, setSidebarHeight, snapOptions);
     };
 
     document.body.style.cursor = 'row-resize';
@@ -1245,7 +1547,8 @@ function setupSidebarVerticalDragListeners(startY, startHeight, setSidebarHeight
  * Resolves the starting pixel height of the bottom-docked sidebar when a vertical drag starts.
  *
  * @param {PointerEvent|Object} e - Pointer down event on the resize handle
- * @param {number|null} sidebarHeight - Current configured height in px (or null for 55vh default)
+ * @param {number|null} sidebarHeight - Current configured height in px (or null for snap/55vh default)
+ * @param {string|null} [sheetSnap=null] - Optional active snap stop (`'peek' | 'half' | 'full'`)
  * @returns {number} Starting height in pixels
  *
  * @example
@@ -1256,30 +1559,35 @@ function setupSidebarVerticalDragListeners(startY, startHeight, setSidebarHeight
  * resolveInitialVerticalResizeHeight({ currentTarget: { parentElement: { getBoundingClientRect: () => ({ height: 464 }) } } }, null);
  * // => 464
  */
-function resolveInitialVerticalResizeHeight(e, sidebarHeight) {
+function resolveInitialVerticalResizeHeight(e, sidebarHeight, sheetSnap = null) {
     const rectHeight = e?.currentTarget?.parentElement?.getBoundingClientRect?.()?.height;
     if (typeof rectHeight === 'number' && rectHeight > 0) return Math.round(rectHeight);
     if (typeof sidebarHeight === 'number' && sidebarHeight > 0) return sidebarHeight;
+    if (sheetSnap) {
+        return resolveBottomSheetPixelHeight({ isCompactViewport: true, isSidebarOpen: true, sheetSnap });
+    }
     const winH = typeof window !== 'undefined' ? window.innerHeight : 844;
     return Math.round(winH * 0.55);
 }
 
 /**
- * Hook to manage sidebar width (desktop) and height (mobile bottom-sheet) dragging,
- * resizing constraints, cursor states, and persistence to localStorage.
+ * Hook to manage sidebar width (desktop) and 3-stop snap / drag height (mobile bottom-sheet),
+ * resizing constraints, cursor states, and swipe-down dismissal.
  *
  * @param {number} [initialWidth=360] - Default sidebar width in pixels
- * @returns {Object} { sidebarWidth, setSidebarWidth, sidebarHeight, setSidebarHeight, isResizingSidebar, handleResizeStart, handleVerticalResizeStart }
+ * @param {Function|null} [onDismiss=null] - Optional callback invoked when mobile sheet is swiped down to dismiss
+ * @returns {Object} { sidebarWidth, setSidebarWidth, sidebarHeight, setSidebarHeight, sheetSnap, setSheetSnap, isResizingSidebar, handleResizeStart, handleVerticalResizeStart }
  *
  * @example
- * const { sidebarWidth, sidebarHeight, isResizingSidebar, handleResizeStart, handleVerticalResizeStart } = useSidebarResize(360);
+ * const { sidebarWidth, sheetSnap, isResizingSidebar, handleResizeStart, handleVerticalResizeStart } = useSidebarResize(360, closeAllPanels);
  *
  * @example
  * const { sidebarWidth, setSidebarWidth } = useSidebarResize();
  */
-function useSidebarResize(initialWidth = 360) {
+function useSidebarResize(initialWidth = 360, onDismiss = null) {
     const [sidebarWidth, setSidebarWidth] = useState(() => loadStoredSidebarWidth(initialWidth));
-    const [sidebarHeight, setSidebarHeight] = useState(() => loadStoredSidebarHeight(null));
+    const [sidebarHeight, setSidebarHeight] = useState(null);
+    const [sheetSnap, setSheetSnap] = useState('peek');
     const [isResizingSidebar, setIsResizingSidebar] = useState(false);
 
     const handleResizeStart = useCallback((e) => {
@@ -1292,14 +1600,16 @@ function useSidebarResize(initialWidth = 360) {
     const handleVerticalResizeStart = useCallback((e) => {
         e.preventDefault();
         e.stopPropagation();
-        const startH = resolveInitialVerticalResizeHeight(e, sidebarHeight);
+        const startH = resolveInitialVerticalResizeHeight(e, sidebarHeight, sheetSnap);
         setSidebarHeight(startH);
         setIsResizingSidebar(true);
-        setupSidebarVerticalDragListeners(e.clientY, startH, setSidebarHeight, setIsResizingSidebar);
-    }, [sidebarHeight]);
+        setupSidebarVerticalDragListeners(e.clientY, startH, setSidebarHeight, setIsResizingSidebar, {
+            currentSnap: sheetSnap, setSheetSnap, onDismiss
+        });
+    }, [sidebarHeight, sheetSnap, onDismiss]);
 
     return {
         sidebarWidth, setSidebarWidth, sidebarHeight, setSidebarHeight,
-        isResizingSidebar, handleResizeStart, handleVerticalResizeStart
+        sheetSnap, setSheetSnap, isResizingSidebar, handleResizeStart, handleVerticalResizeStart
     };
 }

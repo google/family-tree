@@ -1545,9 +1545,9 @@ function resolveRestoredSidebarOpen(state) {
  * measureViewStateViewport({ container: null, isSidebarOpen: true, sidebarWidth: 400 });
  * // => { visibleWidth: 1040, visibleHeight: 900, timelineWidth: 48 }
  */
-function measureViewStateViewport({ container, isSidebarOpen, sidebarWidth }) {
-    const { contW, contH } = resolveViewportDimensions({ container, isSidebarOpen, sidebarWidth });
-    return { visibleWidth: contW, visibleHeight: contH, timelineWidth: isStandaloneExportMode() ? 0 : 48 };
+function measureViewStateViewport({ container, isSidebarOpen, sidebarWidth, bottomSheetHeight = 0 }) {
+    const { contW, contH } = resolveViewportDimensions({ container, isSidebarOpen, sidebarWidth, bottomSheetHeight });
+    return { visibleWidth: contW, visibleHeight: contH, timelineWidth: resolveTimelineGutterWidth() };
 }
 
 /**
@@ -1806,8 +1806,14 @@ function applyRestoredCamera(state, env) {
  * // => { visibleWidth: 1080, visibleHeight: 900, timelineWidth: 48 }   (sidebar predicted open)
  */
 function buildRestoreCameraEnv(p, state) {
+    const restoredOpen = resolveRestoredSidebarOpen(state);
+    const restoredSnap = state?.activeFilter ? 'half' : 'peek';
+    const restoredSheetH = (p.isCompactViewport && restoredOpen)
+        ? resolveBottomSheetPixelHeight({ isCompactViewport: true, isSidebarOpen: true, sheetSnap: restoredSnap })
+        : 0;
     const viewport = measureViewStateViewport({
-        container: p.containerRef.current, isSidebarOpen: resolveRestoredSidebarOpen(state), sidebarWidth: p.sidebarWidth
+        container: p.containerRef.current, isSidebarOpen: restoredOpen,
+        sidebarWidth: p.sidebarWidth, bottomSheetHeight: restoredSheetH
     });
     return {
         camera: p.camera, setCamera: p.setCamera, clampCamera: p.clampCamera, getPpy: p.getPpy, tree: p.tree, viewport,
@@ -1921,7 +1927,8 @@ function useUrlViewStateWriter(params) {
  */
 function captureAndWriteViewState(p) {
     const viewport = measureViewStateViewport({
-        container: p.containerRef.current, isSidebarOpen: p.isAnySidebarOpen, sidebarWidth: p.sidebarWidth
+        container: p.containerRef.current, isSidebarOpen: p.isAnySidebarOpen,
+        sidebarWidth: p.sidebarWidth, bottomSheetHeight: p.bottomSheetHeight || 0
     });
     const anchor = p.showMap ? null : chooseViewStateAnchor({
         treeElement: p.treeRef ? p.treeRef.current : null, tree: p.tree, focusId: p.focusId, camera: p.camera, viewport

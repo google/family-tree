@@ -86,7 +86,7 @@ function useAppCoreState() {
     const data = useAncestryData();
     const nav = useTreeNavigationHistory(data.focusId);
     const panels = useAppPanels(data.isLoading);
-    const sidebar = useSidebarResize(360);
+    const sidebar = useSidebarResize(360, panels.closeAllPanels);
     const shell = useAppShellPanels(isStandalone);
     const treeStats = useMemo(() => data.tree.getStats(), [data.tree]);
     const [sheetUrl, setSheetUrl] = useState(() => (hasInitialSheetToLoad() ? resolveInitialSheetUrl() : ''));
@@ -95,10 +95,52 @@ function useAppCoreState() {
     const isCompactViewport = useCompactViewport();
     const dockedSidebarWidth = resolveDockedSidebarWidth(sidebar.sidebarWidth, isCompactViewport);
     const timelineGutterWidth = resolveTimelineGutterWidth({ isStandalone, isCompact: isCompactViewport });
+    const mobileSheet = resolveMobileSheetState({
+        isCompactViewport, isAnySidebarOpen: panels.isAnySidebarOpen, sheetSnap: sidebar.sheetSnap,
+        sidebarHeight: sidebar.sidebarHeight, hasFocusPerson: Boolean(data.tree.get(data.focusId)),
+        showLogs: panels.showLogs, showAI: panels.showAI, activeFilter: data.activeFilter
+    });
     return {
         isStandalone, ...theme, ...data, ...nav, ...panels, ...sidebar, ...shell, treeStats, sheetUrl, setSheetUrl,
-        isCompactViewport, dockedSidebarWidth, timelineGutterWidth
+        isCompactViewport, dockedSidebarWidth, timelineGutterWidth, ...mobileSheet
     };
+}
+
+/**
+ * Synchronizes mobile 3-stop bottom-sheet lifecycle: resets snap stop back to `'peek'` when all
+ * panels close, and smoothly re-centers the focused person card when toggling between `'peek'`
+ * and `'half'` stops on compact viewports while preserving current zoom.
+ *
+ * @param {object} params
+ *
+ * @example
+ * useMobileSheetSync({ ...core, centerOnPerson: viewport.centerOnPerson, cameraRef: viewport.cameraRef });
+ *
+ * @example
+ * useMobileSheetSync({ isCompactViewport: false, isAnySidebarOpen: false, setSheetSnap: () => {}, setSidebarHeight: () => {} });
+ */
+function useMobileSheetSync({
+    isCompactViewport, isAnySidebarOpen, effectiveSheetSnap, bottomSheetHeight,
+    canPeek, focusId, isResizingSidebar, setSheetSnap, setSidebarHeight, centerOnPerson, cameraRef
+}) {
+    const prevSnapRef = useRef(null);
+
+    useEffect(() => {
+        if (!isAnySidebarOpen) {
+            setSheetSnap('peek');
+            setSidebarHeight(null);
+        }
+    }, [isAnySidebarOpen, setSheetSnap, setSidebarHeight]);
+
+    useEffect(() => {
+        const prev = prevSnapRef.current;
+        prevSnapRef.current = effectiveSheetSnap;
+        if (!isCompactViewport || !isAnySidebarOpen || !canPeek || !focusId || isResizingSidebar) return;
+        if (!prev || prev === effectiveSheetSnap) return;
+        if (effectiveSheetSnap === 'peek' || effectiveSheetSnap === 'half') {
+            centerOnPerson(focusId, cameraRef?.current?.z ?? null, bottomSheetHeight);
+        }
+    }, [isCompactViewport, isAnySidebarOpen, canPeek, focusId, isResizingSidebar, effectiveSheetSnap, bottomSheetHeight, centerOnPerson, cameraRef]);
 }
 
 /**
@@ -125,10 +167,14 @@ function useAppCoreState() {
  * @example
  * const { camera, setCamera, isDragging } = useAppViewportState(params);
  */
-function useAppViewportState({ tree, focusId, treeStats, isAnySidebarOpen, sidebarWidth, closeAllPanels, openAiPanel, setShowMap, setTree }) {
+function useAppViewportState({
+    tree, focusId, treeStats, isAnySidebarOpen, sidebarWidth, bottomSheetHeight = 0,
+    focusBottomSheetHeight = 0, isCompactViewport = false, closeAllPanels, openAiPanel, setShowMap, setTree
+}) {
     const search = useTreeSearchState(openAiPanel);
     const viewport = useAppCanvasViewportManager({
-        closeAllPanels, treeStats, isAnySidebarOpen, sidebarWidth, rootId: tree.rootId, focusId
+        closeAllPanels, treeStats, isAnySidebarOpen, sidebarWidth, rootId: tree.rootId, focusId,
+        bottomSheetHeight, focusBottomSheetHeight, isCompactViewport
     });
     const ai = useAppAiCoordinator({
         tree, setTree, setShowMap, setCollapsedNodes: viewport.setCollapsedNodes, framePeople: viewport.framePeople
@@ -346,7 +392,9 @@ function buildSidebarProps(core, viewport, focusNav) {
     return {
         focusPerson: core.tree.get(core.focusId), activeFilter: core.activeFilter,
         onFilterBy: focusNav.handleFilterBy, sidebarWidth: core.sidebarWidth, sidebarHeight: core.sidebarHeight,
-        dockBottom: core.isCompactViewport, onResizeStart: core.handleResizeStart,
+        dockBottom: core.isCompactViewport, sheetSnap: core.effectiveSheetSnap, canPeek: core.canPeek,
+        onSelectSnap: (snap) => { core.setSidebarHeight(null); core.setSheetSnap(snap); },
+        onResizeStart: core.handleResizeStart,
         onVerticalResizeStart: core.handleVerticalResizeStart, onClose: core.closeAllPanels,
         isResizing: core.isResizingSidebar, tree: core.tree, setFocusId: focusNav.handleSetFocusId,
         isVisible: core.isAnySidebarOpen, centerOnPerson: viewport.centerOnPerson,
@@ -377,7 +425,7 @@ function buildZoomProps(core, viewport) {
         setCamera: viewport.setCamera, clampCamera: viewport.clampCamera, centerOnPerson: viewport.centerOnPerson,
         fitToScreen: viewport.handleFitToScreen, focusId: core.focusId, rootId: core.tree.rootId,
         setIsSidebarVisible: core.setIsSidebarVisible, closeAllPanels: core.closeAllPanels,
-        bottomDockLift: resolveBottomDockLift(core.isCompactViewport, core.isAnySidebarOpen, core.sidebarHeight)
+        bottomDockLift: resolveBottomDockLift(core.isCompactViewport, core.isAnySidebarOpen, core.sidebarHeight, core.effectiveSheetSnap)
     };
 }
 
@@ -467,7 +515,7 @@ function buildShellProps(core, viewport, focusNav, layoutExp, applyDemographicSe
             isHomeOpen: core.isHomeOpen, isStandalone: core.isStandalone, hasTree: Boolean(core.tree?.root),
             isLoading: core.isLoading, showMap: core.showMap, showAI: core.showAI, showLogs: core.showLogs,
             isAILoading: viewport.isAILoading, isExportingApp: layoutExp.isExportingApp, isExportingA4: layoutExp.isExportingA4,
-            bottomDockLift: resolveBottomDockLift(core.isCompactViewport, core.isAnySidebarOpen, core.sidebarHeight)
+            bottomDockLift: resolveBottomDockLift(core.isCompactViewport, core.isAnySidebarOpen, core.sidebarHeight, core.effectiveSheetSnap)
         },
         settingsPanelProps: {
             isOpen: core.isSettingsOpen, initialTab: core.settingsTab,
@@ -519,9 +567,12 @@ function useAppViewModel() {
     const viewport = useAppViewportState({
         tree: core.tree, focusId: core.focusId, treeStats: core.treeStats,
         isAnySidebarOpen: core.isAnySidebarOpen, sidebarWidth: core.dockedSidebarWidth,
+        bottomSheetHeight: core.bottomSheetHeight, focusBottomSheetHeight: core.focusBottomSheetHeight,
+        isCompactViewport: core.isCompactViewport,
         closeAllPanels: core.closeAllPanels, openAiPanel: core.openAiPanel,
         setShowMap: core.setShowMap, setTree: core.setTree
     });
+    useMobileSheetSync({ ...core, centerOnPerson: viewport.centerOnPerson, cameraRef: viewport.cameraRef });
     const focusNav = useAppFocusAndNavigation({
         ...core, ...viewport, collapsedCount: viewport.collapsedNodes.size
     });

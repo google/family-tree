@@ -381,20 +381,21 @@ function resolveFramedBoxMetrics({
 function computeFramedCamera({
     box, contW, contH, preferredZ = null, currentZ = 1,
     timelineWidth = 48, targetPadX = 100, targetPadY = 120,
-    minBoxW = 90, minBoxH = 76, treeW = null
+    minBoxW = 90, minBoxH = 76, treeW = null, topInset = 0
 }) {
     const { boxCenterX, boxCenterY, usableContW, neededW, neededH } = resolveFramedBoxMetrics({
         box, minBoxW, minBoxH, targetPadX, targetPadY, contW, timelineWidth
     });
+    const usableContH = Math.max(80, contH - topInset);
 
     const finalZ = resolveFramedZoom({
         preferredZ, foundCount: box.foundCount, currentZ,
-        usableContW, neededW, contH, neededH
+        usableContW, neededW, contH: usableContH, neededH
     });
 
     return {
         x: resolveFramedCameraX(usableContW, timelineWidth, treeW, finalZ, boxCenterX),
-        y: (contH * 0.50) - (boxCenterY * finalZ),
+        y: topInset + (usableContH * 0.50) - (boxCenterY * finalZ),
         z: finalZ
     };
 }
@@ -488,8 +489,11 @@ function computeCameraBounds({
     topMargin = 16,
     bottomMargin = 0
 }) {
+    const isCompact = contW <= 639;
+    const effTop = (isCompact && topMargin === 16) ? 64 : topMargin;
+    const effBottom = (isCompact && bottomMargin === 0) ? 48 : bottomMargin;
     const usableContW = Math.max(100, contW - timelineWidth);
-    const usableH = Math.max(100, contH - topMargin - bottomMargin);
+    const usableH = Math.max(100, contH - effTop - effBottom);
 
     const minZ = Math.max(0.05, Math.min((usableContW - paddingX * 2) / Math.max(1, treeW), 1));
     const scaledW = treeW * z;
@@ -499,8 +503,10 @@ function computeCameraBounds({
 
     let minX = scaledW <= usableContW ? centeredX : contW - scaledW - paddingX;
     let maxX = scaledW <= usableContW ? centeredX : timelineWidth + paddingX;
-    let minY = scaledH <= usableH ? topMargin : contH - scaledH - bottomMargin;
-    let maxY = scaledH <= usableH ? topMargin : topMargin;
+    let minY = scaledH <= usableH ? effTop : contH - scaledH - effBottom;
+    let maxY = scaledH <= usableH
+        ? (isCompact ? Math.max(effTop, contH - scaledH - effBottom) : effTop)
+        : effTop;
 
     return { minX, maxX, minY, maxY, minZ, centeredX };
 }
@@ -575,16 +581,22 @@ function resolveViewportDimensions({
     container,
     isSidebarOpen = false,
     sidebarWidth = 360,
-    forceFullWindow = false
+    forceFullWindow = false,
+    bottomSheetHeight = 0
 }) {
     const hasWindow = typeof window !== 'undefined';
     const effectiveContW = (isSidebarOpen && hasWindow)
         ? (window.innerWidth - sidebarWidth)
         : (container ? container.clientWidth : (hasWindow ? window.innerWidth : 1000));
     const contW = (forceFullWindow && hasWindow) ? window.innerWidth : effectiveContW;
-    const contH = (forceFullWindow || !isSidebarOpen) && hasWindow
-        ? window.innerHeight
-        : (container ? container.clientHeight : (hasWindow ? window.innerHeight : 800));
+    let contH;
+    if (!forceFullWindow && bottomSheetHeight > 0 && hasWindow) {
+        contH = Math.max(120, window.innerHeight - bottomSheetHeight);
+    } else if ((forceFullWindow || !isSidebarOpen) && hasWindow) {
+        contH = window.innerHeight;
+    } else {
+        contH = container ? container.clientHeight : (hasWindow ? window.innerHeight : 800);
+    }
     return { contW, contH };
 }
 
@@ -788,19 +800,20 @@ function setupCanvasTouchListeners({
  */
 function applyFramedCamera({
     box, treeElement, container, isSidebarOpen, sidebarWidth,
-    preferredZ, targetPadX, targetPadY, setCamera, clampCamera
+    preferredZ, targetPadX, targetPadY, setCamera, clampCamera,
+    bottomSheetHeight = 0, topInset = 0
 }) {
     const { contW: effectiveContW, contH } = resolveViewportDimensions({
-        container, isSidebarOpen, sidebarWidth, forceFullWindow: false
+        container, isSidebarOpen, sidebarWidth, forceFullWindow: false, bottomSheetHeight
     });
     const currentTreeW = getTreeElementWidth(treeElement);
 
     setCamera(cam => {
         const nextCam = computeFramedCamera({
             box, contW: effectiveContW, contH, preferredZ, timelineWidth: resolveTimelineGutterWidth(),
-            currentZ: cam.z, targetPadX, targetPadY, treeW: currentTreeW
+            currentZ: cam.z, targetPadX, targetPadY, treeW: currentTreeW, topInset
         });
-        return clampCamera(nextCam);
+        return clampCamera(nextCam, bottomSheetHeight);
     });
 }
 
@@ -814,16 +827,18 @@ function applyFramedCamera({
  *   targetPadY: number,
  *   maxAttempts: number,
  *   intervalMs: number,
- *   initialDelay: number
+ *   initialDelay: number,
+ *   bottomSheetHeight: number,
+ *   topInset: number
  * }} Normalized polling configuration options.
  *
  * @example
  *   resolveFramePeopleOptions(1.5);
- *   // returns { preferredZ: 1.5, targetPadX: 100, targetPadY: 120, maxAttempts: 35, intervalMs: 35, initialDelay: 25 }
+ *   // returns { preferredZ: 1.5, targetPadX: 100, targetPadY: 120, maxAttempts: 35, intervalMs: 35, initialDelay: 25, bottomSheetHeight: 0, topInset: 0 }
  *
  * @example
  *   resolveFramePeopleOptions({ targetPadX: 80, maxAttempts: 20 });
- *   // returns { preferredZ: null, targetPadX: 80, targetPadY: 120, maxAttempts: 20, intervalMs: 35, initialDelay: 25 }
+ *   // returns { preferredZ: null, targetPadX: 80, targetPadY: 120, maxAttempts: 20, intervalMs: 35, initialDelay: 25, bottomSheetHeight: 0, topInset: 0 }
  */
 function resolveFramePeopleOptions(options) {
     const preferredZ = typeof options === 'number' ? options : options?.preferredZ ?? null;
@@ -832,8 +847,10 @@ function resolveFramePeopleOptions(options) {
     const maxAttempts = options?.maxAttempts ?? 35;
     const intervalMs = options?.intervalMs ?? 35;
     const initialDelay = options?.initialDelay ?? 25;
+    const bottomSheetHeight = options?.bottomSheetHeight ?? 0;
+    const topInset = options?.topInset ?? 0;
 
-    return { preferredZ, targetPadX, targetPadY, maxAttempts, intervalMs, initialDelay };
+    return { preferredZ, targetPadX, targetPadY, maxAttempts, intervalMs, initialDelay, bottomSheetHeight, topInset };
 }
 
 /**
@@ -850,6 +867,8 @@ function resolveFramePeopleOptions(options) {
  * @param {number} params.targetPadY - Target vertical padding.
  * @param {Function} params.setCamera - State setter for camera coordinates.
  * @param {Function} params.clampCamera - Clamping function for camera coordinates.
+ * @param {number} [params.bottomSheetHeight=0] - Target mobile bottom-sheet height in pixels.
+ * @param {number} [params.topInset=0] - Top floating toolbar inset in pixels.
  * @returns {boolean} True if framing was successfully applied.
  *
  * @example
@@ -860,15 +879,17 @@ function resolveFramePeopleOptions(options) {
  */
 function attemptFramePeople({
     ids, treeElement, container, isSidebarOpen, sidebarWidth,
-    preferredZ, targetPadX, targetPadY, setCamera, clampCamera
+    preferredZ, targetPadX, targetPadY, setCamera, clampCamera,
+    bottomSheetHeight = 0, topInset = 0
 }) {
     if (!treeElement || !container) return false;
     const box = computePeopleBoundingBox(ids, treeElement);
     if (box && box.foundCount < ids.length) return false;
     if (box && box.foundCount > 0) {
         applyFramedCamera({
-            box, treeElement, container, isSidebarOpen,
-            sidebarWidth, preferredZ, targetPadX, targetPadY, setCamera, clampCamera
+            box, treeElement, container, isSidebarOpen, sidebarWidth,
+            preferredZ, targetPadX, targetPadY, setCamera, clampCamera,
+            bottomSheetHeight, topInset
         });
         return true;
     }
@@ -920,14 +941,18 @@ function pollFramePeople({
     isSidebarOpen = false, sidebarWidth = 360, setCamera, clampCamera
 }) {
     if (!ids || ids.length === 0) return null;
-    const { preferredZ, targetPadX, targetPadY, maxAttempts, intervalMs, initialDelay } = resolveFramePeopleOptions(options);
+    const {
+        preferredZ, targetPadX, targetPadY, maxAttempts, intervalMs, initialDelay,
+        bottomSheetHeight, topInset
+    } = resolveFramePeopleOptions(options);
 
     let attempts = 0;
     const tryFrame = () => {
         attempts++;
         const framed = attemptFramePeople({
             ids, treeElement: treeRef.current, container: containerRef.current, isSidebarOpen,
-            sidebarWidth, preferredZ, targetPadX, targetPadY, setCamera, clampCamera
+            sidebarWidth, preferredZ, targetPadX, targetPadY, setCamera, clampCamera,
+            bottomSheetHeight, topInset
         });
         if (!framed && attempts < maxAttempts) {
             setTimeout(tryFrame, intervalMs);

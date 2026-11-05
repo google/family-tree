@@ -287,18 +287,30 @@ try {
         extractFunction(source, 'processPointerMove'),
         extractFunction(source, 'processPointerUp')
     ].join('\n');
-    // Sibling bus-bar fold toggle (Section 217) and phone-layout helpers (Section 218).
+    // Sibling bus-bar fold toggle (Section 217), phone-layout helpers (Section 218), and 3-stop peek sheet (Section 220).
     const siblingBarSrc = [
         extractConst(source, 'SIBLING_BAR_HIT_PX'),
         extractConst(source, 'COMPACT_VIEWPORT_MAX_WIDTH'),
         extractConst(source, 'TIMELINE_GUTTER_WIDTH'),
         extractConst(source, 'TIMELINE_GUTTER_COMPACT_WIDTH'),
-        extractConst(source, 'BOTTOM_DOCK_HEIGHT')
+        extractConst(source, 'BOTTOM_DOCK_HEIGHT'),
+        extractConst(source, 'MOBILE_SHEET_PEEK_PX'),
+        extractConst(source, 'MOBILE_SHEET_HALF_VH'),
+        extractConst(source, 'MOBILE_SHEET_FULL_VH'),
+        extractConst(source, 'MOBILE_SHEET_DISMISS_PX'),
+        extractConst(source, 'MOBILE_TOP_CHROME_INSET_PX')
     ].concat([
         'withSetMembers', 'planSiblingBarToggle', 'isSiblingBarFolded', 'describeSiblingBarAction',
         'isCompactViewportWidth', 'resolveTimelineGutterWidth', 'resolveDockedSidebarWidth', 'resolveSidebarDockLayout',
         'loadStoredSidebarHeight', 'clampSidebarHeight', 'resolveInitialVerticalResizeHeight',
-        'resolveBottomDockLift', 'shouldShowZoomControls'
+        'resolveBottomDockLift', 'shouldShowZoomControls',
+        'resolveSheetSnapHeights', 'resolveSheetSnapCssHeight', 'cycleSheetSnapStop',
+        'resolveEffectiveSheetSnap', 'resolveBottomSheetPixelHeight', 'resolveMobileSheetState',
+        'clampMobileSheetDragHeight', 'resolveReleaseSheetSnap',
+        'compareSidebarRelatives', 'parseCommaDelimitedTokens',
+        'collectPeekJumpRelatives', 'formatPeekPersonSummary', 'isMobilePeekCardActive',
+        'resolveFramedZoom', 'resolveFramedCameraX', 'resolveFramedBoxMetrics',
+        'computeFramedCamera', 'computeCameraBounds'
     ].map(name => extractFunction(source, name))).join('\n');
     const urlViewStateSrc = [
         extractConst(source, 'VIEW_STATE_B64'),
@@ -384,7 +396,13 @@ try {
         resolveBottomDockLift, shouldShowZoomControls,
         TAILWIND_FALLBACK_THEME_ID, buildThemeBootScript, THEME_BOOT_SCRIPT, preferenceStorageKey, shouldIgnorePointerDown, BOTTOM_DOCK_HEIGHT,
         TIMELINE_GUTTER_WIDTH, TIMELINE_GUTTER_COMPACT_WIDTH, SIBLING_BAR_HIT_PX, COMPACT_VIEWPORT_MAX_WIDTH,
-        extractSheetQueryValue, resolveRestoredCollapsedIds
+        extractSheetQueryValue, resolveRestoredCollapsedIds,
+        MOBILE_SHEET_PEEK_PX, MOBILE_SHEET_HALF_VH, MOBILE_SHEET_FULL_VH, MOBILE_SHEET_DISMISS_PX, MOBILE_TOP_CHROME_INSET_PX,
+        resolveSheetSnapHeights, resolveSheetSnapCssHeight, cycleSheetSnapStop,
+        resolveEffectiveSheetSnap, resolveBottomSheetPixelHeight, resolveMobileSheetState,
+        clampMobileSheetDragHeight, resolveReleaseSheetSnap,
+        collectPeekJumpRelatives, formatPeekPersonSummary, isMobilePeekCardActive,
+        computeFramedCamera, computeCameraBounds
     ] = new Function(`
         // Isolated cookie jar + localStorage + documentElement: preference & theme tests must never
         // touch the real browser state, and Stage 3 runs in node where neither exists. Every other
@@ -583,7 +601,13 @@ try {
             resolveBottomDockLift, shouldShowZoomControls,
             TAILWIND_FALLBACK_THEME_ID, buildThemeBootScript, THEME_BOOT_SCRIPT, preferenceStorageKey, shouldIgnorePointerDown, BOTTOM_DOCK_HEIGHT,
         TIMELINE_GUTTER_WIDTH, TIMELINE_GUTTER_COMPACT_WIDTH, SIBLING_BAR_HIT_PX, COMPACT_VIEWPORT_MAX_WIDTH,
-        extractSheetQueryValue, resolveRestoredCollapsedIds
+        extractSheetQueryValue, resolveRestoredCollapsedIds,
+        MOBILE_SHEET_PEEK_PX, MOBILE_SHEET_HALF_VH, MOBILE_SHEET_FULL_VH, MOBILE_SHEET_DISMISS_PX, MOBILE_TOP_CHROME_INSET_PX,
+        resolveSheetSnapHeights, resolveSheetSnapCssHeight, cycleSheetSnapStop,
+        resolveEffectiveSheetSnap, resolveBottomSheetPixelHeight, resolveMobileSheetState,
+        clampMobileSheetDragHeight, resolveReleaseSheetSnap,
+        collectPeekJumpRelatives, formatPeekPersonSummary, isMobilePeekCardActive,
+        computeFramedCamera, computeCameraBounds
         ];
     `)();
 
@@ -15744,6 +15768,135 @@ const m3 = tree.all.find(n => n.id === '3');
                 'Washington DC|Vellikkulangara');
         } catch (e) {
             assertEqual('Test 219 execution failed', e.message, '');
+        }
+    }
+
+    // ══════════════════════════════════════════════════════════════════════════
+    //  220. 3-Stop Mobile Peek Sheet (96px -> 45vh -> 85vh) & Sheet-Aware Camera Framing
+    // ══════════════════════════════════════════════════════════════════════════
+    {
+        section('220. 3-Stop Mobile Peek Sheet (96px -> 45vh -> 85vh) & Sheet-Aware Camera Framing');
+        try {
+            assertEqual('Test 220.01: 3-stop snap heights & CSS tokens resolve peek=96px, half=45vh (380px on 844px phone), full=85vh (717px)',
+                JSON.stringify({
+                    heights: resolveSheetSnapHeights(844),
+                    css: [resolveSheetSnapCssHeight('peek'), resolveSheetSnapCssHeight('half'), resolveSheetSnapCssHeight('full'), resolveSheetSnapCssHeight(null)],
+                    cycle: [cycleSheetSnapStop('peek'), cycleSheetSnapStop('half'), cycleSheetSnapStop('full')]
+                }),
+                JSON.stringify({
+                    heights: { peek: 96, half: 380, full: 717 },
+                    css: ['96px', '45vh', '85vh', '55vh'],
+                    cycle: ['half', 'full', 'peek']
+                }));
+
+            assertEqual('Test 220.02: resolveEffectiveSheetSnap keeps peek for focused person, promotes non-person panels (AI, logs, filters, directory) to half, and returns null on desktop/closed',
+                [resolveEffectiveSheetSnap({ isCompactViewport: false, isAnySidebarOpen: true, sheetSnap: 'peek', hasFocusPerson: true }),
+                 resolveEffectiveSheetSnap({ isCompactViewport: true, isAnySidebarOpen: false, sheetSnap: 'peek', hasFocusPerson: true }),
+                 resolveEffectiveSheetSnap({ isCompactViewport: true, isAnySidebarOpen: true, sheetSnap: 'peek', hasFocusPerson: true }),
+                 resolveEffectiveSheetSnap({ isCompactViewport: true, isAnySidebarOpen: true, sheetSnap: 'peek', hasFocusPerson: true, activeFilter: { filterType: 'directory', tab: 'place' } }),
+                 resolveEffectiveSheetSnap({ isCompactViewport: true, isAnySidebarOpen: true, sheetSnap: 'peek', hasFocusPerson: false, activeFilter: { filterType: 'directory', tab: 'place' } }),
+                 resolveEffectiveSheetSnap({ isCompactViewport: true, isAnySidebarOpen: true, sheetSnap: 'peek', hasFocusPerson: true, activeFilter: { filterType: 'place', value: 'Kochi' } }),
+                 resolveEffectiveSheetSnap({ isCompactViewport: true, isAnySidebarOpen: true, sheetSnap: 'peek', showAI: true }),
+                 resolveEffectiveSheetSnap({ isCompactViewport: true, isAnySidebarOpen: true, sheetSnap: 'peek', showLogs: true }),
+                 resolveEffectiveSheetSnap({ isCompactViewport: true, isAnySidebarOpen: true, sheetSnap: 'full', showAI: true })].join('|'),
+                '||peek|peek|half|half|half|half|full');
+
+            assertEqual('Test 220.03: resolveMobileSheetState predicts 96px focusBottomSheetHeight synchronously even when sidebar is closed pre-click, and 380px when already at half',
+                JSON.stringify([
+                    resolveMobileSheetState({ isCompactViewport: true, isAnySidebarOpen: false, sheetSnap: 'peek', windowHeight: 844 }),
+                    resolveMobileSheetState({ isCompactViewport: true, isAnySidebarOpen: true, sheetSnap: 'half', hasFocusPerson: true, windowHeight: 844 }),
+                    resolveMobileSheetState({ isCompactViewport: false, isAnySidebarOpen: true, sheetSnap: 'peek', hasFocusPerson: true, windowHeight: 844 })
+                ]),
+                JSON.stringify([
+                    { canPeek: false, effectiveSheetSnap: null, bottomSheetHeight: 0, focusBottomSheetHeight: 96 },
+                    { canPeek: true, effectiveSheetSnap: 'half', bottomSheetHeight: 380, focusBottomSheetHeight: 380 },
+                    { canPeek: false, effectiveSheetSnap: null, bottomSheetHeight: 0, focusBottomSheetHeight: 0 }
+                ]));
+
+            assertEqual('Test 220.04: Handle tap cycles stops, downward swipe from peek or < 56px dismisses, and directional flicks step between peek / half / full',
+                [resolveReleaseSheetSnap({ startHeight: 96, deltaY: 2, currentSnap: 'peek', windowHeight: 844 }),
+                 resolveReleaseSheetSnap({ startHeight: 380, deltaY: -3, currentSnap: 'half', windowHeight: 844 }),
+                 resolveReleaseSheetSnap({ startHeight: 717, deltaY: 0, currentSnap: 'full', windowHeight: 844 }),
+                 resolveReleaseSheetSnap({ startHeight: 96, deltaY: -40, currentSnap: 'peek', windowHeight: 844 }),
+                 resolveReleaseSheetSnap({ startHeight: 380, deltaY: -340, currentSnap: 'half', windowHeight: 844 }),
+                 resolveReleaseSheetSnap({ startHeight: 96, deltaY: 60, currentSnap: 'peek', windowHeight: 844 }),
+                 resolveReleaseSheetSnap({ startHeight: 96, deltaY: 500, currentSnap: 'peek', windowHeight: 844 }),
+                 resolveReleaseSheetSnap({ startHeight: 380, deltaY: 50, currentSnap: 'half', windowHeight: 844 }),
+                 resolveReleaseSheetSnap({ startHeight: 380, deltaY: -50, currentSnap: 'half', windowHeight: 844 }),
+                 resolveReleaseSheetSnap({ startHeight: 717, deltaY: -60, currentSnap: 'full', windowHeight: 844 }),
+                 resolveReleaseSheetSnap({ startHeight: 717, deltaY: -520, currentSnap: 'full', windowHeight: 844 }),
+                 clampMobileSheetDragHeight(96, -80, 844),
+                 clampMobileSheetDragHeight(717, 200, 844)].join('|'),
+                'half|full|peek|dismiss|dismiss|half|full|full|peek|half|peek|40|780');
+
+            assertEqual('Test 220.05: resolveSidebarDockLayout & resolveBottomDockLift honor 3-stop snap heights and hide the floating FAB without layout shift at full (85vh)',
+                JSON.stringify({
+                    peekDock: resolveSidebarDockLayout({ dockBottom: true, isVisible: true, sidebarWidth: 360, sheetSnap: 'peek' }).style,
+                    halfDock: resolveSidebarDockLayout({ dockBottom: true, isVisible: true, sidebarWidth: 360, sheetSnap: 'half' }).style,
+                    fullDock: resolveSidebarDockLayout({ dockBottom: true, isVisible: true, sidebarWidth: 360, sheetSnap: 'full' }).style,
+                    peekLift: resolveBottomDockLift(true, true, null, 'peek'),
+                    halfLift: resolveBottomDockLift(true, true, null, 'half'),
+                    fullLift: resolveBottomDockLift(true, true, null, 'full')
+                }),
+                JSON.stringify({
+                    peekDock: { height: '96px' },
+                    halfDock: { height: '45vh' },
+                    fullDock: { height: '85vh' },
+                    peekLift: { bottom: 'calc(96px + 1rem)' },
+                    halfLift: { bottom: 'calc(45vh + 1.25rem)' },
+                    fullLift: { bottom: '1.5rem', opacity: 0, visibility: 'hidden', pointerEvents: 'none' }
+                }));
+
+            const rows220 = [
+                { _sourceId: 's1', _sheetRow: 2, Name: 'Chacko', 'Year of Birth': '1924', 'Year of Death': '2014', Gender: 'M', Location: 'Chalakkudy' },
+                { _sourceId: 's1', _sheetRow: 3, Name: 'Regina', 'Year of Birth': '1924', 'Year of Death': '2014', Spouse: 'Chacko', Location: 'Ollur' },
+                { _sourceId: 's1', _sheetRow: 10, Name: 'Anto', 'Year of Birth': '1955', Mother: 'Regina', Job: 'Banker', Location: '' },
+                { _sourceId: 's1', _sheetRow: 11, Name: 'Beena', 'Year of Birth': '1958', Spouse: 'Anto', Job: 'Teacher', Location: 'Chelakkara' },
+                { _sourceId: 's1', _sheetRow: 12, Name: 'Rupak', 'Year of Birth': '1984', Mother: 'Beena', Job: 'IT', Location: 'California' },
+                { _sourceId: 's1', _sheetRow: 13, Name: 'Innez', 'Year of Birth': '1989', Mother: 'Beena', Job: 'Test Analyst', Location: 'Perth' }
+            ];
+            const tree220 = new FamilyTreeBuilder(rows220).build();
+            const anto220 = tree220.all.find(n => n.name === 'Anto' && !n.isGhost);
+            const jumps220 = collectPeekJumpRelatives(anto220, tree220);
+
+            assertEqual('Test 220.06: Peek Card quick-jump chips order spouse -> chronological children -> parents and format inline bio summary',
+                jumps220.map(r => `${r.symbol}${r.name}`).join('|') + ' :: ' + formatPeekPersonSummary(anto220).includes('Chalakkudy'),
+                '♥Beena|↓Rupak|↓Innez|↑Chacko|↑Regina :: true');
+
+            assertEqual('Test 220.07: isMobilePeekCardActive morphs from Peek Card into full details live as finger drags past 148px',
+                [isMobilePeekCardActive({ dockBottom: true, sheetSnap: 'peek', focusPerson: anto220 }),
+                 isMobilePeekCardActive({ dockBottom: true, sheetSnap: 'peek', isResizing: true, sidebarHeight: 120, focusPerson: anto220 }),
+                 isMobilePeekCardActive({ dockBottom: true, sheetSnap: 'peek', isResizing: true, sidebarHeight: 180, focusPerson: anto220 }),
+                 isMobilePeekCardActive({ dockBottom: true, sheetSnap: 'half', focusPerson: anto220 }),
+                 isMobilePeekCardActive({ dockBottom: false, sheetSnap: 'peek', focusPerson: anto220 })].join('|'),
+                'true|true|false|false|false');
+
+            // Sheet-aware camera viewport & bounds math:
+            const sheetDims = new Function('window', extractFunction(appCode, 'resolveViewportDimensions') +
+                '; return [resolveViewportDimensions({ container: { clientWidth: 390, clientHeight: 844 }, isSidebarOpen: false, sidebarWidth: 0, bottomSheetHeight: 96 }),' +
+                ' resolveViewportDimensions({ container: { clientWidth: 390, clientHeight: 844 }, isSidebarOpen: true, sidebarWidth: 0, bottomSheetHeight: 380 })];')({ innerWidth: 390, innerHeight: 844 });
+            assertEqual('Test 220.08: resolveViewportDimensions subtracts target bottomSheetHeight synchronously on frame 0 even before isSidebarOpen flips true or CSS finishes animating',
+                JSON.stringify(sheetDims),
+                JSON.stringify([{ contW: 390, contH: 748 }, { contW: 390, contH: 464 }]));
+
+            const framedPeek = computeFramedCamera({
+                box: { minX: 100, maxX: 190, minY: 200, maxY: 276, foundCount: 1 },
+                contW: 390, contH: 748, preferredZ: 0.8, currentZ: 0.8,
+                timelineWidth: 32, targetPadX: 0, targetPadY: 0, topInset: 56
+            });
+            // usableContH = 748 - 56 = 692; screen Y of boxCenterY (238) = framedPeek.y + 238 * 0.8 = 56 + 346 = 402px!
+            assertEqual('Test 220.09: computeFramedCamera with topInset=56 places the card center at the exact midpoint between the top toolbar (56px) and the 96px Peek Sheet (748px)',
+                Math.round(framedPeek.y + 238 * framedPeek.z),
+                402);
+
+            const mobileShortBounds = computeCameraBounds({ treeW: 300, treeH: 350, contW: 390, contH: 748, z: 0.8, timelineWidth: 32 });
+            const mobileTallBounds = computeCameraBounds({ treeW: 900, treeH: 1400, contW: 390, contH: 748, z: 0.8, timelineWidth: 32 });
+            const desktopShortBounds = computeCameraBounds({ treeW: 300, treeH: 350, contW: 1280, contH: 800, z: 0.8, timelineWidth: 48 });
+            assertEqual('Test 220.10: computeCameraBounds reserves top (64px) & bottom (48px) mobile margins, unlocks vertical centering on short trees, and leaves desktop bounds unchanged',
+                [mobileShortBounds.minY, mobileShortBounds.maxY, mobileTallBounds.minY, mobileTallBounds.maxY, desktopShortBounds.minY, desktopShortBounds.maxY].join('|'),
+                '64|420|-420|64|16|16');
+        } catch (e) {
+            assertEqual('Test 220 execution failed', e.message, '');
         }
     }
 

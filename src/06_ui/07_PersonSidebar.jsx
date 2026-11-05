@@ -531,7 +531,7 @@ const SidebarPersonDetails = ({ focusPerson, tree, setFocusId, onFilterBy, cente
     );
 
     return (
-        <div className={`p-6 ${dockBottom ? 'pt-8' : 'pt-[72px]'} overflow-y-auto flex-1 pb-24 interactive-element w-full`}>
+        <div className={`p-6 ${dockBottom ? 'pt-8' : 'pt-[72px]'} overflow-y-auto custom-scrollbar flex-1 pb-24 interactive-element w-full`}>
             <SidebarPersonHeader focusPerson={focusPerson} setFocusId={setFocusId} centerOnPerson={centerOnPerson} />
             <SidebarPersonBadges focusPerson={focusPerson} tree={tree} onFilterBy={onFilterBy} dateStr={dateStr} extraStr={extraStr} isDeduced={isDeduced} />
             <div className="mt-6">
@@ -566,10 +566,10 @@ const SidebarResizeHandle = ({ onResizeStart, dockBottom = false }) => (
         data-testid="sidebar-resize-handle"
         onPointerDown={onResizeStart}
         className={dockBottom
-            ? "absolute top-0 left-0 right-12 h-7 cursor-row-resize touch-none z-40 group flex items-center justify-center pl-12 select-none interactive-element"
+            ? "absolute top-0 left-0 right-0 h-6 cursor-row-resize touch-none z-40 group flex items-center justify-center select-none interactive-element"
             : "absolute top-0 bottom-0 left-0 w-3.5 -translate-x-1/2 cursor-col-resize touch-none z-50 group flex items-center justify-center select-none interactive-element"
         }
-        title="Drag to resize panel"
+        title={dockBottom ? "Drag or tap to resize sheet" : "Drag to resize panel"}
     >
         <div className={dockBottom
             ? "h-1.5 w-12 rounded-full bg-slate-300 group-hover:bg-blue-500 group-hover:w-16 transition-all group-active:bg-blue-600 group-active:w-20 shadow-sm"
@@ -577,6 +577,234 @@ const SidebarResizeHandle = ({ onResizeStart, dockBottom = false }) => (
         } />
     </div>
 );
+
+/**
+ * Collects up to 8 immediate relatives (partners, children sorted chronologically, then parents)
+ * for 1-tap generation hopping inside the `96px` mobile Peek Card, excluding unknown/synthetic ghosts.
+ *
+ * @param {Person|null} focusPerson - Active focused person record.
+ * @param {FamilyTree|null} tree - Family tree instance.
+ * @returns {Array<{ id: string, name: string, gender: string, role: 'spouse'|'child'|'parent', symbol: string }>}
+ *
+ * @example
+ * collectPeekJumpRelatives(tree.get('Anto_1955_22'), tree);
+ * // => [{ id: 'Beena_1958_23', name: 'Beena', gender: 'F', role: 'spouse', symbol: '♥' }, ...]
+ *
+ * @example
+ * collectPeekJumpRelatives(null, tree);
+ * // => []
+ */
+function collectPeekJumpRelatives(focusPerson, tree) {
+    if (!focusPerson || !tree || typeof tree.get !== 'function') return [];
+    const seen = new Set([focusPerson.id]);
+    const out = [];
+    const addGroup = (ids, role, symbol, sortGroup = false) => {
+        const nodes = (ids || [])
+            .map(id => tree.get(id))
+            .filter(n => n && !n._isUnknown && !FamilyTree.isSyntheticSiblingParent(n));
+        if (sortGroup) nodes.sort(compareSidebarRelatives);
+        for (const node of nodes) {
+            if (seen.has(node.id) || out.length >= 8) continue;
+            seen.add(node.id);
+            out.push({ id: node.id, name: node.name, gender: node.gender, role, symbol });
+        }
+    };
+    addGroup(focusPerson.partners, 'spouse', '♥', false);
+    addGroup(focusPerson.children, 'child', '↓', true);
+    addGroup([focusPerson.fatherId, focusPerson.momId], 'parent', '↑', false);
+    return out;
+}
+
+/**
+ * Formats a concise single-line biographical summary (`lifespan · age · place/job`) for the mobile Peek Card.
+ *
+ * @param {Person|null} focusPerson - Active focused person record.
+ * @returns {string} Dot-separated inline summary string.
+ *
+ * @example
+ * formatPeekPersonSummary(tree.get('Anto_1955_22'));
+ * // => 'b. 1955 · 71 yrs · Chalakkudy'
+ *
+ * @example
+ * formatPeekPersonSummary(null);
+ * // => ''
+ */
+function formatPeekPersonSummary(focusPerson) {
+    if (!focusPerson) return '';
+    const { dateStr, extraStr } = typeof focusPerson.getDateStrings === 'function'
+        ? focusPerson.getDateStrings()
+        : {};
+    const primaryPlace = parseCommaDelimitedTokens(focusPerson.place || '')[0] || '';
+    const primaryJob = !primaryPlace ? (parseCommaDelimitedTokens(focusPerson.job || '')[0] || '') : '';
+    return [dateStr, extraStr, primaryPlace || primaryJob].filter(Boolean).join(' · ');
+}
+
+/**
+ * Determines whether the compact `96px` mobile Peek Card should be displayed instead of full details.
+ * Morphs live into full details during finger drag once height exceeds `148px`.
+ *
+ * @param {Object} [options={}]
+ * @returns {boolean}
+ *
+ * @example
+ * isMobilePeekCardActive({ dockBottom: true, sheetSnap: 'peek', focusPerson: { id: 'p1' } });
+ * // => true
+ *
+ * @example
+ * isMobilePeekCardActive({ dockBottom: true, sheetSnap: 'half', focusPerson: { id: 'p1' } });
+ * // => false
+ */
+function isMobilePeekCardActive({
+    dockBottom = false, sheetSnap = null, isResizing = false, sidebarHeight = null,
+    focusPerson = null, activeFilter = null, showLogs = false, showAI = false
+} = {}) {
+    if (!dockBottom || !focusPerson || showLogs || showAI) return false;
+    if (activeFilter && activeFilter.filterType !== 'directory') return false;
+    if (isResizing && typeof sidebarHeight === 'number') return sidebarHeight <= 148;
+    return sheetSnap === 'peek';
+}
+
+/**
+ * Horizontally scrollable quick-jump relative chips rendered on Row 2 of the mobile Peek Card.
+ *
+ * @param {Object} props
+ * @param {Person} props.focusPerson - Focused person profile.
+ * @param {FamilyTree} props.tree - Family tree model.
+ * @param {Function} props.setFocusId - Callback to jump focus to a relative.
+ * @param {Function} [props.onSelectSnap] - Callback to expand sheet stop if no relatives exist.
+ * @returns {React.ReactNode}
+ *
+ * @example
+ * <SidebarPeekRelativeChips focusPerson={person} tree={tree} setFocusId={setFocusId} />
+ *
+ * @example
+ * <SidebarPeekRelativeChips focusPerson={isolatedPerson} tree={tree} setFocusId={() => {}} onSelectSnap={setSnap} />
+ */
+const SidebarPeekRelativeChips = ({ focusPerson, tree, setFocusId, onSelectSnap }) => {
+    const relatives = useMemo(() => collectPeekJumpRelatives(focusPerson, tree), [focusPerson, tree]);
+    if (relatives.length === 0) {
+        return (
+            <div className="flex items-center gap-2 mt-1.5 h-7">
+                <button type="button" data-testid="peek-expand-fallback" onClick={() => onSelectSnap?.('half')}
+                        className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-medium bg-slate-100 hover:bg-blue-50 text-slate-600 hover:text-blue-700 border border-slate-200 cursor-pointer transition-colors interactive-element">
+                    <span>View full profile & lineage</span>
+                    <span aria-hidden="true">▲</span>
+                </button>
+            </div>
+        );
+    }
+    return (
+        <div data-testid="peek-relative-chips" style={{ scrollbarWidth: 'none' }}
+             className="flex items-center gap-1.5 mt-1.5 h-7 overflow-x-auto no-scrollbar">
+            {relatives.map((rel) => {
+                const symColor = rel.role === 'spouse' ? 'text-pink-500' : (rel.role === 'child' ? 'text-blue-500' : 'text-amber-600');
+                return (
+                    <button key={rel.id} type="button" data-testid={`peek-jump-${rel.id}`} onClick={() => setFocusId(rel.id)}
+                            className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-semibold bg-slate-100 hover:bg-blue-50 text-slate-700 hover:text-blue-700 border border-slate-200 shrink-0 cursor-pointer transition-colors interactive-element"
+                            title={`Jump to ${rel.role}: ${rel.name}`}>
+                        <span className={`${symColor} text-[11px] leading-none`} aria-hidden="true">{rel.symbol}</span>
+                        <span className="max-w-[116px] truncate">{rel.name}</span>
+                    </button>
+                );
+            })}
+        </div>
+    );
+};
+
+/**
+ * Compact `96px` two-row mobile Peek Card preserving `~89%` of the portrait tree canvas while showing
+ * person identity, lifespan/place summary, and 1-tap quick-jump relative chips.
+ *
+ * @param {Object} props
+ * @param {Person|null} props.focusPerson - Active focused person record.
+ * @param {FamilyTree} props.tree - Family tree model.
+ * @param {Function} props.setFocusId - Callback to focus a relative.
+ * @param {Function} [props.centerOnPerson] - Callback to center camera on person.
+ * @param {Function} [props.onSelectSnap] - Callback to change mobile sheet snap stop.
+ * @returns {React.ReactNode|null}
+ *
+ * @example
+ * <SidebarPersonPeekCard focusPerson={person} tree={tree} setFocusId={setFocusId} centerOnPerson={centerOnPerson} />
+ *
+ * @example
+ * <SidebarPersonPeekCard focusPerson={null} tree={tree} setFocusId={() => {}} />
+ */
+const SidebarPersonPeekCard = ({ focusPerson, tree, setFocusId, centerOnPerson, onSelectSnap }) => {
+    if (!focusPerson) return null;
+    const summary = formatPeekPersonSummary(focusPerson);
+    const dotColor = focusPerson.gender === 'M'
+        ? 'bg-blue-500'
+        : (focusPerson.gender === 'F' ? 'bg-pink-500' : 'bg-slate-300');
+
+    return (
+        <div data-testid="person-peek-card" className="px-3.5 pt-5 pb-2 h-full flex flex-col justify-between overflow-hidden select-none interactive-element w-full">
+            <div className="flex items-baseline gap-2 min-w-0 pr-24">
+                <span className={`w-2.5 h-2.5 rounded-full ${dotColor} shrink-0 self-center`} />
+                <button type="button" data-testid="peek-person-name"
+                        onClick={() => focusPerson.id && centerOnPerson?.(focusPerson.id)}
+                        className="text-base font-bold text-slate-800 leading-tight truncate text-left cursor-pointer hover:text-blue-600 transition-colors">
+                    {focusPerson.name}
+                </button>
+                {summary && (
+                    <span data-testid="peek-person-summary" className="text-xs text-slate-500 truncate min-w-0">
+                        {summary}
+                    </span>
+                )}
+            </div>
+            <SidebarPeekRelativeChips focusPerson={focusPerson} tree={tree} setFocusId={setFocusId} onSelectSnap={onSelectSnap} />
+        </div>
+    );
+};
+
+/**
+ * Top-right snap stop controls (`More ▲`, `Full ▲`, `Half ▼`, `Peek ▼`) rendered alongside the
+ * close button on the mobile bottom sheet.
+ *
+ * @param {Object} props
+ * @param {string|null} props.sheetSnap - Current effective snap stop (`'peek' | 'half' | 'full'`).
+ * @param {boolean} [props.canPeek=false] - Whether the active panel supports collapsing to `'peek'`.
+ * @param {Function} [props.onSelectSnap] - Callback to select a target snap stop.
+ * @returns {React.ReactNode|null}
+ *
+ * @example
+ * <SidebarSheetSnapControls sheetSnap="peek" canPeek={true} onSelectSnap={setSheetSnap} />
+ *
+ * @example
+ * <SidebarSheetSnapControls sheetSnap="half" canPeek={false} onSelectSnap={setSheetSnap} />
+ */
+const SidebarSheetSnapControls = ({ sheetSnap, canPeek = false, onSelectSnap }) => {
+    if (typeof onSelectSnap !== 'function' || !sheetSnap) return null;
+    const btnCls = "px-2 py-1 rounded-md text-[11px] font-semibold bg-slate-100 hover:bg-slate-200/80 text-slate-600 hover:text-slate-800 border border-slate-200/80 transition-colors cursor-pointer leading-none";
+    return (
+        <div data-testid="sheet-snap-controls" className="absolute top-2 right-11 z-50 flex items-center gap-1 interactive-element">
+            {sheetSnap === 'peek' && (
+                <button type="button" data-testid="sheet-snap-half" onClick={() => onSelectSnap('half')} className={btnCls} title="Expand details panel">
+                    More ▲
+                </button>
+            )}
+            {sheetSnap === 'half' && canPeek && (
+                <button type="button" data-testid="sheet-snap-peek" onClick={() => onSelectSnap('peek')} className={btnCls} title="Collapse to compact peek bar">
+                    Peek ▼
+                </button>
+            )}
+            {sheetSnap === 'half' && (
+                <button type="button" data-testid="sheet-snap-full" onClick={() => onSelectSnap('full')} className={btnCls} title="Expand to full height">
+                    Full ▲
+                </button>
+            )}
+            {sheetSnap === 'full' && (
+                <button type="button" data-testid="sheet-snap-half" onClick={() => onSelectSnap('half')} className={btnCls} title="Restore to half height">
+                    Half ▼
+                </button>
+            )}
+            {sheetSnap === 'full' && canPeek && (
+                <button type="button" data-testid="sheet-snap-peek" onClick={() => onSelectSnap('peek')} className={btnCls} title="Collapse to compact peek bar">
+                    Peek ▼
+                </button>
+            )}
+        </div>
+    );
+};
 
 /**
  * Renders the dismiss ('x') button in the top-right corner of the details panel.
@@ -634,47 +862,76 @@ const SidebarCloseButton = ({ onClose, dockBottom = false }) => {
  * @example
  * <SidebarMainPanels aiProps={{}} showLogs={true} showAI={false} logs={[{ text: 'loaded' }]} isLoading={false} setShowLogs={() => {}} activeFilter={null} filteredProps={{}} focusPerson={null} tree={tree} setFocusId={() => {}} onFilterBy={() => {}} />
  */
-const SidebarMainPanels = ({
-    aiProps, showLogs, showAI, logs, isLoading, setShowLogs,
-    activeFilter, filteredProps, focusPerson, tree, setFocusId, onFilterBy, centerOnPerson, dockBottom = false
-}) => (
-    <>
-        <AIAssistant {...aiProps} />
-        {showLogs && !showAI && <SidebarLogsView logs={logs} isLoading={isLoading} setShowLogs={setShowLogs} />}
-        {activeFilter && activeFilter.filterType !== 'directory' && !showLogs && !showAI && (
-            <FilteredListView {...filteredProps} />
-        )}
-        {focusPerson && (!activeFilter || activeFilter.filterType === 'directory') && !showLogs && !showAI && (
-            <SidebarPersonDetails focusPerson={focusPerson} tree={tree} setFocusId={setFocusId} onFilterBy={onFilterBy} centerOnPerson={centerOnPerson} dockBottom={dockBottom} />
-        )}
-    </>
-);
+const SidebarMainPanels = (props) => {
+    const {
+        showLogs, showAI, setShowAI, logs, isLoading, setShowLogs, activeFilter, focusPerson, tree,
+        setFocusId, onFilterBy, centerOnPerson, dockBottom = false, isPeekCard = false, onSelectSnap,
+        isAILoading, setIsAILoading, onAiProfilesResponded, pendingAiQuery, setPendingAiQuery,
+        setShowMap, omniSelectedIndex, setOmniSelectedIndex
+    } = props;
+    const aiProps = {
+        isOpen: showAI, setIsOpen: setShowAI, tree, handleSetFocusId: setFocusId,
+        isLoading: isAILoading, setIsLoading: setIsAILoading, onAiProfilesResponded, pendingAiQuery, setPendingAiQuery
+    };
+    const filteredProps = {
+        activeFilter, tree, setFocusId, onFilterBy, setShowMap, setShowAI,
+        setShowLogs, setPendingAiQuery, omniSelectedIndex, setOmniSelectedIndex
+    };
+    const showPerson = Boolean(focusPerson && (!activeFilter || activeFilter.filterType === 'directory') && !showLogs && !showAI);
+
+    return (
+        <>
+            <AIAssistant {...aiProps} />
+            {showLogs && !showAI && <SidebarLogsView logs={logs} isLoading={isLoading} setShowLogs={setShowLogs} />}
+            {activeFilter && activeFilter.filterType !== 'directory' && !showLogs && !showAI && <FilteredListView {...filteredProps} />}
+            {showPerson && isPeekCard && (
+                <SidebarPersonPeekCard focusPerson={focusPerson} tree={tree} setFocusId={setFocusId}
+                                       centerOnPerson={centerOnPerson} onSelectSnap={onSelectSnap} />
+            )}
+            {showPerson && !isPeekCard && (
+                <SidebarPersonDetails focusPerson={focusPerson} tree={tree} setFocusId={setFocusId}
+                                      onFilterBy={onFilterBy} centerOnPerson={centerOnPerson} dockBottom={dockBottom} />
+            )}
+        </>
+    );
+};
 
 /** Share of the viewport height the details panel takes when docked below the canvas on phones. */
 const BOTTOM_DOCK_HEIGHT = '55vh';
 
 /**
  * Inline style that lifts a bottom-anchored control (settings FAB) clear of the
- * phone layout's bottom-docked details panel, so it never covers the panel's content. On
- * desktop, or while no panel is open, the control keeps its normal `bottom-6` position.
+ * phone layout's bottom-docked details panel, or hides it without layout shift when the sheet
+ * is expanded to `'full'` (`85vh`) so it never collides with the top navigation bar.
  *
  * @param {boolean} isCompactViewport - Phone layout (see `isCompactViewportWidth`)
  * @param {boolean} isAnySidebarOpen - Whether a details / filter / AI / logs panel is open
- * @param {number|null} [sidebarHeight=null] - User-resized bottom-sheet height in px, or null for `55vh`
- * @returns {{ bottom: string }|undefined}
+ * @param {number|null} [sidebarHeight=null] - User-dragged bottom-sheet height in px, or null
+ * @param {string|null} [sheetSnap=null] - Optional 3-stop snap state (`'peek' | 'half' | 'full'`)
+ * @returns {{ bottom: string, opacity?: number, visibility?: string, pointerEvents?: string }|undefined}
  *
  * @example
- * resolveBottomDockLift(true, true);        // => { bottom: 'calc(55vh + 1.5rem)' }
- * resolveBottomDockLift(true, true, 320);   // => { bottom: 'calc(320px + 1.5rem)' }
+ * resolveBottomDockLift(true, true);                  // => { bottom: 'calc(55vh + 1.5rem)' }
+ * resolveBottomDockLift(true, true, null, 'peek');    // => { bottom: 'calc(96px + 1rem)' }
  *
  * @example
- * resolveBottomDockLift(false, true);       // => undefined (desktop: the panel sits beside the canvas)
- * resolveBottomDockLift(true, false);       // => undefined (nothing docked at the bottom)
+ * resolveBottomDockLift(false, true);                 // => undefined
+ * resolveBottomDockLift(true, true, null, 'full');    // => { bottom: '1.5rem', opacity: 0, visibility: 'hidden', pointerEvents: 'none' }
  */
-function resolveBottomDockLift(isCompactViewport, isAnySidebarOpen, sidebarHeight = null) {
+function resolveBottomDockLift(isCompactViewport, isAnySidebarOpen, sidebarHeight = null, sheetSnap = null) {
     if (!isCompactViewport || !isAnySidebarOpen) return undefined;
-    const heightCss = (typeof sidebarHeight === 'number' && sidebarHeight > 0) ? `${sidebarHeight}px` : BOTTOM_DOCK_HEIGHT;
-    return { bottom: `calc(${heightCss} + 1.5rem)` };
+    if ((typeof sidebarHeight === 'number' && sidebarHeight >= 520) || (sidebarHeight === null && sheetSnap === 'full')) {
+        return { bottom: '1.5rem', opacity: 0, visibility: 'hidden', pointerEvents: 'none' };
+    }
+    if (typeof sidebarHeight === 'number' && sidebarHeight > 0) {
+        return { bottom: `calc(${sidebarHeight}px + 1.5rem)` };
+    }
+    if (sheetSnap === 'peek' || sheetSnap === 'half') {
+        const snapCss = resolveSheetSnapCssHeight(sheetSnap);
+        const gapRem = sheetSnap === 'peek' ? '1rem' : '1.25rem';
+        return { bottom: `calc(${snapCss} + ${gapRem})` };
+    }
+    return { bottom: `calc(${BOTTOM_DOCK_HEIGHT} + 1.5rem)` };
 }
 
 /**
@@ -686,7 +943,8 @@ function resolveBottomDockLift(isCompactViewport, isAnySidebarOpen, sidebarHeigh
  * @param {boolean} options.dockBottom - Phone layout (see `isCompactViewportWidth`)
  * @param {boolean} options.isVisible - Whether the panel is open
  * @param {number} options.sidebarWidth - Configured desktop width in px
- * @param {number|null} [options.sidebarHeight=null] - Configured phone bottom-sheet height in px (defaults to `55vh`)
+ * @param {number|null} [options.sidebarHeight=null] - Live phone bottom-sheet drag height in px
+ * @param {string|null} [options.sheetSnap=null] - Optional 3-stop snap state (`'peek' | 'half' | 'full'`)
  * @returns {{ className: string, style: Object }}
  *
  * @example
@@ -694,14 +952,17 @@ function resolveBottomDockLift(isCompactViewport, isAnySidebarOpen, sidebarHeigh
  * // => { className: 'border-l', style: { width: '360px' } }
  *
  * @example
- * resolveSidebarDockLayout({ dockBottom: true, isVisible: true, sidebarWidth: 360 });
- * // => { className: 'w-full border-t rounded-t-2xl', style: { height: '55vh' } }
- * resolveSidebarDockLayout({ dockBottom: true, isVisible: true, sidebarWidth: 360, sidebarHeight: 340 });
- * // => { className: 'w-full border-t rounded-t-2xl', style: { height: '340px' } }
+ * resolveSidebarDockLayout({ dockBottom: true, isVisible: true, sidebarWidth: 360, sheetSnap: 'peek' });
+ * // => { className: 'w-full border-t rounded-t-2xl', style: { height: '96px' } }
  */
-function resolveSidebarDockLayout({ dockBottom, isVisible, sidebarWidth, sidebarHeight = null }) {
+function resolveSidebarDockLayout({ dockBottom, isVisible, sidebarWidth, sidebarHeight = null, sheetSnap = null }) {
     if (dockBottom) {
-        const openHeight = (typeof sidebarHeight === 'number' && sidebarHeight > 0) ? `${sidebarHeight}px` : BOTTOM_DOCK_HEIGHT;
+        let openHeight = BOTTOM_DOCK_HEIGHT;
+        if (typeof sidebarHeight === 'number' && sidebarHeight > 0) {
+            openHeight = `${sidebarHeight}px`;
+        } else if (sheetSnap === 'peek' || sheetSnap === 'half' || sheetSnap === 'full') {
+            openHeight = resolveSheetSnapCssHeight(sheetSnap);
+        }
         return { className: 'w-full border-t rounded-t-2xl', style: { height: isVisible ? openHeight : 0 } };
     }
     return { className: 'border-l', style: { width: isVisible ? `${sidebarWidth}px` : 0 } };
@@ -710,38 +971,9 @@ function resolveSidebarDockLayout({ dockBottom, isVisible, sidebarWidth, sidebar
 /**
  * Collapsible side panel orchestrating detail views for persons, attribute directories,
  * active filters, system logs, and the AI Assistant. Docks to the right of the canvas on
- * desktop and below it on phones (`dockBottom`).
+ * desktop and below it as a 3-stop Peek Sheet on phones (`dockBottom`).
  *
  * @param {object} props
- * @param {object} [props.focusPerson] - Currently selected person node
- * @param {object} [props.activeFilter] - Active filter state { filterType, value, tab }
- * @param {Function} props.onFilterBy - Callback to set active filter
- * @param {object} props.tree - FamilyTree data model
- * @param {Function} props.setFocusId - State setter to select a person ID
- * @param {boolean} props.isVisible - Whether the sidebar is currently open/visible
- * @param {number} [props.sidebarWidth=360] - Width of sidebar in pixels (desktop)
- * @param {number|null} [props.sidebarHeight=null] - Height of bottom sheet in pixels (phones)
- * @param {boolean} [props.dockBottom=false] - Phone layout: full-width bottom sheet instead of a right column
- * @param {Function} props.onResizeStart - Pointer down handler to initiate horizontal sidebar resizing
- * @param {Function} [props.onVerticalResizeStart] - Pointer down handler to initiate vertical bottom-sheet resizing
- * @param {Function} [props.onClose] - Callback to dismiss/close the panel
- * @param {boolean} [props.isResizing=false] - Whether a resize drag operation is active
- * @param {boolean} props.showLogs - Whether system logs view is active
- * @param {Function} props.setShowLogs - State setter for logs view visibility
- * @param {Array<object>} props.logs - System log messages
- * @param {boolean} props.isLoading - Whether tree or network operations are loading
- * @param {boolean} props.showAI - Whether AI Assistant panel is active
- * @param {Function} props.setShowAI - State setter for AI Assistant panel visibility
- * @param {boolean} props.isAILoading - Whether AI queries are loading
- * @param {Function} props.setIsAILoading - State setter for AI loading state
- * @param {Function} props.onAiProfilesResponded - Callback when AI returns profiles
- * @param {string} props.pendingAiQuery - Pending query string for AI Assistant
- * @param {Function} props.setPendingAiQuery - Setter for pending AI query
- * @param {boolean} props.showMap - Whether map view is active
- * @param {Function} props.setShowMap - State setter for map view
- * @param {number} props.omniSelectedIndex - Keyboard selection index in filtered list
- * @param {Function} props.setOmniSelectedIndex - Setter for keyboard selection index
- * @param {Function} [props.centerOnPerson] - Callback to center canvas on person
  * @returns {React.ReactNode}
  *
  * @example
@@ -763,33 +995,26 @@ function resolveSidebarDockLayout({ dockBottom, isVisible, sidebarWidth, sidebar
  *   showMap={true}
  * />
  */
-const PersonSidebar = ({ 
-    focusPerson, activeFilter, onFilterBy, tree, setFocusId, isVisible, sidebarWidth = 360, sidebarHeight = null, dockBottom = false,
-    onResizeStart, onVerticalResizeStart, onClose, isResizing = false, showLogs, setShowLogs, logs, isLoading, showAI, setShowAI,
-    isAILoading, setIsAILoading, onAiProfilesResponded, pendingAiQuery, setPendingAiQuery,
-    showMap, setShowMap, omniSelectedIndex, setOmniSelectedIndex, centerOnPerson
-}) => {
+const PersonSidebar = (props) => {
+    const {
+        focusPerson, activeFilter, onFilterBy, tree, isVisible, sidebarWidth = 360, sidebarHeight = null,
+        dockBottom = false, sheetSnap = null, canPeek = false, onSelectSnap, onResizeStart, onVerticalResizeStart,
+        onClose, isResizing = false, showLogs, showAI, showMap
+    } = props;
     const isDirectoryMode = (activeFilter?.filterType === 'directory') || (!focusPerson && !activeFilter && showMap);
     if (!focusPerson && !activeFilter && !showLogs && !showAI && !isDirectoryMode) return null;
 
-    const aiProps = { isOpen: showAI, setIsOpen: setShowAI, tree, handleSetFocusId: setFocusId, isLoading: isAILoading, setIsLoading: setIsAILoading, onAiProfilesResponded, pendingAiQuery, setPendingAiQuery };
-    const filteredProps = { activeFilter, tree, setFocusId, onFilterBy, setShowMap, setShowAI, setShowLogs, setPendingAiQuery, omniSelectedIndex, setOmniSelectedIndex };
-    const dock = resolveSidebarDockLayout({ dockBottom, isVisible, sidebarWidth, sidebarHeight });
+    const dock = resolveSidebarDockLayout({ dockBottom, isVisible, sidebarWidth, sidebarHeight, sheetSnap });
     const showCloseBtn = isVisible && !showLogs && (dockBottom || (focusPerson && !showAI && (!activeFilter || activeFilter.filterType === 'directory')));
+    const isPeekCard = isMobilePeekCardActive({ dockBottom, sheetSnap, isResizing, sidebarHeight, focusPerson, activeFilter, showLogs, showAI });
 
     return (
-        <div 
-            data-testid="person-sidebar"
-            className={`bg-white border-slate-200 shadow-2xl flex flex-col z-40 sidebar-scroll relative shrink-0 overflow-hidden ${dock.className} ${isResizing ? 'transition-none' : 'transition-all duration-300 ease-in-out'} ${isVisible ? 'opacity-100' : 'border-none opacity-0 pointer-events-none'}`}
-            style={dock.style}
-        >
+        <div data-testid="person-sidebar" style={dock.style}
+             className={`bg-white border-slate-200 shadow-2xl flex flex-col z-40 sidebar-scroll relative shrink-0 overflow-hidden ${dock.className} ${isResizing ? 'transition-none' : 'transition-all duration-300 ease-in-out'} ${isVisible ? 'opacity-100' : 'border-none opacity-0 pointer-events-none'}`}>
             {isVisible && <SidebarResizeHandle onResizeStart={dockBottom ? onVerticalResizeStart : onResizeStart} dockBottom={dockBottom} />}
+            {isVisible && dockBottom && !showLogs && <SidebarSheetSnapControls sheetSnap={sheetSnap} canPeek={canPeek} onSelectSnap={onSelectSnap} />}
             {showCloseBtn && <SidebarCloseButton onClose={onClose} dockBottom={dockBottom} />}
-            <SidebarMainPanels
-                aiProps={aiProps} showLogs={showLogs} showAI={showAI} logs={logs} isLoading={isLoading}
-                setShowLogs={setShowLogs} activeFilter={activeFilter} filteredProps={filteredProps}
-                focusPerson={focusPerson} tree={tree} setFocusId={setFocusId} onFilterBy={onFilterBy} centerOnPerson={centerOnPerson} dockBottom={dockBottom}
-            />
+            <SidebarMainPanels {...props} isPeekCard={isPeekCard} />
             {isDirectoryMode && !focusPerson && !showLogs && !showAI && (
                 <QuickDirectorySelector
                     tree={tree}

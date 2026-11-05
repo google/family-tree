@@ -3396,7 +3396,7 @@ const GlobalAppStyles = React.memo(() => (
             .custom-scrollbar::-webkit-scrollbar { width: 6px; }
             .custom-scrollbar::-webkit-scrollbar-track { background: transparent; margin: 4px; }
             .custom-scrollbar::-webkit-scrollbar-thumb { background-color: rgb(var(--tw-slate-300, 203 213 225)); border-radius: 10px; }
-            .custom-scrollbar::-webkit-scrollbar-thumb:hover { background-color: rgb(var(--tw-slate-400, 148 163 184)); }
+            .custom-scrollbar::-webkit-scrollbar-thumb:hover { background-color: rgb(var(--tw-slate-400, 148 163 184)); } .no-scrollbar::-webkit-scrollbar { display: none; }
             html[data-theme-mode="dark"] .leaflet-tile { filter: invert(1) hue-rotate(180deg) brightness(0.9); }
             @keyframes text-gradient { 0% { background-position: 0% 50%; } 50% { background-position: 100% 50%; } 100% { background-position: 0% 50%; } }
             .animate-text-gradient { background-size: 200% auto; animation: text-gradient 3s linear infinite; }
@@ -4080,13 +4080,16 @@ function useAiProfilesResponseHandler({
  *   });
  */
 function useAppCanvasViewportManager({
-    closeAllPanels, treeStats, isAnySidebarOpen, sidebarWidth, rootId, focusId
+    closeAllPanels, treeStats, isAnySidebarOpen, sidebarWidth, rootId, focusId,
+    bottomSheetHeight = 0, focusBottomSheetHeight = 0, isCompactViewport = false
 }) {
     const handleInteract = useCallback(() => {
         closeAllPanels();
     }, [closeAllPanels]);
 
-    const canvas = useCanvasControls(handleInteract, treeStats, isAnySidebarOpen, sidebarWidth);
+    const canvas = useCanvasControls(handleInteract, treeStats, isAnySidebarOpen, sidebarWidth, {
+        bottomSheetHeight, focusBottomSheetHeight, isCompactViewport
+    });
 
     const collapse = useSubtreeCollapseAnchor({
         treeRef: canvas.treeRef,

@@ -28427,20 +28427,21 @@ function resolveFramedBoxMetrics({
 function computeFramedCamera({
     box, contW, contH, preferredZ = null, currentZ = 1,
     timelineWidth = 48, targetPadX = 100, targetPadY = 120,
-    minBoxW = 90, minBoxH = 76, treeW = null
+    minBoxW = 90, minBoxH = 76, treeW = null, topInset = 0
 }) {
     const { boxCenterX, boxCenterY, usableContW, neededW, neededH } = resolveFramedBoxMetrics({
         box, minBoxW, minBoxH, targetPadX, targetPadY, contW, timelineWidth
     });
+    const usableContH = Math.max(80, contH - topInset);
 
     const finalZ = resolveFramedZoom({
         preferredZ, foundCount: box.foundCount, currentZ,
-        usableContW, neededW, contH, neededH
+        usableContW, neededW, contH: usableContH, neededH
     });
 
     return {
         x: resolveFramedCameraX(usableContW, timelineWidth, treeW, finalZ, boxCenterX),
-        y: (contH * 0.50) - (boxCenterY * finalZ),
+        y: topInset + (usableContH * 0.50) - (boxCenterY * finalZ),
         z: finalZ
     };
 }
@@ -28534,8 +28535,11 @@ function computeCameraBounds({
     topMargin = 16,
     bottomMargin = 0
 }) {
+    const isCompact = contW <= 639;
+    const effTop = (isCompact && topMargin === 16) ? 64 : topMargin;
+    const effBottom = (isCompact && bottomMargin === 0) ? 48 : bottomMargin;
     const usableContW = Math.max(100, contW - timelineWidth);
-    const usableH = Math.max(100, contH - topMargin - bottomMargin);
+    const usableH = Math.max(100, contH - effTop - effBottom);
 
     const minZ = Math.max(0.05, Math.min((usableContW - paddingX * 2) / Math.max(1, treeW), 1));
     const scaledW = treeW * z;
@@ -28545,8 +28549,10 @@ function computeCameraBounds({
 
     let minX = scaledW <= usableContW ? centeredX : contW - scaledW - paddingX;
     let maxX = scaledW <= usableContW ? centeredX : timelineWidth + paddingX;
-    let minY = scaledH <= usableH ? topMargin : contH - scaledH - bottomMargin;
-    let maxY = scaledH <= usableH ? topMargin : topMargin;
+    let minY = scaledH <= usableH ? effTop : contH - scaledH - effBottom;
+    let maxY = scaledH <= usableH
+        ? (isCompact ? Math.max(effTop, contH - scaledH - effBottom) : effTop)
+        : effTop;
 
     return { minX, maxX, minY, maxY, minZ, centeredX };
 }
@@ -28621,16 +28627,22 @@ function resolveViewportDimensions({
     container,
     isSidebarOpen = false,
     sidebarWidth = 360,
-    forceFullWindow = false
+    forceFullWindow = false,
+    bottomSheetHeight = 0
 }) {
     const hasWindow = typeof window !== 'undefined';
     const effectiveContW = (isSidebarOpen && hasWindow)
         ? (window.innerWidth - sidebarWidth)
         : (container ? container.clientWidth : (hasWindow ? window.innerWidth : 1000));
     const contW = (forceFullWindow && hasWindow) ? window.innerWidth : effectiveContW;
-    const contH = (forceFullWindow || !isSidebarOpen) && hasWindow
-        ? window.innerHeight
-        : (container ? container.clientHeight : (hasWindow ? window.innerHeight : 800));
+    let contH;
+    if (!forceFullWindow && bottomSheetHeight > 0 && hasWindow) {
+        contH = Math.max(120, window.innerHeight - bottomSheetHeight);
+    } else if ((forceFullWindow || !isSidebarOpen) && hasWindow) {
+        contH = window.innerHeight;
+    } else {
+        contH = container ? container.clientHeight : (hasWindow ? window.innerHeight : 800);
+    }
     return { contW, contH };
 }
 
@@ -28834,19 +28846,20 @@ function setupCanvasTouchListeners({
  */
 function applyFramedCamera({
     box, treeElement, container, isSidebarOpen, sidebarWidth,
-    preferredZ, targetPadX, targetPadY, setCamera, clampCamera
+    preferredZ, targetPadX, targetPadY, setCamera, clampCamera,
+    bottomSheetHeight = 0, topInset = 0
 }) {
     const { contW: effectiveContW, contH } = resolveViewportDimensions({
-        container, isSidebarOpen, sidebarWidth, forceFullWindow: false
+        container, isSidebarOpen, sidebarWidth, forceFullWindow: false, bottomSheetHeight
     });
     const currentTreeW = getTreeElementWidth(treeElement);
 
     setCamera(cam => {
         const nextCam = computeFramedCamera({
             box, contW: effectiveContW, contH, preferredZ, timelineWidth: resolveTimelineGutterWidth(),
-            currentZ: cam.z, targetPadX, targetPadY, treeW: currentTreeW
+            currentZ: cam.z, targetPadX, targetPadY, treeW: currentTreeW, topInset
         });
-        return clampCamera(nextCam);
+        return clampCamera(nextCam, bottomSheetHeight);
     });
 }
 
@@ -28860,16 +28873,18 @@ function applyFramedCamera({
  *   targetPadY: number,
  *   maxAttempts: number,
  *   intervalMs: number,
- *   initialDelay: number
+ *   initialDelay: number,
+ *   bottomSheetHeight: number,
+ *   topInset: number
  * }} Normalized polling configuration options.
  *
  * @example
  *   resolveFramePeopleOptions(1.5);
- *   // returns { preferredZ: 1.5, targetPadX: 100, targetPadY: 120, maxAttempts: 35, intervalMs: 35, initialDelay: 25 }
+ *   // returns { preferredZ: 1.5, targetPadX: 100, targetPadY: 120, maxAttempts: 35, intervalMs: 35, initialDelay: 25, bottomSheetHeight: 0, topInset: 0 }
  *
  * @example
  *   resolveFramePeopleOptions({ targetPadX: 80, maxAttempts: 20 });
- *   // returns { preferredZ: null, targetPadX: 80, targetPadY: 120, maxAttempts: 20, intervalMs: 35, initialDelay: 25 }
+ *   // returns { preferredZ: null, targetPadX: 80, targetPadY: 120, maxAttempts: 20, intervalMs: 35, initialDelay: 25, bottomSheetHeight: 0, topInset: 0 }
  */
 function resolveFramePeopleOptions(options) {
     const preferredZ = typeof options === 'number' ? options : options?.preferredZ ?? null;
@@ -28878,8 +28893,10 @@ function resolveFramePeopleOptions(options) {
     const maxAttempts = options?.maxAttempts ?? 35;
     const intervalMs = options?.intervalMs ?? 35;
     const initialDelay = options?.initialDelay ?? 25;
+    const bottomSheetHeight = options?.bottomSheetHeight ?? 0;
+    const topInset = options?.topInset ?? 0;
 
-    return { preferredZ, targetPadX, targetPadY, maxAttempts, intervalMs, initialDelay };
+    return { preferredZ, targetPadX, targetPadY, maxAttempts, intervalMs, initialDelay, bottomSheetHeight, topInset };
 }
 
 /**
@@ -28896,6 +28913,8 @@ function resolveFramePeopleOptions(options) {
  * @param {number} params.targetPadY - Target vertical padding.
  * @param {Function} params.setCamera - State setter for camera coordinates.
  * @param {Function} params.clampCamera - Clamping function for camera coordinates.
+ * @param {number} [params.bottomSheetHeight=0] - Target mobile bottom-sheet height in pixels.
+ * @param {number} [params.topInset=0] - Top floating toolbar inset in pixels.
  * @returns {boolean} True if framing was successfully applied.
  *
  * @example
@@ -28906,15 +28925,17 @@ function resolveFramePeopleOptions(options) {
  */
 function attemptFramePeople({
     ids, treeElement, container, isSidebarOpen, sidebarWidth,
-    preferredZ, targetPadX, targetPadY, setCamera, clampCamera
+    preferredZ, targetPadX, targetPadY, setCamera, clampCamera,
+    bottomSheetHeight = 0, topInset = 0
 }) {
     if (!treeElement || !container) return false;
     const box = computePeopleBoundingBox(ids, treeElement);
     if (box && box.foundCount < ids.length) return false;
     if (box && box.foundCount > 0) {
         applyFramedCamera({
-            box, treeElement, container, isSidebarOpen,
-            sidebarWidth, preferredZ, targetPadX, targetPadY, setCamera, clampCamera
+            box, treeElement, container, isSidebarOpen, sidebarWidth,
+            preferredZ, targetPadX, targetPadY, setCamera, clampCamera,
+            bottomSheetHeight, topInset
         });
         return true;
     }
@@ -28966,14 +28987,18 @@ function pollFramePeople({
     isSidebarOpen = false, sidebarWidth = 360, setCamera, clampCamera
 }) {
     if (!ids || ids.length === 0) return null;
-    const { preferredZ, targetPadX, targetPadY, maxAttempts, intervalMs, initialDelay } = resolveFramePeopleOptions(options);
+    const {
+        preferredZ, targetPadX, targetPadY, maxAttempts, intervalMs, initialDelay,
+        bottomSheetHeight, topInset
+    } = resolveFramePeopleOptions(options);
 
     let attempts = 0;
     const tryFrame = () => {
         attempts++;
         const framed = attemptFramePeople({
             ids, treeElement: treeRef.current, container: containerRef.current, isSidebarOpen,
-            sidebarWidth, preferredZ, targetPadX, targetPadY, setCamera, clampCamera
+            sidebarWidth, preferredZ, targetPadX, targetPadY, setCamera, clampCamera,
+            bottomSheetHeight, topInset
         });
         if (!framed && attempts < maxAttempts) {
             setTimeout(tryFrame, intervalMs);
@@ -29630,11 +29655,13 @@ function computeTreeSpanHeight(treeStats, targetPpy) {
  * });
  */
 function calculateViewportCameraBounds({
-    treeElement, container, isSidebarOpen, sidebarWidth, forceFullWindow, treeStats, targetPpy, z
+    treeElement, container, isSidebarOpen, sidebarWidth, forceFullWindow, treeStats, targetPpy, z, bottomSheetHeight = 0
 }) {
     if (!treeElement) return { minX: -5000, maxX: 5000, minY: -5000, maxY: 5000, minZ: 0.05, centeredX: 0 };
 
-    const { contW, contH } = resolveViewportDimensions({ container, isSidebarOpen, sidebarWidth, forceFullWindow });
+    const { contW, contH } = resolveViewportDimensions({
+        container, isSidebarOpen, sidebarWidth, forceFullWindow, bottomSheetHeight
+    });
     const treeW = getTreeElementWidth(treeElement);
     const treeH = computeTreeSpanHeight(treeStats, targetPpy);
 
@@ -29647,6 +29674,188 @@ const COMPACT_VIEWPORT_MAX_WIDTH = 639;
 const TIMELINE_GUTTER_WIDTH = 48;
 /** Narrow year-labels-only gutter on phones, in px (the era bands are dropped). */
 const TIMELINE_GUTTER_COMPACT_WIDTH = 32;
+/** Compact peek height of the mobile bottom sheet (`96px`), leaving ~89% of the portrait canvas open. */
+const MOBILE_SHEET_PEEK_PX = 96;
+/** Viewport-height fraction for the half-expanded mobile bottom sheet (`45vh`). */
+const MOBILE_SHEET_HALF_VH = 0.45;
+/** Viewport-height fraction for the fully-expanded mobile bottom sheet (`85vh`). */
+const MOBILE_SHEET_FULL_VH = 0.85;
+/** Pixel height threshold below which dragging down dismisses the mobile bottom sheet (`56px`). */
+const MOBILE_SHEET_DISMISS_PX = 56;
+/** Top floating toolbar clearance (`56px`) reserved when centering cards on compact viewports. */
+const MOBILE_TOP_CHROME_INSET_PX = 56;
+
+/**
+ * Resolves the pixel heights of the 3 mobile bottom-sheet snap stops (`peek`, `half`, `full`)
+ * for a given viewport height.
+ *
+ * @param {number} [windowHeight=window.innerHeight] - Viewport height in CSS pixels.
+ * @returns {{ peek: number, half: number, full: number }}
+ *
+ * @example
+ * resolveSheetSnapHeights(844);
+ * // => { peek: 96, half: 380, full: 717 }
+ *
+ * @example
+ * resolveSheetSnapHeights(667);
+ * // => { peek: 96, half: 300, full: 567 }
+ */
+function resolveSheetSnapHeights(windowHeight = (typeof window !== 'undefined' ? window.innerHeight : 844)) {
+    const winH = Number.isFinite(windowHeight) && windowHeight > 0 ? windowHeight : 844;
+    return {
+        peek: MOBILE_SHEET_PEEK_PX,
+        half: Math.max(180, Math.round(winH * MOBILE_SHEET_HALF_VH)),
+        full: Math.max(280, Math.round(winH * MOBILE_SHEET_FULL_VH))
+    };
+}
+
+/**
+ * Maps a named mobile bottom-sheet snap stop (`'peek' | 'half' | 'full'`) to its CSS height string,
+ * falling back to `'55vh'` when unset.
+ *
+ * @param {string|null|undefined} sheetSnap - Active snap stop identifier.
+ * @returns {string} CSS height token (`'96px'`, `'45vh'`, `'85vh'`, or `'55vh'`).
+ *
+ * @example
+ * resolveSheetSnapCssHeight('peek'); // => '96px'
+ * resolveSheetSnapCssHeight('half'); // => '45vh'
+ *
+ * @example
+ * resolveSheetSnapCssHeight('full'); // => '85vh'
+ * resolveSheetSnapCssHeight(null);   // => '55vh'
+ */
+function resolveSheetSnapCssHeight(sheetSnap) {
+    if (sheetSnap === 'peek') return `${MOBILE_SHEET_PEEK_PX}px`;
+    if (sheetSnap === 'half') return '45vh';
+    if (sheetSnap === 'full') return '85vh';
+    return '55vh';
+}
+
+/**
+ * Cycles a mobile bottom-sheet snap stop on handle tap (`'peek' -> 'half' -> 'full' -> 'peek'`).
+ *
+ * @param {string} [currentSnap='peek'] - Current snap stop.
+ * @returns {'peek'|'half'|'full'} Next snap stop in cycle.
+ *
+ * @example
+ * cycleSheetSnapStop('peek'); // => 'half'
+ *
+ * @example
+ * cycleSheetSnapStop('full'); // => 'peek'
+ */
+function cycleSheetSnapStop(currentSnap = 'peek') {
+    if (currentSnap === 'peek') return 'half';
+    if (currentSnap === 'half') return 'full';
+    return 'peek';
+}
+
+/**
+ * Computes the effective mobile bottom-sheet snap stop for the currently open panel:
+ * returns `null` on desktop or when closed, preserves `'peek'` when viewing a focused person,
+ * and promotes `'peek'` to `'half'` (`45vh`) for list/chat/log drawers that need vertical space.
+ *
+ * @param {Object} [options={}]
+ * @param {boolean} [options.isCompactViewport=false] - Whether compact phone layout is active.
+ * @param {boolean} [options.isAnySidebarOpen=false] - Whether any bottom panel is open.
+ * @param {string} [options.sheetSnap='peek'] - User-selected snap stop.
+ * @param {boolean} [options.hasFocusPerson=false] - Whether a person profile is currently focused.
+ * @param {boolean} [options.showLogs=false] - Whether system logs view is open.
+ * @param {boolean} [options.showAI=false] - Whether AI Assistant view is open.
+ * @param {Object|null} [options.activeFilter=null] - Active search/category filter descriptor.
+ * @returns {'peek'|'half'|'full'|null}
+ *
+ * @example
+ * resolveEffectiveSheetSnap({ isCompactViewport: true, isAnySidebarOpen: true, sheetSnap: 'peek', hasFocusPerson: true });
+ * // => 'peek'
+ *
+ * @example
+ * resolveEffectiveSheetSnap({ isCompactViewport: true, isAnySidebarOpen: true, sheetSnap: 'peek', showAI: true });
+ * // => 'half'
+ */
+function resolveEffectiveSheetSnap({
+    isCompactViewport = false, isAnySidebarOpen = false, sheetSnap = 'peek',
+    hasFocusPerson = false, showLogs = false, showAI = false, activeFilter = null
+} = {}) {
+    if (!isCompactViewport || !isAnySidebarOpen) return null;
+    const isNonDirectoryFilter = Boolean(activeFilter && activeFilter.filterType !== 'directory');
+    const canUsePeek = Boolean(hasFocusPerson && !showLogs && !showAI && !isNonDirectoryFilter);
+    const requested = (sheetSnap === 'peek' || sheetSnap === 'half' || sheetSnap === 'full') ? sheetSnap : 'peek';
+    if (!canUsePeek && requested === 'peek') return 'half';
+    return requested;
+}
+
+/**
+ * Resolves the active or predicted pixel height of the mobile bottom sheet for synchronous camera math.
+ *
+ * @param {Object} [options={}]
+ * @param {boolean} [options.isCompactViewport=false] - Whether phone layout is active.
+ * @param {boolean} [options.isSidebarOpen=false] - Whether bottom sheet is open.
+ * @param {number|null} [options.sidebarHeight=null] - Live pixel drag height override, if any.
+ * @param {string|null} [options.sheetSnap=null] - Active snap stop (`'peek' | 'half' | 'full'`).
+ * @param {number} [options.windowHeight] - Optional viewport height override.
+ * @returns {number} Reserved bottom-sheet height in pixels (`0` on desktop or when closed).
+ *
+ * @example
+ * resolveBottomSheetPixelHeight({ isCompactViewport: true, isSidebarOpen: true, sheetSnap: 'peek', windowHeight: 844 });
+ * // => 96
+ *
+ * @example
+ * resolveBottomSheetPixelHeight({ isCompactViewport: false, isSidebarOpen: true, sheetSnap: 'peek', windowHeight: 844 });
+ * // => 0
+ */
+function resolveBottomSheetPixelHeight({
+    isCompactViewport = false, isSidebarOpen = false, sidebarHeight = null, sheetSnap = null, windowHeight
+} = {}) {
+    if (!isCompactViewport || !isSidebarOpen) return 0;
+    if (typeof sidebarHeight === 'number' && sidebarHeight > 0) return Math.round(sidebarHeight);
+    const heights = resolveSheetSnapHeights(windowHeight);
+    if (sheetSnap === 'peek' || sheetSnap === 'half' || sheetSnap === 'full') {
+        return heights[sheetSnap];
+    }
+    const winH = Number.isFinite(windowHeight) && windowHeight > 0
+        ? windowHeight
+        : (typeof window !== 'undefined' ? window.innerHeight : 844);
+    return Math.round(winH * 0.55);
+}
+
+/**
+ * Aggregates mobile bottom-sheet eligibility, effective snap stop, active pixel height,
+ * and predicted person-focus pixel height for camera centering.
+ *
+ * @param {Object} [options={}]
+ * @returns {{ canPeek: boolean, effectiveSheetSnap: 'peek'|'half'|'full'|null, bottomSheetHeight: number, focusBottomSheetHeight: number }}
+ *
+ * @example
+ * resolveMobileSheetState({ isCompactViewport: true, isAnySidebarOpen: false, sheetSnap: 'peek', windowHeight: 844 });
+ * // => { canPeek: false, effectiveSheetSnap: null, bottomSheetHeight: 0, focusBottomSheetHeight: 96 }
+ *
+ * @example
+ * resolveMobileSheetState({ isCompactViewport: true, isAnySidebarOpen: true, sheetSnap: 'half', hasFocusPerson: true, windowHeight: 844 });
+ * // => { canPeek: true, effectiveSheetSnap: 'half', bottomSheetHeight: 380, focusBottomSheetHeight: 380 }
+ */
+function resolveMobileSheetState({
+    isCompactViewport = false, isAnySidebarOpen = false, sheetSnap = 'peek',
+    sidebarHeight = null, hasFocusPerson = false, showLogs = false, showAI = false,
+    activeFilter = null, windowHeight
+} = {}) {
+    const canPeek = Boolean(
+        isCompactViewport && hasFocusPerson && !showLogs && !showAI &&
+        (!activeFilter || activeFilter.filterType === 'directory')
+    );
+    const effectiveSheetSnap = resolveEffectiveSheetSnap({
+        isCompactViewport, isAnySidebarOpen, sheetSnap, hasFocusPerson, showLogs, showAI, activeFilter
+    });
+    const bottomSheetHeight = resolveBottomSheetPixelHeight({
+        isCompactViewport, isSidebarOpen: isAnySidebarOpen, sidebarHeight, sheetSnap: effectiveSheetSnap, windowHeight
+    });
+    const personTargetSnap = sheetSnap === 'half' ? 'half' : 'peek';
+    const focusBottomSheetHeight = isCompactViewport
+        ? resolveBottomSheetPixelHeight({
+            isCompactViewport: true, isSidebarOpen: true, sidebarHeight, sheetSnap: personTargetSnap, windowHeight
+        })
+        : 0;
+    return { canPeek, effectiveSheetSnap, bottomSheetHeight, focusBottomSheetHeight };
+}
 
 /**
  * Whether a viewport width calls for the phone layout: details panel docked below the canvas,
@@ -29786,29 +29995,31 @@ function clampCameraCoordinates(cam, getBounds) {
  *       treeRef: { current: null }
  *   });
  */
-function useCanvasCameraBounds({ treeStats, isSidebarOpen = false, sidebarWidth = 360, containerRef, treeRef }) {
-    const getPpy = useCallback((z, forceFullWindow = false) => {
-        const contH = (forceFullWindow || !isSidebarOpen) && typeof window !== 'undefined'
-            ? window.innerHeight
-            : (containerRef.current ? containerRef.current.clientHeight : (typeof window !== 'undefined' ? window.innerHeight : 800));
-        return computeDynamicPpy(treeStats, contH, z);
-    }, [treeStats, isSidebarOpen, containerRef]);
-
-    const getBounds = useCallback((z, forceFullWindow = false) => {
-        const targetPpy = getPpy(z, forceFullWindow);
-        return calculateViewportCameraBounds({
-            treeElement: treeRef.current,
-            container: containerRef.current,
-            isSidebarOpen,
-            sidebarWidth,
-            forceFullWindow,
-            treeStats,
-            targetPpy,
-            z
+function useCanvasCameraBounds({
+    treeStats, isSidebarOpen = false, sidebarWidth = 360, bottomSheetHeight = 0, containerRef, treeRef
+}) {
+    const getPpy = useCallback((z, forceFullWindow = false, sheetOverride) => {
+        const activeSheetH = sheetOverride !== undefined ? sheetOverride : bottomSheetHeight;
+        const { contH } = resolveViewportDimensions({
+            container: containerRef.current, isSidebarOpen, sidebarWidth, forceFullWindow, bottomSheetHeight: activeSheetH
         });
-    }, [treeStats, getPpy, isSidebarOpen, sidebarWidth, containerRef, treeRef]);
+        return computeDynamicPpy(treeStats, contH, z);
+    }, [treeStats, isSidebarOpen, sidebarWidth, bottomSheetHeight, containerRef]);
 
-    const clampCamera = useCallback((cam) => clampCameraCoordinates(cam, getBounds), [getBounds]);
+    const getBounds = useCallback((z, forceFullWindow = false, sheetOverride) => {
+        const activeSheetH = sheetOverride !== undefined ? sheetOverride : bottomSheetHeight;
+        const targetPpy = getPpy(z, forceFullWindow, activeSheetH);
+        return calculateViewportCameraBounds({
+            treeElement: treeRef.current, container: containerRef.current,
+            isSidebarOpen, sidebarWidth, forceFullWindow, treeStats, targetPpy, z,
+            bottomSheetHeight: activeSheetH
+        });
+    }, [treeStats, getPpy, isSidebarOpen, sidebarWidth, bottomSheetHeight, containerRef, treeRef]);
+
+    const clampCamera = useCallback(
+        (cam, sheetOverride) => clampCameraCoordinates(cam, (z) => getBounds(z, false, sheetOverride)),
+        [getBounds]
+    );
 
     return { getPpy, getBounds, clampCamera };
 }
@@ -29954,14 +30165,16 @@ function executeFitToScreen({
  * @example
  * buildPersonCenterFramingOptions(null);
  */
-function buildPersonCenterFramingOptions(targetZ = null) {
+function buildPersonCenterFramingOptions(targetZ = null, bottomSheetHeight = 0, topInset = 0) {
     return {
         preferredZ: targetZ,
         targetPadX: 0,
         targetPadY: 0,
         maxAttempts: 15,
         intervalMs: 40,
-        initialDelay: 15
+        initialDelay: 15,
+        bottomSheetHeight,
+        topInset
     };
 }
 
@@ -29976,10 +30189,13 @@ function buildPersonCenterFramingOptions(targetZ = null) {
  * @param {boolean} params.isSidebarOpen - Whether the sidebar panel is expanded
  * @param {number} params.sidebarWidth - Width in pixels allocated for the sidebar
  * @param {React.Dispatch<React.SetStateAction<object>>} params.setCamera - Camera state setter
- * @param {(cam: object) => object} params.clampCamera - Boundary clamping function
+ * @param {(cam: object, sheetOverride?: number) => object} params.clampCamera - Boundary clamping function
+ * @param {number} [params.bottomSheetHeight=0] - Active mobile bottom-sheet pixel height
+ * @param {number} [params.focusBottomSheetHeight=0] - Predicted mobile bottom-sheet pixel height when focusing a person
+ * @param {boolean} [params.isCompactViewport=false] - Whether compact phone layout is active
  * @returns {{
  *   framePeople: (ids: Array<string>, options?: object|null) => void,
- *   centerOnPerson: (id: string, targetZ?: number|null) => void,
+ *   centerOnPerson: (id: string, targetZ?: number|null, sheetHeightOverride?: number|null) => void,
  *   fitToScreen: (forceFullWindow?: boolean) => void
  * }}
  *
@@ -30008,18 +30224,27 @@ function buildPersonCenterFramingOptions(targetZ = null) {
  * fitToScreen(true);
  */
 function useCanvasCameraFraming({
-    treeRef, containerRef, treeStats, isSidebarOpen, sidebarWidth, setCamera, clampCamera
+    treeRef, containerRef, treeStats, isSidebarOpen, sidebarWidth, setCamera, clampCamera,
+    bottomSheetHeight = 0, focusBottomSheetHeight = 0, isCompactViewport = false
 }) {
     const framePeople = useCallback((ids, options = null) => {
+        const baseOpts = typeof options === 'number' ? { preferredZ: options } : (options || {});
+        const mergedOptions = {
+            bottomSheetHeight,
+            topInset: isCompactViewport ? MOBILE_TOP_CHROME_INSET_PX : 0,
+            ...baseOpts
+        };
         pollFramePeople({
-            ids, options, treeRef, containerRef, isSidebarOpen, sidebarWidth, setCamera, clampCamera
+            ids, options: mergedOptions, treeRef, containerRef, isSidebarOpen, sidebarWidth, setCamera, clampCamera
         });
-    }, [clampCamera, isSidebarOpen, sidebarWidth, treeRef, containerRef, setCamera]);
+    }, [clampCamera, isSidebarOpen, sidebarWidth, bottomSheetHeight, isCompactViewport, treeRef, containerRef, setCamera]);
 
-    const centerOnPerson = useCallback((id, targetZ = null) => {
+    const centerOnPerson = useCallback((id, targetZ = null, sheetHeightOverride = null) => {
         if (!id) return;
-        framePeople([id], buildPersonCenterFramingOptions(targetZ));
-    }, [framePeople]);
+        const targetSheetH = sheetHeightOverride !== null ? sheetHeightOverride : (focusBottomSheetHeight || bottomSheetHeight);
+        const topInset = isCompactViewport ? MOBILE_TOP_CHROME_INSET_PX : 0;
+        framePeople([id], buildPersonCenterFramingOptions(targetZ, targetSheetH, topInset));
+    }, [framePeople, focusBottomSheetHeight, bottomSheetHeight, isCompactViewport]);
 
     const fitToScreen = useCallback((forceFullWindow = false) => {
         executeFitToScreen({
@@ -30039,6 +30264,7 @@ function useCanvasCameraFraming({
  * @param {(cam: object) => object} params.clampCamera - Boundary clamping function
  * @param {boolean} params.isSidebarOpen - Whether the sidebar is visible
  * @param {number} params.sidebarWidth - Width of the sidebar in pixels
+ * @param {number} [params.bottomSheetHeight=0] - Active mobile bottom-sheet pixel height
  * @param {object|null} params.treeStats - Generational tree metrics
  * @param {React.RefObject<HTMLElement>} params.containerRef - Ref to container DOM node
  * @param {React.RefObject<HTMLElement>} params.treeRef - Ref to tree content DOM node
@@ -30070,6 +30296,7 @@ function useCanvasAutoClamp({
     clampCamera,
     isSidebarOpen,
     sidebarWidth,
+    bottomSheetHeight = 0,
     treeStats,
     containerRef,
     treeRef
@@ -30082,7 +30309,7 @@ function useCanvasAutoClamp({
             clearTimeout(t1);
             clearTimeout(t2);
         };
-    }, [isSidebarOpen, sidebarWidth, treeStats, clampCamera, setCamera]);
+    }, [isSidebarOpen, sidebarWidth, bottomSheetHeight, treeStats, clampCamera, setCamera]);
 
     useEffect(() => {
         return setupCanvasResizeObserver({
@@ -30174,13 +30401,14 @@ function useCanvasTouchLifecycle({ containerRef, onInteract, cameraRef, setCamer
  * @example
  * const { camera, setCamera, containerRef, treeRef, fitToScreen } = useCanvasControls();
  */
-function useCanvasControls(onInteract, treeStats, isSidebarOpen = false, sidebarWidth = 360) {
+function useCanvasControls(onInteract, treeStats, isSidebarOpen = false, sidebarWidth = 360, mobileSheetOpts = {}) {
+    const { bottomSheetHeight = 0, focusBottomSheetHeight = 0, isCompactViewport = false } = mobileSheetOpts || {};
     const { camera, setCamera, cameraRef } = useCanvasCameraState();
     const containerRef = useRef(null);
     const treeRef = useRef(null);
 
     const { getPpy, getBounds, clampCamera } = useCanvasCameraBounds({
-        treeStats, isSidebarOpen, sidebarWidth, containerRef, treeRef
+        treeStats, isSidebarOpen, sidebarWidth, bottomSheetHeight, containerRef, treeRef
     });
 
     const gestures = useCanvasPointerGestures({
@@ -30192,11 +30420,12 @@ function useCanvasControls(onInteract, treeStats, isSidebarOpen = false, sidebar
     });
 
     const { framePeople, centerOnPerson, fitToScreen } = useCanvasCameraFraming({
-        treeRef, containerRef, treeStats, isSidebarOpen, sidebarWidth, setCamera, clampCamera
+        treeRef, containerRef, treeStats, isSidebarOpen, sidebarWidth, setCamera, clampCamera,
+        bottomSheetHeight, focusBottomSheetHeight, isCompactViewport
     });
 
     useCanvasAutoClamp({
-        setCamera, clampCamera, isSidebarOpen, sidebarWidth, treeStats, containerRef, treeRef
+        setCamera, clampCamera, isSidebarOpen, sidebarWidth, bottomSheetHeight, treeStats, containerRef, treeRef
     });
 
     return {
@@ -30334,22 +30563,124 @@ function clampSidebarHeight(startHeight, deltaY, windowHeight = (typeof window !
 }
 
 /**
- * Attaches pointermove and pointerup listeners to resize and persist bottom-sheet height during vertical drag.
+ * Clamps live finger-dragged mobile bottom-sheet height within `[40, windowHeight - 64]`
+ * so users can drag smoothly between `96px` peek, `45vh` half, `85vh` full, or below `56px` to dismiss.
+ *
+ * @param {number} startHeight - Initial sheet height in px at pointerdown.
+ * @param {number} deltaY - Vertical displacement (`startY - clientY`; positive = dragged upward).
+ * @param {number} [windowHeight=window.innerHeight] - Viewport height in px.
+ * @returns {number} Clamped live drag height in px.
+ *
+ * @example
+ * clampMobileSheetDragHeight(96, 120, 844); // => 216
+ *
+ * @example
+ * clampMobileSheetDragHeight(96, -80, 844); // => 40
+ */
+function clampMobileSheetDragHeight(
+    startHeight,
+    deltaY,
+    windowHeight = (typeof window !== 'undefined' ? window.innerHeight : 844)
+) {
+    const maxH = Math.max(180, windowHeight - 64);
+    return Math.max(40, Math.min(startHeight + deltaY, maxH));
+}
+
+/**
+ * Resolves the target snap stop (`'peek' | 'half' | 'full' | 'dismiss'`) when releasing a mobile
+ * bottom-sheet drag or tapping the top grab handle (`|deltaY| <= 6` cycles stops).
+ *
+ * @param {Object} [params={}]
+ * @param {number} [params.startHeight=96] - Sheet height in px when pointerdown started.
+ * @param {number} [params.deltaY=0] - Vertical displacement (`startY - clientY`; positive = up).
+ * @param {string} [params.currentSnap='peek'] - Active snap stop before gesture started.
+ * @param {number} [params.windowHeight=844] - Viewport height in px.
+ * @returns {'peek'|'half'|'full'|'dismiss'}
+ *
+ * @example
+ * resolveReleaseSheetSnap({ startHeight: 96, deltaY: 0, currentSnap: 'peek', windowHeight: 844 });
+ * // => 'half'
+ *
+ * @example
+ * resolveReleaseSheetSnap({ startHeight: 96, deltaY: -45, currentSnap: 'peek', windowHeight: 844 });
+ * // => 'dismiss'
+ */
+function resolveReleaseSheetSnap({ startHeight = 96, deltaY = 0, currentSnap = 'peek', windowHeight = 844 } = {}) {
+    if (Math.abs(deltaY) <= 6) return cycleSheetSnapStop(currentSnap);
+    const rawH = startHeight + deltaY;
+    if ((rawH < MOBILE_SHEET_DISMISS_PX && deltaY < -16) || (currentSnap === 'peek' && deltaY < -32)) {
+        return 'dismiss';
+    }
+    const heights = resolveSheetSnapHeights(windowHeight);
+    const midPeekHalf = (heights.peek + heights.half) / 2;
+    const midHalfFull = (heights.half + heights.full) / 2;
+    if (deltaY > 28) {
+        return (rawH > midHalfFull || startHeight >= heights.half - 24) ? 'full' : 'half';
+    }
+    if (deltaY < -28) {
+        return (rawH < midPeekHalf || startHeight <= heights.half + 24) ? 'peek' : 'half';
+    }
+    if (rawH < midPeekHalf) return 'peek';
+    return rawH < midHalfFull ? 'half' : 'full';
+}
+
+/**
+ * Applies either 3-stop snap transitions (when `snapOptions` is supplied) or legacy pixel height
+ * persistence upon releasing a vertical bottom-sheet drag.
+ *
+ * @param {number} deltaY - Total vertical displacement (`startY - clientY`).
+ * @param {number} startHeight - Starting sheet height in px.
+ * @param {Function} setSidebarHeight - State setter for live pixel height.
+ * @param {Object|null} snapOptions - Optional `{ currentSnap, setSheetSnap, onDismiss }` snap callbacks.
+ *
+ * @example
+ * applyVerticalDragRelease(80, 96, setSidebarHeight, { currentSnap: 'peek', setSheetSnap });
+ *
+ * @example
+ * applyVerticalDragRelease(-50, 96, setSidebarHeight, { currentSnap: 'peek', setSheetSnap, onDismiss });
+ */
+function applyVerticalDragRelease(deltaY, startHeight, setSidebarHeight, snapOptions) {
+    if (!snapOptions) {
+        const finalHeight = clampSidebarHeight(startHeight, deltaY);
+        try { localStorage.setItem('familyTree_sidebarHeight', String(Math.round(finalHeight))); } catch (err) {}
+        return;
+    }
+    const winH = typeof window !== 'undefined' ? window.innerHeight : 844;
+    const nextSnap = resolveReleaseSheetSnap({
+        startHeight, deltaY, currentSnap: snapOptions.currentSnap || 'peek', windowHeight: winH
+    });
+    setSidebarHeight(null);
+    if (nextSnap === 'dismiss') {
+        snapOptions.setSheetSnap?.('peek');
+        snapOptions.onDismiss?.();
+    } else {
+        snapOptions.setSheetSnap?.(nextSnap);
+    }
+}
+
+/**
+ * Attaches pointermove and pointerup listeners to resize or snap the mobile bottom sheet during vertical drag.
  *
  * @param {number} startY - Initial pointer Y coordinate at drag start
  * @param {number} startHeight - Initial sidebar height in pixels
  * @param {Function} setSidebarHeight - State setter for sidebar height
  * @param {Function} setIsResizingSidebar - State setter for resizing flag
+ * @param {Object|null} [snapOptions=null] - Optional 3-stop snap configuration `{ currentSnap, setSheetSnap, onDismiss }`
  *
  * @example
  * setupSidebarVerticalDragListeners(400, 460, setSidebarHeight, setIsResizingSidebar);
  *
  * @example
- * setupSidebarVerticalDragListeners(350, 380, (h) => console.log(h), () => {});
+ * setupSidebarVerticalDragListeners(750, 96, setSidebarHeight, setIsResizingSidebar, { currentSnap: 'peek', setSheetSnap });
  */
-function setupSidebarVerticalDragListeners(startY, startHeight, setSidebarHeight, setIsResizingSidebar) {
+function setupSidebarVerticalDragListeners(
+    startY, startHeight, setSidebarHeight, setIsResizingSidebar, snapOptions = null
+) {
     const handlePointerMove = (moveEvent) => {
-        const newHeight = clampSidebarHeight(startHeight, startY - moveEvent.clientY);
+        const deltaY = startY - moveEvent.clientY;
+        const newHeight = snapOptions
+            ? clampMobileSheetDragHeight(startHeight, deltaY)
+            : clampSidebarHeight(startHeight, deltaY);
         setSidebarHeight(newHeight);
     };
 
@@ -30360,11 +30691,7 @@ function setupSidebarVerticalDragListeners(startY, startHeight, setSidebarHeight
         document.body.style.cursor = '';
         document.body.style.userSelect = '';
         setIsResizingSidebar(false);
-
-        const finalHeight = clampSidebarHeight(startHeight, startY - upEvent.clientY);
-        try {
-            localStorage.setItem('familyTree_sidebarHeight', String(Math.round(finalHeight)));
-        } catch (err) {}
+        applyVerticalDragRelease(startY - upEvent.clientY, startHeight, setSidebarHeight, snapOptions);
     };
 
     document.body.style.cursor = 'row-resize';
@@ -30378,7 +30705,8 @@ function setupSidebarVerticalDragListeners(startY, startHeight, setSidebarHeight
  * Resolves the starting pixel height of the bottom-docked sidebar when a vertical drag starts.
  *
  * @param {PointerEvent|Object} e - Pointer down event on the resize handle
- * @param {number|null} sidebarHeight - Current configured height in px (or null for 55vh default)
+ * @param {number|null} sidebarHeight - Current configured height in px (or null for snap/55vh default)
+ * @param {string|null} [sheetSnap=null] - Optional active snap stop (`'peek' | 'half' | 'full'`)
  * @returns {number} Starting height in pixels
  *
  * @example
@@ -30389,30 +30717,35 @@ function setupSidebarVerticalDragListeners(startY, startHeight, setSidebarHeight
  * resolveInitialVerticalResizeHeight({ currentTarget: { parentElement: { getBoundingClientRect: () => ({ height: 464 }) } } }, null);
  * // => 464
  */
-function resolveInitialVerticalResizeHeight(e, sidebarHeight) {
+function resolveInitialVerticalResizeHeight(e, sidebarHeight, sheetSnap = null) {
     const rectHeight = e?.currentTarget?.parentElement?.getBoundingClientRect?.()?.height;
     if (typeof rectHeight === 'number' && rectHeight > 0) return Math.round(rectHeight);
     if (typeof sidebarHeight === 'number' && sidebarHeight > 0) return sidebarHeight;
+    if (sheetSnap) {
+        return resolveBottomSheetPixelHeight({ isCompactViewport: true, isSidebarOpen: true, sheetSnap });
+    }
     const winH = typeof window !== 'undefined' ? window.innerHeight : 844;
     return Math.round(winH * 0.55);
 }
 
 /**
- * Hook to manage sidebar width (desktop) and height (mobile bottom-sheet) dragging,
- * resizing constraints, cursor states, and persistence to localStorage.
+ * Hook to manage sidebar width (desktop) and 3-stop snap / drag height (mobile bottom-sheet),
+ * resizing constraints, cursor states, and swipe-down dismissal.
  *
  * @param {number} [initialWidth=360] - Default sidebar width in pixels
- * @returns {Object} { sidebarWidth, setSidebarWidth, sidebarHeight, setSidebarHeight, isResizingSidebar, handleResizeStart, handleVerticalResizeStart }
+ * @param {Function|null} [onDismiss=null] - Optional callback invoked when mobile sheet is swiped down to dismiss
+ * @returns {Object} { sidebarWidth, setSidebarWidth, sidebarHeight, setSidebarHeight, sheetSnap, setSheetSnap, isResizingSidebar, handleResizeStart, handleVerticalResizeStart }
  *
  * @example
- * const { sidebarWidth, sidebarHeight, isResizingSidebar, handleResizeStart, handleVerticalResizeStart } = useSidebarResize(360);
+ * const { sidebarWidth, sheetSnap, isResizingSidebar, handleResizeStart, handleVerticalResizeStart } = useSidebarResize(360, closeAllPanels);
  *
  * @example
  * const { sidebarWidth, setSidebarWidth } = useSidebarResize();
  */
-function useSidebarResize(initialWidth = 360) {
+function useSidebarResize(initialWidth = 360, onDismiss = null) {
     const [sidebarWidth, setSidebarWidth] = useState(() => loadStoredSidebarWidth(initialWidth));
-    const [sidebarHeight, setSidebarHeight] = useState(() => loadStoredSidebarHeight(null));
+    const [sidebarHeight, setSidebarHeight] = useState(null);
+    const [sheetSnap, setSheetSnap] = useState('peek');
     const [isResizingSidebar, setIsResizingSidebar] = useState(false);
 
     const handleResizeStart = useCallback((e) => {
@@ -30425,15 +30758,17 @@ function useSidebarResize(initialWidth = 360) {
     const handleVerticalResizeStart = useCallback((e) => {
         e.preventDefault();
         e.stopPropagation();
-        const startH = resolveInitialVerticalResizeHeight(e, sidebarHeight);
+        const startH = resolveInitialVerticalResizeHeight(e, sidebarHeight, sheetSnap);
         setSidebarHeight(startH);
         setIsResizingSidebar(true);
-        setupSidebarVerticalDragListeners(e.clientY, startH, setSidebarHeight, setIsResizingSidebar);
-    }, [sidebarHeight]);
+        setupSidebarVerticalDragListeners(e.clientY, startH, setSidebarHeight, setIsResizingSidebar, {
+            currentSnap: sheetSnap, setSheetSnap, onDismiss
+        });
+    }, [sidebarHeight, sheetSnap, onDismiss]);
 
     return {
         sidebarWidth, setSidebarWidth, sidebarHeight, setSidebarHeight,
-        isResizingSidebar, handleResizeStart, handleVerticalResizeStart
+        sheetSnap, setSheetSnap, isResizingSidebar, handleResizeStart, handleVerticalResizeStart
     };
 }
 
@@ -38191,7 +38526,7 @@ const SidebarPersonDetails = ({ focusPerson, tree, setFocusId, onFilterBy, cente
     );
 
     return (
-        <div className={`p-6 ${dockBottom ? 'pt-8' : 'pt-[72px]'} overflow-y-auto flex-1 pb-24 interactive-element w-full`}>
+        <div className={`p-6 ${dockBottom ? 'pt-8' : 'pt-[72px]'} overflow-y-auto custom-scrollbar flex-1 pb-24 interactive-element w-full`}>
             <SidebarPersonHeader focusPerson={focusPerson} setFocusId={setFocusId} centerOnPerson={centerOnPerson} />
             <SidebarPersonBadges focusPerson={focusPerson} tree={tree} onFilterBy={onFilterBy} dateStr={dateStr} extraStr={extraStr} isDeduced={isDeduced} />
             <div className="mt-6">
@@ -38226,10 +38561,10 @@ const SidebarResizeHandle = ({ onResizeStart, dockBottom = false }) => (
         data-testid="sidebar-resize-handle"
         onPointerDown={onResizeStart}
         className={dockBottom
-            ? "absolute top-0 left-0 right-12 h-7 cursor-row-resize touch-none z-40 group flex items-center justify-center pl-12 select-none interactive-element"
+            ? "absolute top-0 left-0 right-0 h-6 cursor-row-resize touch-none z-40 group flex items-center justify-center select-none interactive-element"
             : "absolute top-0 bottom-0 left-0 w-3.5 -translate-x-1/2 cursor-col-resize touch-none z-50 group flex items-center justify-center select-none interactive-element"
         }
-        title="Drag to resize panel"
+        title={dockBottom ? "Drag or tap to resize sheet" : "Drag to resize panel"}
     >
         <div className={dockBottom
             ? "h-1.5 w-12 rounded-full bg-slate-300 group-hover:bg-blue-500 group-hover:w-16 transition-all group-active:bg-blue-600 group-active:w-20 shadow-sm"
@@ -38237,6 +38572,234 @@ const SidebarResizeHandle = ({ onResizeStart, dockBottom = false }) => (
         } />
     </div>
 );
+
+/**
+ * Collects up to 8 immediate relatives (partners, children sorted chronologically, then parents)
+ * for 1-tap generation hopping inside the `96px` mobile Peek Card, excluding unknown/synthetic ghosts.
+ *
+ * @param {Person|null} focusPerson - Active focused person record.
+ * @param {FamilyTree|null} tree - Family tree instance.
+ * @returns {Array<{ id: string, name: string, gender: string, role: 'spouse'|'child'|'parent', symbol: string }>}
+ *
+ * @example
+ * collectPeekJumpRelatives(tree.get('Anto_1955_22'), tree);
+ * // => [{ id: 'Beena_1958_23', name: 'Beena', gender: 'F', role: 'spouse', symbol: '♥' }, ...]
+ *
+ * @example
+ * collectPeekJumpRelatives(null, tree);
+ * // => []
+ */
+function collectPeekJumpRelatives(focusPerson, tree) {
+    if (!focusPerson || !tree || typeof tree.get !== 'function') return [];
+    const seen = new Set([focusPerson.id]);
+    const out = [];
+    const addGroup = (ids, role, symbol, sortGroup = false) => {
+        const nodes = (ids || [])
+            .map(id => tree.get(id))
+            .filter(n => n && !n._isUnknown && !FamilyTree.isSyntheticSiblingParent(n));
+        if (sortGroup) nodes.sort(compareSidebarRelatives);
+        for (const node of nodes) {
+            if (seen.has(node.id) || out.length >= 8) continue;
+            seen.add(node.id);
+            out.push({ id: node.id, name: node.name, gender: node.gender, role, symbol });
+        }
+    };
+    addGroup(focusPerson.partners, 'spouse', '♥', false);
+    addGroup(focusPerson.children, 'child', '↓', true);
+    addGroup([focusPerson.fatherId, focusPerson.momId], 'parent', '↑', false);
+    return out;
+}
+
+/**
+ * Formats a concise single-line biographical summary (`lifespan · age · place/job`) for the mobile Peek Card.
+ *
+ * @param {Person|null} focusPerson - Active focused person record.
+ * @returns {string} Dot-separated inline summary string.
+ *
+ * @example
+ * formatPeekPersonSummary(tree.get('Anto_1955_22'));
+ * // => 'b. 1955 · 71 yrs · Chalakkudy'
+ *
+ * @example
+ * formatPeekPersonSummary(null);
+ * // => ''
+ */
+function formatPeekPersonSummary(focusPerson) {
+    if (!focusPerson) return '';
+    const { dateStr, extraStr } = typeof focusPerson.getDateStrings === 'function'
+        ? focusPerson.getDateStrings()
+        : {};
+    const primaryPlace = parseCommaDelimitedTokens(focusPerson.place || '')[0] || '';
+    const primaryJob = !primaryPlace ? (parseCommaDelimitedTokens(focusPerson.job || '')[0] || '') : '';
+    return [dateStr, extraStr, primaryPlace || primaryJob].filter(Boolean).join(' · ');
+}
+
+/**
+ * Determines whether the compact `96px` mobile Peek Card should be displayed instead of full details.
+ * Morphs live into full details during finger drag once height exceeds `148px`.
+ *
+ * @param {Object} [options={}]
+ * @returns {boolean}
+ *
+ * @example
+ * isMobilePeekCardActive({ dockBottom: true, sheetSnap: 'peek', focusPerson: { id: 'p1' } });
+ * // => true
+ *
+ * @example
+ * isMobilePeekCardActive({ dockBottom: true, sheetSnap: 'half', focusPerson: { id: 'p1' } });
+ * // => false
+ */
+function isMobilePeekCardActive({
+    dockBottom = false, sheetSnap = null, isResizing = false, sidebarHeight = null,
+    focusPerson = null, activeFilter = null, showLogs = false, showAI = false
+} = {}) {
+    if (!dockBottom || !focusPerson || showLogs || showAI) return false;
+    if (activeFilter && activeFilter.filterType !== 'directory') return false;
+    if (isResizing && typeof sidebarHeight === 'number') return sidebarHeight <= 148;
+    return sheetSnap === 'peek';
+}
+
+/**
+ * Horizontally scrollable quick-jump relative chips rendered on Row 2 of the mobile Peek Card.
+ *
+ * @param {Object} props
+ * @param {Person} props.focusPerson - Focused person profile.
+ * @param {FamilyTree} props.tree - Family tree model.
+ * @param {Function} props.setFocusId - Callback to jump focus to a relative.
+ * @param {Function} [props.onSelectSnap] - Callback to expand sheet stop if no relatives exist.
+ * @returns {React.ReactNode}
+ *
+ * @example
+ * <SidebarPeekRelativeChips focusPerson={person} tree={tree} setFocusId={setFocusId} />
+ *
+ * @example
+ * <SidebarPeekRelativeChips focusPerson={isolatedPerson} tree={tree} setFocusId={() => {}} onSelectSnap={setSnap} />
+ */
+const SidebarPeekRelativeChips = ({ focusPerson, tree, setFocusId, onSelectSnap }) => {
+    const relatives = useMemo(() => collectPeekJumpRelatives(focusPerson, tree), [focusPerson, tree]);
+    if (relatives.length === 0) {
+        return (
+            <div className="flex items-center gap-2 mt-1.5 h-7">
+                <button type="button" data-testid="peek-expand-fallback" onClick={() => onSelectSnap?.('half')}
+                        className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-medium bg-slate-100 hover:bg-blue-50 text-slate-600 hover:text-blue-700 border border-slate-200 cursor-pointer transition-colors interactive-element">
+                    <span>View full profile & lineage</span>
+                    <span aria-hidden="true">▲</span>
+                </button>
+            </div>
+        );
+    }
+    return (
+        <div data-testid="peek-relative-chips" style={{ scrollbarWidth: 'none' }}
+             className="flex items-center gap-1.5 mt-1.5 h-7 overflow-x-auto no-scrollbar">
+            {relatives.map((rel) => {
+                const symColor = rel.role === 'spouse' ? 'text-pink-500' : (rel.role === 'child' ? 'text-blue-500' : 'text-amber-600');
+                return (
+                    <button key={rel.id} type="button" data-testid={`peek-jump-${rel.id}`} onClick={() => setFocusId(rel.id)}
+                            className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-semibold bg-slate-100 hover:bg-blue-50 text-slate-700 hover:text-blue-700 border border-slate-200 shrink-0 cursor-pointer transition-colors interactive-element"
+                            title={`Jump to ${rel.role}: ${rel.name}`}>
+                        <span className={`${symColor} text-[11px] leading-none`} aria-hidden="true">{rel.symbol}</span>
+                        <span className="max-w-[116px] truncate">{rel.name}</span>
+                    </button>
+                );
+            })}
+        </div>
+    );
+};
+
+/**
+ * Compact `96px` two-row mobile Peek Card preserving `~89%` of the portrait tree canvas while showing
+ * person identity, lifespan/place summary, and 1-tap quick-jump relative chips.
+ *
+ * @param {Object} props
+ * @param {Person|null} props.focusPerson - Active focused person record.
+ * @param {FamilyTree} props.tree - Family tree model.
+ * @param {Function} props.setFocusId - Callback to focus a relative.
+ * @param {Function} [props.centerOnPerson] - Callback to center camera on person.
+ * @param {Function} [props.onSelectSnap] - Callback to change mobile sheet snap stop.
+ * @returns {React.ReactNode|null}
+ *
+ * @example
+ * <SidebarPersonPeekCard focusPerson={person} tree={tree} setFocusId={setFocusId} centerOnPerson={centerOnPerson} />
+ *
+ * @example
+ * <SidebarPersonPeekCard focusPerson={null} tree={tree} setFocusId={() => {}} />
+ */
+const SidebarPersonPeekCard = ({ focusPerson, tree, setFocusId, centerOnPerson, onSelectSnap }) => {
+    if (!focusPerson) return null;
+    const summary = formatPeekPersonSummary(focusPerson);
+    const dotColor = focusPerson.gender === 'M'
+        ? 'bg-blue-500'
+        : (focusPerson.gender === 'F' ? 'bg-pink-500' : 'bg-slate-300');
+
+    return (
+        <div data-testid="person-peek-card" className="px-3.5 pt-5 pb-2 h-full flex flex-col justify-between overflow-hidden select-none interactive-element w-full">
+            <div className="flex items-baseline gap-2 min-w-0 pr-24">
+                <span className={`w-2.5 h-2.5 rounded-full ${dotColor} shrink-0 self-center`} />
+                <button type="button" data-testid="peek-person-name"
+                        onClick={() => focusPerson.id && centerOnPerson?.(focusPerson.id)}
+                        className="text-base font-bold text-slate-800 leading-tight truncate text-left cursor-pointer hover:text-blue-600 transition-colors">
+                    {focusPerson.name}
+                </button>
+                {summary && (
+                    <span data-testid="peek-person-summary" className="text-xs text-slate-500 truncate min-w-0">
+                        {summary}
+                    </span>
+                )}
+            </div>
+            <SidebarPeekRelativeChips focusPerson={focusPerson} tree={tree} setFocusId={setFocusId} onSelectSnap={onSelectSnap} />
+        </div>
+    );
+};
+
+/**
+ * Top-right snap stop controls (`More ▲`, `Full ▲`, `Half ▼`, `Peek ▼`) rendered alongside the
+ * close button on the mobile bottom sheet.
+ *
+ * @param {Object} props
+ * @param {string|null} props.sheetSnap - Current effective snap stop (`'peek' | 'half' | 'full'`).
+ * @param {boolean} [props.canPeek=false] - Whether the active panel supports collapsing to `'peek'`.
+ * @param {Function} [props.onSelectSnap] - Callback to select a target snap stop.
+ * @returns {React.ReactNode|null}
+ *
+ * @example
+ * <SidebarSheetSnapControls sheetSnap="peek" canPeek={true} onSelectSnap={setSheetSnap} />
+ *
+ * @example
+ * <SidebarSheetSnapControls sheetSnap="half" canPeek={false} onSelectSnap={setSheetSnap} />
+ */
+const SidebarSheetSnapControls = ({ sheetSnap, canPeek = false, onSelectSnap }) => {
+    if (typeof onSelectSnap !== 'function' || !sheetSnap) return null;
+    const btnCls = "px-2 py-1 rounded-md text-[11px] font-semibold bg-slate-100 hover:bg-slate-200/80 text-slate-600 hover:text-slate-800 border border-slate-200/80 transition-colors cursor-pointer leading-none";
+    return (
+        <div data-testid="sheet-snap-controls" className="absolute top-2 right-11 z-50 flex items-center gap-1 interactive-element">
+            {sheetSnap === 'peek' && (
+                <button type="button" data-testid="sheet-snap-half" onClick={() => onSelectSnap('half')} className={btnCls} title="Expand details panel">
+                    More ▲
+                </button>
+            )}
+            {sheetSnap === 'half' && canPeek && (
+                <button type="button" data-testid="sheet-snap-peek" onClick={() => onSelectSnap('peek')} className={btnCls} title="Collapse to compact peek bar">
+                    Peek ▼
+                </button>
+            )}
+            {sheetSnap === 'half' && (
+                <button type="button" data-testid="sheet-snap-full" onClick={() => onSelectSnap('full')} className={btnCls} title="Expand to full height">
+                    Full ▲
+                </button>
+            )}
+            {sheetSnap === 'full' && (
+                <button type="button" data-testid="sheet-snap-half" onClick={() => onSelectSnap('half')} className={btnCls} title="Restore to half height">
+                    Half ▼
+                </button>
+            )}
+            {sheetSnap === 'full' && canPeek && (
+                <button type="button" data-testid="sheet-snap-peek" onClick={() => onSelectSnap('peek')} className={btnCls} title="Collapse to compact peek bar">
+                    Peek ▼
+                </button>
+            )}
+        </div>
+    );
+};
 
 /**
  * Renders the dismiss ('x') button in the top-right corner of the details panel.
@@ -38294,47 +38857,76 @@ const SidebarCloseButton = ({ onClose, dockBottom = false }) => {
  * @example
  * <SidebarMainPanels aiProps={{}} showLogs={true} showAI={false} logs={[{ text: 'loaded' }]} isLoading={false} setShowLogs={() => {}} activeFilter={null} filteredProps={{}} focusPerson={null} tree={tree} setFocusId={() => {}} onFilterBy={() => {}} />
  */
-const SidebarMainPanels = ({
-    aiProps, showLogs, showAI, logs, isLoading, setShowLogs,
-    activeFilter, filteredProps, focusPerson, tree, setFocusId, onFilterBy, centerOnPerson, dockBottom = false
-}) => (
-    <>
-        <AIAssistant {...aiProps} />
-        {showLogs && !showAI && <SidebarLogsView logs={logs} isLoading={isLoading} setShowLogs={setShowLogs} />}
-        {activeFilter && activeFilter.filterType !== 'directory' && !showLogs && !showAI && (
-            <FilteredListView {...filteredProps} />
-        )}
-        {focusPerson && (!activeFilter || activeFilter.filterType === 'directory') && !showLogs && !showAI && (
-            <SidebarPersonDetails focusPerson={focusPerson} tree={tree} setFocusId={setFocusId} onFilterBy={onFilterBy} centerOnPerson={centerOnPerson} dockBottom={dockBottom} />
-        )}
-    </>
-);
+const SidebarMainPanels = (props) => {
+    const {
+        showLogs, showAI, setShowAI, logs, isLoading, setShowLogs, activeFilter, focusPerson, tree,
+        setFocusId, onFilterBy, centerOnPerson, dockBottom = false, isPeekCard = false, onSelectSnap,
+        isAILoading, setIsAILoading, onAiProfilesResponded, pendingAiQuery, setPendingAiQuery,
+        setShowMap, omniSelectedIndex, setOmniSelectedIndex
+    } = props;
+    const aiProps = {
+        isOpen: showAI, setIsOpen: setShowAI, tree, handleSetFocusId: setFocusId,
+        isLoading: isAILoading, setIsLoading: setIsAILoading, onAiProfilesResponded, pendingAiQuery, setPendingAiQuery
+    };
+    const filteredProps = {
+        activeFilter, tree, setFocusId, onFilterBy, setShowMap, setShowAI,
+        setShowLogs, setPendingAiQuery, omniSelectedIndex, setOmniSelectedIndex
+    };
+    const showPerson = Boolean(focusPerson && (!activeFilter || activeFilter.filterType === 'directory') && !showLogs && !showAI);
+
+    return (
+        <>
+            <AIAssistant {...aiProps} />
+            {showLogs && !showAI && <SidebarLogsView logs={logs} isLoading={isLoading} setShowLogs={setShowLogs} />}
+            {activeFilter && activeFilter.filterType !== 'directory' && !showLogs && !showAI && <FilteredListView {...filteredProps} />}
+            {showPerson && isPeekCard && (
+                <SidebarPersonPeekCard focusPerson={focusPerson} tree={tree} setFocusId={setFocusId}
+                                       centerOnPerson={centerOnPerson} onSelectSnap={onSelectSnap} />
+            )}
+            {showPerson && !isPeekCard && (
+                <SidebarPersonDetails focusPerson={focusPerson} tree={tree} setFocusId={setFocusId}
+                                      onFilterBy={onFilterBy} centerOnPerson={centerOnPerson} dockBottom={dockBottom} />
+            )}
+        </>
+    );
+};
 
 /** Share of the viewport height the details panel takes when docked below the canvas on phones. */
 const BOTTOM_DOCK_HEIGHT = '55vh';
 
 /**
  * Inline style that lifts a bottom-anchored control (settings FAB) clear of the
- * phone layout's bottom-docked details panel, so it never covers the panel's content. On
- * desktop, or while no panel is open, the control keeps its normal `bottom-6` position.
+ * phone layout's bottom-docked details panel, or hides it without layout shift when the sheet
+ * is expanded to `'full'` (`85vh`) so it never collides with the top navigation bar.
  *
  * @param {boolean} isCompactViewport - Phone layout (see `isCompactViewportWidth`)
  * @param {boolean} isAnySidebarOpen - Whether a details / filter / AI / logs panel is open
- * @param {number|null} [sidebarHeight=null] - User-resized bottom-sheet height in px, or null for `55vh`
- * @returns {{ bottom: string }|undefined}
+ * @param {number|null} [sidebarHeight=null] - User-dragged bottom-sheet height in px, or null
+ * @param {string|null} [sheetSnap=null] - Optional 3-stop snap state (`'peek' | 'half' | 'full'`)
+ * @returns {{ bottom: string, opacity?: number, visibility?: string, pointerEvents?: string }|undefined}
  *
  * @example
- * resolveBottomDockLift(true, true);        // => { bottom: 'calc(55vh + 1.5rem)' }
- * resolveBottomDockLift(true, true, 320);   // => { bottom: 'calc(320px + 1.5rem)' }
+ * resolveBottomDockLift(true, true);                  // => { bottom: 'calc(55vh + 1.5rem)' }
+ * resolveBottomDockLift(true, true, null, 'peek');    // => { bottom: 'calc(96px + 1rem)' }
  *
  * @example
- * resolveBottomDockLift(false, true);       // => undefined (desktop: the panel sits beside the canvas)
- * resolveBottomDockLift(true, false);       // => undefined (nothing docked at the bottom)
+ * resolveBottomDockLift(false, true);                 // => undefined
+ * resolveBottomDockLift(true, true, null, 'full');    // => { bottom: '1.5rem', opacity: 0, visibility: 'hidden', pointerEvents: 'none' }
  */
-function resolveBottomDockLift(isCompactViewport, isAnySidebarOpen, sidebarHeight = null) {
+function resolveBottomDockLift(isCompactViewport, isAnySidebarOpen, sidebarHeight = null, sheetSnap = null) {
     if (!isCompactViewport || !isAnySidebarOpen) return undefined;
-    const heightCss = (typeof sidebarHeight === 'number' && sidebarHeight > 0) ? `${sidebarHeight}px` : BOTTOM_DOCK_HEIGHT;
-    return { bottom: `calc(${heightCss} + 1.5rem)` };
+    if ((typeof sidebarHeight === 'number' && sidebarHeight >= 520) || (sidebarHeight === null && sheetSnap === 'full')) {
+        return { bottom: '1.5rem', opacity: 0, visibility: 'hidden', pointerEvents: 'none' };
+    }
+    if (typeof sidebarHeight === 'number' && sidebarHeight > 0) {
+        return { bottom: `calc(${sidebarHeight}px + 1.5rem)` };
+    }
+    if (sheetSnap === 'peek' || sheetSnap === 'half') {
+        const snapCss = resolveSheetSnapCssHeight(sheetSnap);
+        const gapRem = sheetSnap === 'peek' ? '1rem' : '1.25rem';
+        return { bottom: `calc(${snapCss} + ${gapRem})` };
+    }
+    return { bottom: `calc(${BOTTOM_DOCK_HEIGHT} + 1.5rem)` };
 }
 
 /**
@@ -38346,7 +38938,8 @@ function resolveBottomDockLift(isCompactViewport, isAnySidebarOpen, sidebarHeigh
  * @param {boolean} options.dockBottom - Phone layout (see `isCompactViewportWidth`)
  * @param {boolean} options.isVisible - Whether the panel is open
  * @param {number} options.sidebarWidth - Configured desktop width in px
- * @param {number|null} [options.sidebarHeight=null] - Configured phone bottom-sheet height in px (defaults to `55vh`)
+ * @param {number|null} [options.sidebarHeight=null] - Live phone bottom-sheet drag height in px
+ * @param {string|null} [options.sheetSnap=null] - Optional 3-stop snap state (`'peek' | 'half' | 'full'`)
  * @returns {{ className: string, style: Object }}
  *
  * @example
@@ -38354,14 +38947,17 @@ function resolveBottomDockLift(isCompactViewport, isAnySidebarOpen, sidebarHeigh
  * // => { className: 'border-l', style: { width: '360px' } }
  *
  * @example
- * resolveSidebarDockLayout({ dockBottom: true, isVisible: true, sidebarWidth: 360 });
- * // => { className: 'w-full border-t rounded-t-2xl', style: { height: '55vh' } }
- * resolveSidebarDockLayout({ dockBottom: true, isVisible: true, sidebarWidth: 360, sidebarHeight: 340 });
- * // => { className: 'w-full border-t rounded-t-2xl', style: { height: '340px' } }
+ * resolveSidebarDockLayout({ dockBottom: true, isVisible: true, sidebarWidth: 360, sheetSnap: 'peek' });
+ * // => { className: 'w-full border-t rounded-t-2xl', style: { height: '96px' } }
  */
-function resolveSidebarDockLayout({ dockBottom, isVisible, sidebarWidth, sidebarHeight = null }) {
+function resolveSidebarDockLayout({ dockBottom, isVisible, sidebarWidth, sidebarHeight = null, sheetSnap = null }) {
     if (dockBottom) {
-        const openHeight = (typeof sidebarHeight === 'number' && sidebarHeight > 0) ? `${sidebarHeight}px` : BOTTOM_DOCK_HEIGHT;
+        let openHeight = BOTTOM_DOCK_HEIGHT;
+        if (typeof sidebarHeight === 'number' && sidebarHeight > 0) {
+            openHeight = `${sidebarHeight}px`;
+        } else if (sheetSnap === 'peek' || sheetSnap === 'half' || sheetSnap === 'full') {
+            openHeight = resolveSheetSnapCssHeight(sheetSnap);
+        }
         return { className: 'w-full border-t rounded-t-2xl', style: { height: isVisible ? openHeight : 0 } };
     }
     return { className: 'border-l', style: { width: isVisible ? `${sidebarWidth}px` : 0 } };
@@ -38370,38 +38966,9 @@ function resolveSidebarDockLayout({ dockBottom, isVisible, sidebarWidth, sidebar
 /**
  * Collapsible side panel orchestrating detail views for persons, attribute directories,
  * active filters, system logs, and the AI Assistant. Docks to the right of the canvas on
- * desktop and below it on phones (`dockBottom`).
+ * desktop and below it as a 3-stop Peek Sheet on phones (`dockBottom`).
  *
  * @param {object} props
- * @param {object} [props.focusPerson] - Currently selected person node
- * @param {object} [props.activeFilter] - Active filter state { filterType, value, tab }
- * @param {Function} props.onFilterBy - Callback to set active filter
- * @param {object} props.tree - FamilyTree data model
- * @param {Function} props.setFocusId - State setter to select a person ID
- * @param {boolean} props.isVisible - Whether the sidebar is currently open/visible
- * @param {number} [props.sidebarWidth=360] - Width of sidebar in pixels (desktop)
- * @param {number|null} [props.sidebarHeight=null] - Height of bottom sheet in pixels (phones)
- * @param {boolean} [props.dockBottom=false] - Phone layout: full-width bottom sheet instead of a right column
- * @param {Function} props.onResizeStart - Pointer down handler to initiate horizontal sidebar resizing
- * @param {Function} [props.onVerticalResizeStart] - Pointer down handler to initiate vertical bottom-sheet resizing
- * @param {Function} [props.onClose] - Callback to dismiss/close the panel
- * @param {boolean} [props.isResizing=false] - Whether a resize drag operation is active
- * @param {boolean} props.showLogs - Whether system logs view is active
- * @param {Function} props.setShowLogs - State setter for logs view visibility
- * @param {Array<object>} props.logs - System log messages
- * @param {boolean} props.isLoading - Whether tree or network operations are loading
- * @param {boolean} props.showAI - Whether AI Assistant panel is active
- * @param {Function} props.setShowAI - State setter for AI Assistant panel visibility
- * @param {boolean} props.isAILoading - Whether AI queries are loading
- * @param {Function} props.setIsAILoading - State setter for AI loading state
- * @param {Function} props.onAiProfilesResponded - Callback when AI returns profiles
- * @param {string} props.pendingAiQuery - Pending query string for AI Assistant
- * @param {Function} props.setPendingAiQuery - Setter for pending AI query
- * @param {boolean} props.showMap - Whether map view is active
- * @param {Function} props.setShowMap - State setter for map view
- * @param {number} props.omniSelectedIndex - Keyboard selection index in filtered list
- * @param {Function} props.setOmniSelectedIndex - Setter for keyboard selection index
- * @param {Function} [props.centerOnPerson] - Callback to center canvas on person
  * @returns {React.ReactNode}
  *
  * @example
@@ -38423,33 +38990,26 @@ function resolveSidebarDockLayout({ dockBottom, isVisible, sidebarWidth, sidebar
  *   showMap={true}
  * />
  */
-const PersonSidebar = ({ 
-    focusPerson, activeFilter, onFilterBy, tree, setFocusId, isVisible, sidebarWidth = 360, sidebarHeight = null, dockBottom = false,
-    onResizeStart, onVerticalResizeStart, onClose, isResizing = false, showLogs, setShowLogs, logs, isLoading, showAI, setShowAI,
-    isAILoading, setIsAILoading, onAiProfilesResponded, pendingAiQuery, setPendingAiQuery,
-    showMap, setShowMap, omniSelectedIndex, setOmniSelectedIndex, centerOnPerson
-}) => {
+const PersonSidebar = (props) => {
+    const {
+        focusPerson, activeFilter, onFilterBy, tree, isVisible, sidebarWidth = 360, sidebarHeight = null,
+        dockBottom = false, sheetSnap = null, canPeek = false, onSelectSnap, onResizeStart, onVerticalResizeStart,
+        onClose, isResizing = false, showLogs, showAI, showMap
+    } = props;
     const isDirectoryMode = (activeFilter?.filterType === 'directory') || (!focusPerson && !activeFilter && showMap);
     if (!focusPerson && !activeFilter && !showLogs && !showAI && !isDirectoryMode) return null;
 
-    const aiProps = { isOpen: showAI, setIsOpen: setShowAI, tree, handleSetFocusId: setFocusId, isLoading: isAILoading, setIsLoading: setIsAILoading, onAiProfilesResponded, pendingAiQuery, setPendingAiQuery };
-    const filteredProps = { activeFilter, tree, setFocusId, onFilterBy, setShowMap, setShowAI, setShowLogs, setPendingAiQuery, omniSelectedIndex, setOmniSelectedIndex };
-    const dock = resolveSidebarDockLayout({ dockBottom, isVisible, sidebarWidth, sidebarHeight });
+    const dock = resolveSidebarDockLayout({ dockBottom, isVisible, sidebarWidth, sidebarHeight, sheetSnap });
     const showCloseBtn = isVisible && !showLogs && (dockBottom || (focusPerson && !showAI && (!activeFilter || activeFilter.filterType === 'directory')));
+    const isPeekCard = isMobilePeekCardActive({ dockBottom, sheetSnap, isResizing, sidebarHeight, focusPerson, activeFilter, showLogs, showAI });
 
     return (
-        <div 
-            data-testid="person-sidebar"
-            className={`bg-white border-slate-200 shadow-2xl flex flex-col z-40 sidebar-scroll relative shrink-0 overflow-hidden ${dock.className} ${isResizing ? 'transition-none' : 'transition-all duration-300 ease-in-out'} ${isVisible ? 'opacity-100' : 'border-none opacity-0 pointer-events-none'}`}
-            style={dock.style}
-        >
+        <div data-testid="person-sidebar" style={dock.style}
+             className={`bg-white border-slate-200 shadow-2xl flex flex-col z-40 sidebar-scroll relative shrink-0 overflow-hidden ${dock.className} ${isResizing ? 'transition-none' : 'transition-all duration-300 ease-in-out'} ${isVisible ? 'opacity-100' : 'border-none opacity-0 pointer-events-none'}`}>
             {isVisible && <SidebarResizeHandle onResizeStart={dockBottom ? onVerticalResizeStart : onResizeStart} dockBottom={dockBottom} />}
+            {isVisible && dockBottom && !showLogs && <SidebarSheetSnapControls sheetSnap={sheetSnap} canPeek={canPeek} onSelectSnap={onSelectSnap} />}
             {showCloseBtn && <SidebarCloseButton onClose={onClose} dockBottom={dockBottom} />}
-            <SidebarMainPanels
-                aiProps={aiProps} showLogs={showLogs} showAI={showAI} logs={logs} isLoading={isLoading}
-                setShowLogs={setShowLogs} activeFilter={activeFilter} filteredProps={filteredProps}
-                focusPerson={focusPerson} tree={tree} setFocusId={setFocusId} onFilterBy={onFilterBy} centerOnPerson={centerOnPerson} dockBottom={dockBottom}
-            />
+            <SidebarMainPanels {...props} isPeekCard={isPeekCard} />
             {isDirectoryMode && !focusPerson && !showLogs && !showAI && (
                 <QuickDirectorySelector
                     tree={tree}
@@ -48229,7 +48789,7 @@ const GlobalAppStyles = React.memo(() => (
             .custom-scrollbar::-webkit-scrollbar { width: 6px; }
             .custom-scrollbar::-webkit-scrollbar-track { background: transparent; margin: 4px; }
             .custom-scrollbar::-webkit-scrollbar-thumb { background-color: rgb(var(--tw-slate-300, 203 213 225)); border-radius: 10px; }
-            .custom-scrollbar::-webkit-scrollbar-thumb:hover { background-color: rgb(var(--tw-slate-400, 148 163 184)); }
+            .custom-scrollbar::-webkit-scrollbar-thumb:hover { background-color: rgb(var(--tw-slate-400, 148 163 184)); } .no-scrollbar::-webkit-scrollbar { display: none; }
             html[data-theme-mode="dark"] .leaflet-tile { filter: invert(1) hue-rotate(180deg) brightness(0.9); }
             @keyframes text-gradient { 0% { background-position: 0% 50%; } 50% { background-position: 100% 50%; } 100% { background-position: 0% 50%; } }
             .animate-text-gradient { background-size: 200% auto; animation: text-gradient 3s linear infinite; }
@@ -48913,13 +49473,16 @@ function useAiProfilesResponseHandler({
  *   });
  */
 function useAppCanvasViewportManager({
-    closeAllPanels, treeStats, isAnySidebarOpen, sidebarWidth, rootId, focusId
+    closeAllPanels, treeStats, isAnySidebarOpen, sidebarWidth, rootId, focusId,
+    bottomSheetHeight = 0, focusBottomSheetHeight = 0, isCompactViewport = false
 }) {
     const handleInteract = useCallback(() => {
         closeAllPanels();
     }, [closeAllPanels]);
 
-    const canvas = useCanvasControls(handleInteract, treeStats, isAnySidebarOpen, sidebarWidth);
+    const canvas = useCanvasControls(handleInteract, treeStats, isAnySidebarOpen, sidebarWidth, {
+        bottomSheetHeight, focusBottomSheetHeight, isCompactViewport
+    });
 
     const collapse = useSubtreeCollapseAnchor({
         treeRef: canvas.treeRef,
@@ -51058,9 +51621,9 @@ function resolveRestoredSidebarOpen(state) {
  * measureViewStateViewport({ container: null, isSidebarOpen: true, sidebarWidth: 400 });
  * // => { visibleWidth: 1040, visibleHeight: 900, timelineWidth: 48 }
  */
-function measureViewStateViewport({ container, isSidebarOpen, sidebarWidth }) {
-    const { contW, contH } = resolveViewportDimensions({ container, isSidebarOpen, sidebarWidth });
-    return { visibleWidth: contW, visibleHeight: contH, timelineWidth: isStandaloneExportMode() ? 0 : 48 };
+function measureViewStateViewport({ container, isSidebarOpen, sidebarWidth, bottomSheetHeight = 0 }) {
+    const { contW, contH } = resolveViewportDimensions({ container, isSidebarOpen, sidebarWidth, bottomSheetHeight });
+    return { visibleWidth: contW, visibleHeight: contH, timelineWidth: resolveTimelineGutterWidth() };
 }
 
 /**
@@ -51319,8 +51882,14 @@ function applyRestoredCamera(state, env) {
  * // => { visibleWidth: 1080, visibleHeight: 900, timelineWidth: 48 }   (sidebar predicted open)
  */
 function buildRestoreCameraEnv(p, state) {
+    const restoredOpen = resolveRestoredSidebarOpen(state);
+    const restoredSnap = state?.activeFilter ? 'half' : 'peek';
+    const restoredSheetH = (p.isCompactViewport && restoredOpen)
+        ? resolveBottomSheetPixelHeight({ isCompactViewport: true, isSidebarOpen: true, sheetSnap: restoredSnap })
+        : 0;
     const viewport = measureViewStateViewport({
-        container: p.containerRef.current, isSidebarOpen: resolveRestoredSidebarOpen(state), sidebarWidth: p.sidebarWidth
+        container: p.containerRef.current, isSidebarOpen: restoredOpen,
+        sidebarWidth: p.sidebarWidth, bottomSheetHeight: restoredSheetH
     });
     return {
         camera: p.camera, setCamera: p.setCamera, clampCamera: p.clampCamera, getPpy: p.getPpy, tree: p.tree, viewport,
@@ -51434,7 +52003,8 @@ function useUrlViewStateWriter(params) {
  */
 function captureAndWriteViewState(p) {
     const viewport = measureViewStateViewport({
-        container: p.containerRef.current, isSidebarOpen: p.isAnySidebarOpen, sidebarWidth: p.sidebarWidth
+        container: p.containerRef.current, isSidebarOpen: p.isAnySidebarOpen,
+        sidebarWidth: p.sidebarWidth, bottomSheetHeight: p.bottomSheetHeight || 0
     });
     const anchor = p.showMap ? null : chooseViewStateAnchor({
         treeElement: p.treeRef ? p.treeRef.current : null, tree: p.tree, focusId: p.focusId, camera: p.camera, viewport
@@ -52893,7 +53463,7 @@ function useAppCoreState() {
     const data = useAncestryData();
     const nav = useTreeNavigationHistory(data.focusId);
     const panels = useAppPanels(data.isLoading);
-    const sidebar = useSidebarResize(360);
+    const sidebar = useSidebarResize(360, panels.closeAllPanels);
     const shell = useAppShellPanels(isStandalone);
     const treeStats = useMemo(() => data.tree.getStats(), [data.tree]);
     const [sheetUrl, setSheetUrl] = useState(() => (hasInitialSheetToLoad() ? resolveInitialSheetUrl() : ''));
@@ -52902,10 +53472,52 @@ function useAppCoreState() {
     const isCompactViewport = useCompactViewport();
     const dockedSidebarWidth = resolveDockedSidebarWidth(sidebar.sidebarWidth, isCompactViewport);
     const timelineGutterWidth = resolveTimelineGutterWidth({ isStandalone, isCompact: isCompactViewport });
+    const mobileSheet = resolveMobileSheetState({
+        isCompactViewport, isAnySidebarOpen: panels.isAnySidebarOpen, sheetSnap: sidebar.sheetSnap,
+        sidebarHeight: sidebar.sidebarHeight, hasFocusPerson: Boolean(data.tree.get(data.focusId)),
+        showLogs: panels.showLogs, showAI: panels.showAI, activeFilter: data.activeFilter
+    });
     return {
         isStandalone, ...theme, ...data, ...nav, ...panels, ...sidebar, ...shell, treeStats, sheetUrl, setSheetUrl,
-        isCompactViewport, dockedSidebarWidth, timelineGutterWidth
+        isCompactViewport, dockedSidebarWidth, timelineGutterWidth, ...mobileSheet
     };
+}
+
+/**
+ * Synchronizes mobile 3-stop bottom-sheet lifecycle: resets snap stop back to `'peek'` when all
+ * panels close, and smoothly re-centers the focused person card when toggling between `'peek'`
+ * and `'half'` stops on compact viewports while preserving current zoom.
+ *
+ * @param {object} params
+ *
+ * @example
+ * useMobileSheetSync({ ...core, centerOnPerson: viewport.centerOnPerson, cameraRef: viewport.cameraRef });
+ *
+ * @example
+ * useMobileSheetSync({ isCompactViewport: false, isAnySidebarOpen: false, setSheetSnap: () => {}, setSidebarHeight: () => {} });
+ */
+function useMobileSheetSync({
+    isCompactViewport, isAnySidebarOpen, effectiveSheetSnap, bottomSheetHeight,
+    canPeek, focusId, isResizingSidebar, setSheetSnap, setSidebarHeight, centerOnPerson, cameraRef
+}) {
+    const prevSnapRef = useRef(null);
+
+    useEffect(() => {
+        if (!isAnySidebarOpen) {
+            setSheetSnap('peek');
+            setSidebarHeight(null);
+        }
+    }, [isAnySidebarOpen, setSheetSnap, setSidebarHeight]);
+
+    useEffect(() => {
+        const prev = prevSnapRef.current;
+        prevSnapRef.current = effectiveSheetSnap;
+        if (!isCompactViewport || !isAnySidebarOpen || !canPeek || !focusId || isResizingSidebar) return;
+        if (!prev || prev === effectiveSheetSnap) return;
+        if (effectiveSheetSnap === 'peek' || effectiveSheetSnap === 'half') {
+            centerOnPerson(focusId, cameraRef?.current?.z ?? null, bottomSheetHeight);
+        }
+    }, [isCompactViewport, isAnySidebarOpen, canPeek, focusId, isResizingSidebar, effectiveSheetSnap, bottomSheetHeight, centerOnPerson, cameraRef]);
 }
 
 /**
@@ -52932,10 +53544,14 @@ function useAppCoreState() {
  * @example
  * const { camera, setCamera, isDragging } = useAppViewportState(params);
  */
-function useAppViewportState({ tree, focusId, treeStats, isAnySidebarOpen, sidebarWidth, closeAllPanels, openAiPanel, setShowMap, setTree }) {
+function useAppViewportState({
+    tree, focusId, treeStats, isAnySidebarOpen, sidebarWidth, bottomSheetHeight = 0,
+    focusBottomSheetHeight = 0, isCompactViewport = false, closeAllPanels, openAiPanel, setShowMap, setTree
+}) {
     const search = useTreeSearchState(openAiPanel);
     const viewport = useAppCanvasViewportManager({
-        closeAllPanels, treeStats, isAnySidebarOpen, sidebarWidth, rootId: tree.rootId, focusId
+        closeAllPanels, treeStats, isAnySidebarOpen, sidebarWidth, rootId: tree.rootId, focusId,
+        bottomSheetHeight, focusBottomSheetHeight, isCompactViewport
     });
     const ai = useAppAiCoordinator({
         tree, setTree, setShowMap, setCollapsedNodes: viewport.setCollapsedNodes, framePeople: viewport.framePeople
@@ -53153,7 +53769,9 @@ function buildSidebarProps(core, viewport, focusNav) {
     return {
         focusPerson: core.tree.get(core.focusId), activeFilter: core.activeFilter,
         onFilterBy: focusNav.handleFilterBy, sidebarWidth: core.sidebarWidth, sidebarHeight: core.sidebarHeight,
-        dockBottom: core.isCompactViewport, onResizeStart: core.handleResizeStart,
+        dockBottom: core.isCompactViewport, sheetSnap: core.effectiveSheetSnap, canPeek: core.canPeek,
+        onSelectSnap: (snap) => { core.setSidebarHeight(null); core.setSheetSnap(snap); },
+        onResizeStart: core.handleResizeStart,
         onVerticalResizeStart: core.handleVerticalResizeStart, onClose: core.closeAllPanels,
         isResizing: core.isResizingSidebar, tree: core.tree, setFocusId: focusNav.handleSetFocusId,
         isVisible: core.isAnySidebarOpen, centerOnPerson: viewport.centerOnPerson,
@@ -53184,7 +53802,7 @@ function buildZoomProps(core, viewport) {
         setCamera: viewport.setCamera, clampCamera: viewport.clampCamera, centerOnPerson: viewport.centerOnPerson,
         fitToScreen: viewport.handleFitToScreen, focusId: core.focusId, rootId: core.tree.rootId,
         setIsSidebarVisible: core.setIsSidebarVisible, closeAllPanels: core.closeAllPanels,
-        bottomDockLift: resolveBottomDockLift(core.isCompactViewport, core.isAnySidebarOpen, core.sidebarHeight)
+        bottomDockLift: resolveBottomDockLift(core.isCompactViewport, core.isAnySidebarOpen, core.sidebarHeight, core.effectiveSheetSnap)
     };
 }
 
@@ -53274,7 +53892,7 @@ function buildShellProps(core, viewport, focusNav, layoutExp, applyDemographicSe
             isHomeOpen: core.isHomeOpen, isStandalone: core.isStandalone, hasTree: Boolean(core.tree?.root),
             isLoading: core.isLoading, showMap: core.showMap, showAI: core.showAI, showLogs: core.showLogs,
             isAILoading: viewport.isAILoading, isExportingApp: layoutExp.isExportingApp, isExportingA4: layoutExp.isExportingA4,
-            bottomDockLift: resolveBottomDockLift(core.isCompactViewport, core.isAnySidebarOpen, core.sidebarHeight)
+            bottomDockLift: resolveBottomDockLift(core.isCompactViewport, core.isAnySidebarOpen, core.sidebarHeight, core.effectiveSheetSnap)
         },
         settingsPanelProps: {
             isOpen: core.isSettingsOpen, initialTab: core.settingsTab,
@@ -53326,9 +53944,12 @@ function useAppViewModel() {
     const viewport = useAppViewportState({
         tree: core.tree, focusId: core.focusId, treeStats: core.treeStats,
         isAnySidebarOpen: core.isAnySidebarOpen, sidebarWidth: core.dockedSidebarWidth,
+        bottomSheetHeight: core.bottomSheetHeight, focusBottomSheetHeight: core.focusBottomSheetHeight,
+        isCompactViewport: core.isCompactViewport,
         closeAllPanels: core.closeAllPanels, openAiPanel: core.openAiPanel,
         setShowMap: core.setShowMap, setTree: core.setTree
     });
+    useMobileSheetSync({ ...core, centerOnPerson: viewport.centerOnPerson, cameraRef: viewport.cameraRef });
     const focusNav = useAppFocusAndNavigation({
         ...core, ...viewport, collapsedCount: viewport.collapsedNodes.size
     });
