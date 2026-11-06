@@ -534,6 +534,28 @@ function getTreeElementWidth(treeElement) {
 }
 
 /**
+ * Resolves the actual layout height of the tree DOM element, taking into account compact tree view if present.
+ *
+ * @param {HTMLElement|null} treeElement - The root tree DOM container.
+ * @returns {number} Height in pixels, or 0 if element is not mounted.
+ *
+ * @example
+ * getTreeElementHeight(document.getElementById('tree-view'));
+ * // => 980
+ *
+ * @example
+ * getTreeElementHeight(null);
+ * // => 0
+ */
+function getTreeElementHeight(treeElement) {
+    if (!treeElement) return 0;
+    const compactTree = treeElement.querySelector?.('.compact-tree-view');
+    return compactTree
+        ? (compactTree.offsetHeight || parseFloat(compactTree.style.height) || treeElement.scrollHeight || 0)
+        : (treeElement.scrollHeight || 0);
+}
+
+/**
  * Computes the Euclidean distance and midpoint between two 2D coordinates.
  *
  * @param {{ x: number, y: number }} p1 - First coordinate.
@@ -728,7 +750,7 @@ function initTouchPinchState(touches, cameraRef, onInteract) {
  * // returns empty no-op function
  */
 function setupCanvasTouchListeners({
-    container, onInteract, cameraRef, setCamera, clampCamera, getBounds, getPpy
+    container, onInteract, onCancelFraming, cameraRef, setCamera, clampCamera, getBounds, getPpy
 }) {
     if (!container) return () => {};
     let touchPinch = null;
@@ -736,6 +758,7 @@ function setupCanvasTouchListeners({
     const onTouchStart = (e) => {
         if (e.touches.length !== 2) return;
         e.preventDefault();
+        if (onCancelFraming) onCancelFraming();
         touchPinch = initTouchPinchState(e.touches, cameraRef);
     };
 
@@ -817,6 +840,47 @@ function applyFramedCamera({
     });
 }
 
+/** Follow-up delays (ms) after initial framing so zoom-dependent `siblingGap` and `ppy` layout reflows are re-centered. */
+const FRAME_REFLOW_REFINE_DELAYS_MS = Object.freeze([40, 140, 320]);
+
+/**
+ * Cancels any in-flight timer group stored in `cancelRef` and returns a new group helper
+ * (`schedule`, `cancel`, `isCancelled`) that tracks pending `setTimeout` handles.
+ *
+ * @param {{ current: Function|null }|null} [cancelRef=null] - Optional mutable ref holding the active cancel callback.
+ * @returns {{ schedule: (fn: Function, delayMs: number) => number, cancel: () => void, isCancelled: () => boolean }}
+ *
+ * @example
+ * const ref = { current: null };
+ * const group = createCancelableTimerGroup(ref);
+ * group.schedule(() => {}, 40);
+ * group.cancel();
+ *
+ * @example
+ * const group = createCancelableTimerGroup(null);
+ * group.isCancelled();
+ * // => false
+ */
+function createCancelableTimerGroup(cancelRef = null) {
+    if (cancelRef && typeof cancelRef.current === 'function') {
+        cancelRef.current();
+    }
+    const timers = [];
+    let cancelled = false;
+    const cancel = () => {
+        cancelled = true;
+        while (timers.length > 0) clearTimeout(timers.pop());
+        if (cancelRef && cancelRef.current === cancel) cancelRef.current = null;
+    };
+    if (cancelRef) cancelRef.current = cancel;
+    const schedule = (fn, delayMs) => {
+        const id = setTimeout(() => { if (!cancelled) fn(); }, delayMs);
+        timers.push(id);
+        return id;
+    };
+    return { schedule, cancel, isCancelled: () => cancelled };
+}
+
 /**
  * Resolves configuration parameters with default values for polling and framing people nodes.
  *
@@ -829,16 +893,18 @@ function applyFramedCamera({
  *   intervalMs: number,
  *   initialDelay: number,
  *   bottomSheetHeight: number,
- *   topInset: number
+ *   topInset: number,
+ *   refineDelays: readonly number[],
+ *   cancelRef: { current: Function|null }|null
  * }} Normalized polling configuration options.
  *
  * @example
  *   resolveFramePeopleOptions(1.5);
- *   // returns { preferredZ: 1.5, targetPadX: 100, targetPadY: 120, maxAttempts: 35, intervalMs: 35, initialDelay: 25, bottomSheetHeight: 0, topInset: 0 }
+ *   // returns { preferredZ: 1.5, targetPadX: 100, targetPadY: 120, maxAttempts: 35, intervalMs: 35, initialDelay: 25, bottomSheetHeight: 0, topInset: 0, refineDelays: [40, 140, 320], cancelRef: null }
  *
  * @example
  *   resolveFramePeopleOptions({ targetPadX: 80, maxAttempts: 20 });
- *   // returns { preferredZ: null, targetPadX: 80, targetPadY: 120, maxAttempts: 20, intervalMs: 35, initialDelay: 25, bottomSheetHeight: 0, topInset: 0 }
+ *   // returns { preferredZ: null, targetPadX: 80, targetPadY: 120, maxAttempts: 20, intervalMs: 35, initialDelay: 25, bottomSheetHeight: 0, topInset: 0, refineDelays: [40, 140, 320], cancelRef: null }
  */
 function resolveFramePeopleOptions(options) {
     const preferredZ = typeof options === 'number' ? options : options?.preferredZ ?? null;
@@ -849,8 +915,13 @@ function resolveFramePeopleOptions(options) {
     const initialDelay = options?.initialDelay ?? 25;
     const bottomSheetHeight = options?.bottomSheetHeight ?? 0;
     const topInset = options?.topInset ?? 0;
+    const refineDelays = Array.isArray(options?.refineDelays) ? options.refineDelays : FRAME_REFLOW_REFINE_DELAYS_MS;
+    const cancelRef = options?.cancelRef ?? null;
 
-    return { preferredZ, targetPadX, targetPadY, maxAttempts, intervalMs, initialDelay, bottomSheetHeight, topInset };
+    return {
+        preferredZ, targetPadX, targetPadY, maxAttempts, intervalMs, initialDelay,
+        bottomSheetHeight, topInset, refineDelays, cancelRef
+    };
 }
 
 /**
@@ -943,23 +1014,27 @@ function pollFramePeople({
     if (!ids || ids.length === 0) return null;
     const {
         preferredZ, targetPadX, targetPadY, maxAttempts, intervalMs, initialDelay,
-        bottomSheetHeight, topInset
+        bottomSheetHeight, topInset, refineDelays, cancelRef
     } = resolveFramePeopleOptions(options);
+    const timerGroup = createCancelableTimerGroup(cancelRef);
+    const runAttempt = () => attemptFramePeople({
+        ids, treeElement: treeRef.current, container: containerRef.current, isSidebarOpen,
+        sidebarWidth, preferredZ, targetPadX, targetPadY, setCamera, clampCamera,
+        bottomSheetHeight, topInset
+    });
 
     let attempts = 0;
     const tryFrame = () => {
         attempts++;
-        const framed = attemptFramePeople({
-            ids, treeElement: treeRef.current, container: containerRef.current, isSidebarOpen,
-            sidebarWidth, preferredZ, targetPadX, targetPadY, setCamera, clampCamera,
-            bottomSheetHeight, topInset
-        });
-        if (!framed && attempts < maxAttempts) {
-            setTimeout(tryFrame, intervalMs);
+        if (runAttempt()) {
+            // Re-measure after zoom-dependent `siblingGap` and `ppy` layout reflows commit to the DOM.
+            refineDelays.forEach(delayMs => timerGroup.schedule(runAttempt, delayMs));
+        } else if (attempts < maxAttempts) {
+            timerGroup.schedule(tryFrame, intervalMs);
         }
     };
 
-    return setTimeout(tryFrame, initialDelay);
+    return timerGroup.schedule(tryFrame, initialDelay);
 }
 
 /**
@@ -1047,9 +1122,10 @@ function performFitToScreenRefinement({
  * timers.forEach(clearTimeout);
  */
 function scheduleFitToScreenRefinement(params) {
+    const timerGroup = createCancelableTimerGroup(params?.cancelRef ?? null);
     const refine = () => performFitToScreenRefinement(params);
-    const t1 = setTimeout(refine, 50);
-    const t2 = setTimeout(refine, 350);
+    const t1 = timerGroup.schedule(refine, 50);
+    const t2 = timerGroup.schedule(refine, 350);
     return [t1, t2];
 }
 

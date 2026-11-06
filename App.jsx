@@ -28580,6 +28580,28 @@ function getTreeElementWidth(treeElement) {
 }
 
 /**
+ * Resolves the actual layout height of the tree DOM element, taking into account compact tree view if present.
+ *
+ * @param {HTMLElement|null} treeElement - The root tree DOM container.
+ * @returns {number} Height in pixels, or 0 if element is not mounted.
+ *
+ * @example
+ * getTreeElementHeight(document.getElementById('tree-view'));
+ * // => 980
+ *
+ * @example
+ * getTreeElementHeight(null);
+ * // => 0
+ */
+function getTreeElementHeight(treeElement) {
+    if (!treeElement) return 0;
+    const compactTree = treeElement.querySelector?.('.compact-tree-view');
+    return compactTree
+        ? (compactTree.offsetHeight || parseFloat(compactTree.style.height) || treeElement.scrollHeight || 0)
+        : (treeElement.scrollHeight || 0);
+}
+
+/**
  * Computes the Euclidean distance and midpoint between two 2D coordinates.
  *
  * @param {{ x: number, y: number }} p1 - First coordinate.
@@ -28774,7 +28796,7 @@ function initTouchPinchState(touches, cameraRef, onInteract) {
  * // returns empty no-op function
  */
 function setupCanvasTouchListeners({
-    container, onInteract, cameraRef, setCamera, clampCamera, getBounds, getPpy
+    container, onInteract, onCancelFraming, cameraRef, setCamera, clampCamera, getBounds, getPpy
 }) {
     if (!container) return () => {};
     let touchPinch = null;
@@ -28782,6 +28804,7 @@ function setupCanvasTouchListeners({
     const onTouchStart = (e) => {
         if (e.touches.length !== 2) return;
         e.preventDefault();
+        if (onCancelFraming) onCancelFraming();
         touchPinch = initTouchPinchState(e.touches, cameraRef);
     };
 
@@ -28863,6 +28886,47 @@ function applyFramedCamera({
     });
 }
 
+/** Follow-up delays (ms) after initial framing so zoom-dependent `siblingGap` and `ppy` layout reflows are re-centered. */
+const FRAME_REFLOW_REFINE_DELAYS_MS = Object.freeze([40, 140, 320]);
+
+/**
+ * Cancels any in-flight timer group stored in `cancelRef` and returns a new group helper
+ * (`schedule`, `cancel`, `isCancelled`) that tracks pending `setTimeout` handles.
+ *
+ * @param {{ current: Function|null }|null} [cancelRef=null] - Optional mutable ref holding the active cancel callback.
+ * @returns {{ schedule: (fn: Function, delayMs: number) => number, cancel: () => void, isCancelled: () => boolean }}
+ *
+ * @example
+ * const ref = { current: null };
+ * const group = createCancelableTimerGroup(ref);
+ * group.schedule(() => {}, 40);
+ * group.cancel();
+ *
+ * @example
+ * const group = createCancelableTimerGroup(null);
+ * group.isCancelled();
+ * // => false
+ */
+function createCancelableTimerGroup(cancelRef = null) {
+    if (cancelRef && typeof cancelRef.current === 'function') {
+        cancelRef.current();
+    }
+    const timers = [];
+    let cancelled = false;
+    const cancel = () => {
+        cancelled = true;
+        while (timers.length > 0) clearTimeout(timers.pop());
+        if (cancelRef && cancelRef.current === cancel) cancelRef.current = null;
+    };
+    if (cancelRef) cancelRef.current = cancel;
+    const schedule = (fn, delayMs) => {
+        const id = setTimeout(() => { if (!cancelled) fn(); }, delayMs);
+        timers.push(id);
+        return id;
+    };
+    return { schedule, cancel, isCancelled: () => cancelled };
+}
+
 /**
  * Resolves configuration parameters with default values for polling and framing people nodes.
  *
@@ -28875,16 +28939,18 @@ function applyFramedCamera({
  *   intervalMs: number,
  *   initialDelay: number,
  *   bottomSheetHeight: number,
- *   topInset: number
+ *   topInset: number,
+ *   refineDelays: readonly number[],
+ *   cancelRef: { current: Function|null }|null
  * }} Normalized polling configuration options.
  *
  * @example
  *   resolveFramePeopleOptions(1.5);
- *   // returns { preferredZ: 1.5, targetPadX: 100, targetPadY: 120, maxAttempts: 35, intervalMs: 35, initialDelay: 25, bottomSheetHeight: 0, topInset: 0 }
+ *   // returns { preferredZ: 1.5, targetPadX: 100, targetPadY: 120, maxAttempts: 35, intervalMs: 35, initialDelay: 25, bottomSheetHeight: 0, topInset: 0, refineDelays: [40, 140, 320], cancelRef: null }
  *
  * @example
  *   resolveFramePeopleOptions({ targetPadX: 80, maxAttempts: 20 });
- *   // returns { preferredZ: null, targetPadX: 80, targetPadY: 120, maxAttempts: 20, intervalMs: 35, initialDelay: 25, bottomSheetHeight: 0, topInset: 0 }
+ *   // returns { preferredZ: null, targetPadX: 80, targetPadY: 120, maxAttempts: 20, intervalMs: 35, initialDelay: 25, bottomSheetHeight: 0, topInset: 0, refineDelays: [40, 140, 320], cancelRef: null }
  */
 function resolveFramePeopleOptions(options) {
     const preferredZ = typeof options === 'number' ? options : options?.preferredZ ?? null;
@@ -28895,8 +28961,13 @@ function resolveFramePeopleOptions(options) {
     const initialDelay = options?.initialDelay ?? 25;
     const bottomSheetHeight = options?.bottomSheetHeight ?? 0;
     const topInset = options?.topInset ?? 0;
+    const refineDelays = Array.isArray(options?.refineDelays) ? options.refineDelays : FRAME_REFLOW_REFINE_DELAYS_MS;
+    const cancelRef = options?.cancelRef ?? null;
 
-    return { preferredZ, targetPadX, targetPadY, maxAttempts, intervalMs, initialDelay, bottomSheetHeight, topInset };
+    return {
+        preferredZ, targetPadX, targetPadY, maxAttempts, intervalMs, initialDelay,
+        bottomSheetHeight, topInset, refineDelays, cancelRef
+    };
 }
 
 /**
@@ -28989,23 +29060,27 @@ function pollFramePeople({
     if (!ids || ids.length === 0) return null;
     const {
         preferredZ, targetPadX, targetPadY, maxAttempts, intervalMs, initialDelay,
-        bottomSheetHeight, topInset
+        bottomSheetHeight, topInset, refineDelays, cancelRef
     } = resolveFramePeopleOptions(options);
+    const timerGroup = createCancelableTimerGroup(cancelRef);
+    const runAttempt = () => attemptFramePeople({
+        ids, treeElement: treeRef.current, container: containerRef.current, isSidebarOpen,
+        sidebarWidth, preferredZ, targetPadX, targetPadY, setCamera, clampCamera,
+        bottomSheetHeight, topInset
+    });
 
     let attempts = 0;
     const tryFrame = () => {
         attempts++;
-        const framed = attemptFramePeople({
-            ids, treeElement: treeRef.current, container: containerRef.current, isSidebarOpen,
-            sidebarWidth, preferredZ, targetPadX, targetPadY, setCamera, clampCamera,
-            bottomSheetHeight, topInset
-        });
-        if (!framed && attempts < maxAttempts) {
-            setTimeout(tryFrame, intervalMs);
+        if (runAttempt()) {
+            // Re-measure after zoom-dependent `siblingGap` and `ppy` layout reflows commit to the DOM.
+            refineDelays.forEach(delayMs => timerGroup.schedule(runAttempt, delayMs));
+        } else if (attempts < maxAttempts) {
+            timerGroup.schedule(tryFrame, intervalMs);
         }
     };
 
-    return setTimeout(tryFrame, initialDelay);
+    return timerGroup.schedule(tryFrame, initialDelay);
 }
 
 /**
@@ -29093,9 +29168,10 @@ function performFitToScreenRefinement({
  * timers.forEach(clearTimeout);
  */
 function scheduleFitToScreenRefinement(params) {
+    const timerGroup = createCancelableTimerGroup(params?.cancelRef ?? null);
     const refine = () => performFitToScreenRefinement(params);
-    const t1 = setTimeout(refine, 50);
-    const t2 = setTimeout(refine, 350);
+    const t1 = timerGroup.schedule(refine, 50);
+    const t2 = timerGroup.schedule(refine, 350);
     return [t1, t2];
 }
 
@@ -29175,9 +29251,10 @@ function setupCanvasResizeObserver({
  * @example
  * <div onWheel={handleWheel} />
  */
-function useCanvasWheelZoom({ onInteract, containerRef, setCamera, clampCamera, getBounds, getPpy }) {
+function useCanvasWheelZoom({ onInteract, onCancelFraming, containerRef, setCamera, clampCamera, getBounds, getPpy }) {
     return useCallback((e) => {
         if (e.target.closest('.interactive-element')) return;
+        if (onCancelFraming) onCancelFraming();
         
         const cont = containerRef.current ? containerRef.current.getBoundingClientRect() : { left: 0, top: 0 };
         const pointerX = e.clientX - cont.left;
@@ -29509,7 +29586,7 @@ function processPointerDown({
  */
 function useCanvasPointerCallbacks({
     activePointersRef, pointerPinchRef, cameraRef, setIsDragging, setDragStart,
-    isDragging, dragStart, onInteract, containerRef, getBounds, getPpy, setCamera, clampCamera
+    isDragging, dragStart, onInteract, onCancelFraming, containerRef, getBounds, getPpy, setCamera, clampCamera
 }) {
     const handlePointerDown = useCallback((e) => {
         processPointerDown({
@@ -29523,7 +29600,10 @@ function useCanvasPointerCallbacks({
             e, activePointersRef, pointerPinchRef, isDragging, dragStart,
             containerRef, getBounds, getPpy, setCamera, clampCamera
         });
-    }, [isDragging, dragStart, clampCamera, getBounds, getPpy, setCamera, containerRef]);
+        if (onCancelFraming && activePointersRef.current.get(e.pointerId)?.moved) {
+            onCancelFraming();
+        }
+    }, [isDragging, dragStart, onCancelFraming, clampCamera, getBounds, getPpy, setCamera, containerRef]);
     
     const handlePointerUp = useCallback((e) => {
         processPointerUp({
@@ -29577,7 +29657,7 @@ function useCanvasPointerCallbacks({
  * />
  */
 function useCanvasPointerGestures({
-    onInteract, cameraRef, setCamera, clampCamera, getBounds, getPpy, containerRef
+    onInteract, onCancelFraming, cameraRef, setCamera, clampCamera, getBounds, getPpy, containerRef
 }) {
     const [isDragging, setIsDragging] = useState(false);
     const [dragStart, setDragStart] = useState({ x: 0, y: 0 });
@@ -29586,11 +29666,11 @@ function useCanvasPointerGestures({
 
     const { handlePointerDown, handlePointerMove, handlePointerUp } = useCanvasPointerCallbacks({
         activePointersRef, pointerPinchRef, cameraRef, setIsDragging, setDragStart,
-        isDragging, dragStart, onInteract, containerRef, getBounds, getPpy, setCamera, clampCamera
+        isDragging, dragStart, onInteract, onCancelFraming, containerRef, getBounds, getPpy, setCamera, clampCamera
     });
 
     const handleWheel = useCanvasWheelZoom({
-        onInteract, containerRef, setCamera, clampCamera, getBounds, getPpy
+        onInteract, onCancelFraming, containerRef, setCamera, clampCamera, getBounds, getPpy
     });
 
     return { isDragging, handlePointerDown, handlePointerMove, handlePointerUp, handleWheel };
@@ -29663,7 +29743,7 @@ function calculateViewportCameraBounds({
         container, isSidebarOpen, sidebarWidth, forceFullWindow, bottomSheetHeight
     });
     const treeW = getTreeElementWidth(treeElement);
-    const treeH = computeTreeSpanHeight(treeStats, targetPpy);
+    const treeH = Math.max(computeTreeSpanHeight(treeStats, targetPpy), getTreeElementHeight(treeElement));
 
     return computeCameraBounds({ treeW, treeH, contW, contH, z, timelineWidth: resolveTimelineGutterWidth() });
 }
@@ -29855,6 +29935,41 @@ function resolveMobileSheetState({
         })
         : 0;
     return { canPeek, effectiveSheetSnap, bottomSheetHeight, focusBottomSheetHeight };
+}
+
+/**
+ * Determines whether changing the mobile bottom-sheet snap stop should trigger a camera re-center:
+ * true only when toggling between `'peek'` and `'half'` while keeping the same person focused in a
+ * peek-capable panel (never when transitioning from System Logs or Filter panels to a newly focused
+ * person, where `handleSetFocusId` already initiates full zoom-in framing).
+ *
+ * @param {Object} [params={}]
+ * @returns {boolean}
+ *
+ * @example
+ * shouldRecenterOnSheetSnapChange({
+ *     isCompactViewport: true, isAnySidebarOpen: true, canPeek: true, focusId: 'Anto_1955_166',
+ *     isResizingSidebar: false, prevState: { snap: 'peek', canPeek: true, focusId: 'Anto_1955_166' },
+ *     effectiveSheetSnap: 'half'
+ * });
+ * // => true
+ *
+ * @example
+ * shouldRecenterOnSheetSnapChange({
+ *     isCompactViewport: true, isAnySidebarOpen: true, canPeek: true, focusId: 'Anto_1955_166',
+ *     isResizingSidebar: false, prevState: { snap: 'half', canPeek: false, focusId: null },
+ *     effectiveSheetSnap: 'peek'
+ * });
+ * // => false
+ */
+function shouldRecenterOnSheetSnapChange({
+    isCompactViewport = false, isAnySidebarOpen = false, canPeek = false, focusId = null,
+    isResizingSidebar = false, prevState = null, effectiveSheetSnap = null
+} = {}) {
+    if (!isCompactViewport || !isAnySidebarOpen || !canPeek || !focusId || isResizingSidebar) return false;
+    if (!prevState || !prevState.canPeek || prevState.focusId !== focusId) return false;
+    if (!prevState.snap || prevState.snap === effectiveSheetSnap) return false;
+    return effectiveSheetSnap === 'peek' || effectiveSheetSnap === 'half';
 }
 
 /**
@@ -30136,7 +30251,7 @@ function applyInitialFitToScreen({ treeElement, container, isSidebarOpen, sideba
  *   });
  */
 function executeFitToScreen({
-    treeRef, containerRef, treeStats, isSidebarOpen, sidebarWidth, forceFullWindow = false, setCamera
+    treeRef, containerRef, treeStats, isSidebarOpen, sidebarWidth, forceFullWindow = false, setCamera, cancelRef = null
 }) {
     const treeElement = treeRef.current;
     const cont = containerRef.current;
@@ -30149,7 +30264,7 @@ function executeFitToScreen({
 
     scheduleFitToScreenRefinement({
         treeRef, containerRef, setCamera, isSidebarOpen, sidebarWidth, forceFullWindow,
-        timelineWidth: metrics.timelineWidth, paddingX: metrics.paddingX, topMargin: metrics.topMargin
+        timelineWidth: metrics.timelineWidth, paddingX: metrics.paddingX, topMargin: metrics.topMargin, cancelRef
     });
 }
 
@@ -30225,19 +30340,20 @@ function buildPersonCenterFramingOptions(targetZ = null, bottomSheetHeight = 0, 
  */
 function useCanvasCameraFraming({
     treeRef, containerRef, treeStats, isSidebarOpen, sidebarWidth, setCamera, clampCamera,
-    bottomSheetHeight = 0, focusBottomSheetHeight = 0, isCompactViewport = false
+    bottomSheetHeight = 0, focusBottomSheetHeight = 0, isCompactViewport = false, frameCancelRef = null
 }) {
     const framePeople = useCallback((ids, options = null) => {
         const baseOpts = typeof options === 'number' ? { preferredZ: options } : (options || {});
         const mergedOptions = {
             bottomSheetHeight,
             topInset: isCompactViewport ? MOBILE_TOP_CHROME_INSET_PX : 0,
+            cancelRef: frameCancelRef,
             ...baseOpts
         };
         pollFramePeople({
             ids, options: mergedOptions, treeRef, containerRef, isSidebarOpen, sidebarWidth, setCamera, clampCamera
         });
-    }, [clampCamera, isSidebarOpen, sidebarWidth, bottomSheetHeight, isCompactViewport, treeRef, containerRef, setCamera]);
+    }, [clampCamera, isSidebarOpen, sidebarWidth, bottomSheetHeight, isCompactViewport, frameCancelRef, treeRef, containerRef, setCamera]);
 
     const centerOnPerson = useCallback((id, targetZ = null, sheetHeightOverride = null) => {
         if (!id) return;
@@ -30248,9 +30364,9 @@ function useCanvasCameraFraming({
 
     const fitToScreen = useCallback((forceFullWindow = false) => {
         executeFitToScreen({
-            treeRef, containerRef, treeStats, isSidebarOpen, sidebarWidth, forceFullWindow, setCamera
+            treeRef, containerRef, treeStats, isSidebarOpen, sidebarWidth, forceFullWindow, setCamera, cancelRef: frameCancelRef
         });
-    }, [treeStats, isSidebarOpen, sidebarWidth, setCamera, treeRef, containerRef]);
+    }, [treeStats, isSidebarOpen, sidebarWidth, frameCancelRef, setCamera, treeRef, containerRef]);
 
     return { framePeople, centerOnPerson, fitToScreen };
 }
@@ -30359,13 +30475,13 @@ function useCanvasCameraState() {
  * @example
  * useCanvasTouchLifecycle({ containerRef, cameraRef, setCamera, clampCamera, getBounds, getPpy });
  */
-function useCanvasTouchLifecycle({ containerRef, onInteract, cameraRef, setCamera, clampCamera, getBounds, getPpy }) {
+function useCanvasTouchLifecycle({ containerRef, onInteract, onCancelFraming, cameraRef, setCamera, clampCamera, getBounds, getPpy }) {
     useEffect(() => {
         return setupCanvasTouchListeners({
-            container: containerRef.current, onInteract, cameraRef,
+            container: containerRef.current, onInteract, onCancelFraming, cameraRef,
             setCamera, clampCamera, getBounds, getPpy
         });
-    }, [clampCamera, getBounds, getPpy, onInteract]);
+    }, [clampCamera, getBounds, getPpy, onInteract, onCancelFraming]);
 }
 
 /**
@@ -30406,22 +30522,24 @@ function useCanvasControls(onInteract, treeStats, isSidebarOpen = false, sidebar
     const { camera, setCamera, cameraRef } = useCanvasCameraState();
     const containerRef = useRef(null);
     const treeRef = useRef(null);
+    const frameCancelRef = useRef(null);
+    const cancelFraming = useCallback(() => { if (frameCancelRef.current) frameCancelRef.current(); }, []);
 
     const { getPpy, getBounds, clampCamera } = useCanvasCameraBounds({
         treeStats, isSidebarOpen, sidebarWidth, bottomSheetHeight, containerRef, treeRef
     });
 
     const gestures = useCanvasPointerGestures({
-        onInteract, cameraRef, setCamera, clampCamera, getBounds, getPpy, containerRef
+        onInteract, onCancelFraming: cancelFraming, cameraRef, setCamera, clampCamera, getBounds, getPpy, containerRef
     });
 
     useCanvasTouchLifecycle({
-        containerRef, onInteract, cameraRef, setCamera, clampCamera, getBounds, getPpy
+        containerRef, onInteract, onCancelFraming: cancelFraming, cameraRef, setCamera, clampCamera, getBounds, getPpy
     });
 
     const { framePeople, centerOnPerson, fitToScreen } = useCanvasCameraFraming({
         treeRef, containerRef, treeStats, isSidebarOpen, sidebarWidth, setCamera, clampCamera,
-        bottomSheetHeight, focusBottomSheetHeight, isCompactViewport
+        bottomSheetHeight, focusBottomSheetHeight, isCompactViewport, frameCancelRef
     });
 
     useCanvasAutoClamp({
@@ -51604,13 +51722,16 @@ function resolveRestoredSidebarOpen(state) {
 }
 
 /**
- * Measures the canvas area that is actually visible to the user (the sidebar overlays the
- * right edge of the full-width canvas) together with the timeline gutter width.
+ * Measures the canvas area that is actually visible to the user (on desktop the sidebar overlays
+ * the right edge of the full-width canvas; on compact phones it docks below the canvas so
+ * horizontal sidebar reservation is `0`) together with the timeline gutter width.
  *
  * @param {Object} params
  * @param {HTMLElement|null} params.container - Canvas container element.
  * @param {boolean} params.isSidebarOpen - Whether any sidebar panel is open.
- * @param {number} params.sidebarWidth - Sidebar width in pixels.
+ * @param {number} params.sidebarWidth - Configured desktop sidebar width in pixels.
+ * @param {number} [params.bottomSheetHeight=0] - Reserved mobile bottom-sheet height in pixels.
+ * @param {boolean} [params.isCompactViewport=isCompactViewportWidth()] - Whether compact phone layout is active.
  * @returns {{visibleWidth: number, visibleHeight: number, timelineWidth: number}}
  *
  * @example
@@ -51618,11 +51739,16 @@ function resolveRestoredSidebarOpen(state) {
  * // => { visibleWidth: 1440, visibleHeight: 900, timelineWidth: 48 }
  *
  * @example
- * measureViewStateViewport({ container: null, isSidebarOpen: true, sidebarWidth: 400 });
- * // => { visibleWidth: 1040, visibleHeight: 900, timelineWidth: 48 }
+ * measureViewStateViewport({ container: null, isSidebarOpen: true, sidebarWidth: 360, bottomSheetHeight: 96, isCompactViewport: true });
+ * // => { visibleWidth: 390, visibleHeight: 748, timelineWidth: 32 }
  */
-function measureViewStateViewport({ container, isSidebarOpen, sidebarWidth, bottomSheetHeight = 0 }) {
-    const { contW, contH } = resolveViewportDimensions({ container, isSidebarOpen, sidebarWidth, bottomSheetHeight });
+function measureViewStateViewport({
+    container, isSidebarOpen, sidebarWidth, bottomSheetHeight = 0, isCompactViewport = isCompactViewportWidth()
+}) {
+    const dockedWidth = resolveDockedSidebarWidth(sidebarWidth, Boolean(isCompactViewport));
+    const { contW, contH } = resolveViewportDimensions({
+        container, isSidebarOpen, sidebarWidth: dockedWidth, bottomSheetHeight
+    });
     return { visibleWidth: contW, visibleHeight: contH, timelineWidth: resolveTimelineGutterWidth() };
 }
 
@@ -51803,6 +51929,59 @@ function applyRestoredSelection(state, actions) {
 }
 
 /**
+ * Keeps a focused person card visibly inside a compact phone viewport (`<= 639px` wide) when
+ * restoring a `#hash` URL that was shared from a wide desktop screen with a large `o=` pan offset
+ * or an off-screen cousin anchor. Desktop viewports (`> 639px`) are returned untouched.
+ *
+ * @param {Object} params
+ * @param {{x: number, y: number}|null} params.center - Candidate visible centre in unscaled tree pixels.
+ * @param {{x: number, y: number}|null} params.focusedAnchor - Focused person card centre in unscaled tree pixels.
+ * @param {number} params.zoom - Restored camera zoom level.
+ * @param {{visibleWidth: number, visibleHeight: number, timelineWidth?: number}|null} params.viewport - Target viewport metrics.
+ * @param {number} [params.topInset=MOBILE_TOP_CHROME_INSET_PX] - Reserved top toolbar height on phones.
+ * @returns {{x: number, y: number}|null} Clamped visible centre in unscaled tree pixels.
+ *
+ * @example
+ * clampCompactFocusCenter({
+ *     center: { x: 4300, y: 757 }, focusedAnchor: { x: 4012, y: 757 }, zoom: 0.8,
+ *     viewport: { visibleWidth: 390, visibleHeight: 748, timelineWidth: 32 }
+ * });
+ * // => { x: 4180.75, y: 757 }
+ *
+ * @example
+ * clampCompactFocusCenter({
+ *     center: { x: 4300, y: 757 }, focusedAnchor: { x: 4012, y: 757 }, zoom: 0.8,
+ *     viewport: { visibleWidth: 1080, visibleHeight: 800, timelineWidth: 48 }
+ * });
+ * // => { x: 4300, y: 757 }
+ */
+function clampCompactFocusCenter({ center, focusedAnchor, zoom, viewport, topInset = MOBILE_TOP_CHROME_INSET_PX }) {
+    if (!center || !focusedAnchor || !viewport || !(zoom > 0) || viewport.visibleWidth > COMPACT_VIEWPORT_MAX_WIDTH) {
+        return center;
+    }
+    const timelineWidth = viewport.timelineWidth ?? 32;
+    const centerScreenX = timelineWidth + (viewport.visibleWidth - timelineWidth) / 2;
+    const centerScreenY = viewport.visibleHeight / 2;
+    const padX = Math.min(48, Math.round(45 * zoom) + 8);
+    const padY = Math.min(44, Math.round(38 * zoom) + 8);
+    const minScreenX = timelineWidth + padX;
+    const maxScreenX = viewport.visibleWidth - padX;
+    const minScreenY = topInset + padY;
+    const maxScreenY = viewport.visibleHeight - padY;
+    const x = minScreenX >= maxScreenX ? focusedAnchor.x : Math.max(
+        focusedAnchor.x - (maxScreenX - centerScreenX) / zoom,
+        Math.min(focusedAnchor.x + (centerScreenX - minScreenX) / zoom, center.x)
+    );
+    const y = minScreenY >= maxScreenY
+        ? focusedAnchor.y + (centerScreenY - (topInset + (viewport.visibleHeight - topInset) / 2)) / zoom
+        : Math.max(
+            focusedAnchor.y - (maxScreenY - centerScreenY) / zoom,
+            Math.min(focusedAnchor.y + (centerScreenY - minScreenY) / zoom, center.y)
+        );
+    return { x, y };
+}
+
+/**
  * Rebuilds the visible centre of a shared view state on this screen: the anchor person (the
  * explicit `a=` anchor, else the focused person) is resolved against the tree, measured on the
  * current layout, and offset by the shared `o=` distance using this screen's pixels-per-year.
@@ -51821,10 +52000,16 @@ function applyRestoredSelection(state, actions) {
  * // => null  (no anchor in the URL)
  */
 function resolveRestoredCenter(state, env, zoom) {
-    const anchorId = resolveViewStatePersonId(env.tree, state.anchorId || state.focusId);
+    const resolvedFocusId = state.focusId ? resolveViewStatePersonId(env.tree, state.focusId) : null;
+    const anchorId = state.anchorId ? resolveViewStatePersonId(env.tree, state.anchorId) : resolvedFocusId;
     const anchor = anchorId ? env.measureAnchor(anchorId) : null;
     if (!anchor) return null;
-    return computeCenterFromAnchorOffset({ anchor, offset: state.offset || { dx: 0, dy: 0 }, ppy: env.getPpy(zoom) });
+    const center = computeCenterFromAnchorOffset({ anchor, offset: state.offset || { dx: 0, dy: 0 }, ppy: env.getPpy(zoom) });
+    if (!resolvedFocusId || !env.viewport || env.viewport.visibleWidth > COMPACT_VIEWPORT_MAX_WIDTH) {
+        return center;
+    }
+    const focusedAnchor = anchorId === resolvedFocusId ? anchor : env.measureAnchor(resolvedFocusId);
+    return clampCompactFocusCenter({ center, focusedAnchor, zoom, viewport: env.viewport });
 }
 
 /**
@@ -51889,10 +52074,13 @@ function buildRestoreCameraEnv(p, state) {
         : 0;
     const viewport = measureViewStateViewport({
         container: p.containerRef.current, isSidebarOpen: restoredOpen,
-        sidebarWidth: p.sidebarWidth, bottomSheetHeight: restoredSheetH
+        sidebarWidth: p.sidebarWidth, bottomSheetHeight: restoredSheetH,
+        isCompactViewport: Boolean(p.isCompactViewport)
     });
     return {
-        camera: p.camera, setCamera: p.setCamera, clampCamera: p.clampCamera, getPpy: p.getPpy, tree: p.tree, viewport,
+        camera: p.camera, setCamera: p.setCamera,
+        clampCamera: (cam) => p.clampCamera(cam, restoredSheetH),
+        getPpy: p.getPpy, tree: p.tree, viewport,
         measureAnchor: (id) => measurePersonNodeCenter(id, p.treeRef ? p.treeRef.current : null)
     };
 }
@@ -51976,14 +52164,16 @@ function useUrlViewStateRestore({ latest, initialState, phaseRef, rootId, isLoad
 function useUrlViewStateWriter(params) {
     const {
         focusId, isSidebarVisible, activeFilter, showMap, camera, ppy, collapsedNodes, isLoading,
-        isDragging, isShifting, isAnySidebarOpen, sidebarWidth, tree, phaseRef, writeNow
+        isDragging, isShifting, isAnySidebarOpen, sidebarWidth, isCompactViewport, bottomSheetHeight,
+        tree, phaseRef, writeNow
     } = params;
     useEffect(() => {
         if (!phaseRef.current.writable || isLoading || isDragging || isShifting) return undefined;
         const timer = setTimeout(writeNow, VIEW_STATE_WRITE_DEBOUNCE_MS);
         return () => clearTimeout(timer);
     }, [focusId, isSidebarVisible, activeFilter, showMap, camera, ppy, collapsedNodes, isLoading,
-        isDragging, isShifting, isAnySidebarOpen, sidebarWidth, tree, phaseRef, writeNow]);
+        isDragging, isShifting, isAnySidebarOpen, sidebarWidth, isCompactViewport, bottomSheetHeight,
+        tree, phaseRef, writeNow]);
 }
 
 /**
@@ -52004,7 +52194,8 @@ function useUrlViewStateWriter(params) {
 function captureAndWriteViewState(p) {
     const viewport = measureViewStateViewport({
         container: p.containerRef.current, isSidebarOpen: p.isAnySidebarOpen,
-        sidebarWidth: p.sidebarWidth, bottomSheetHeight: p.bottomSheetHeight || 0
+        sidebarWidth: p.sidebarWidth, bottomSheetHeight: p.bottomSheetHeight || 0,
+        isCompactViewport: Boolean(p.isCompactViewport)
     });
     const anchor = p.showMap ? null : chooseViewStateAnchor({
         treeElement: p.treeRef ? p.treeRef.current : null, tree: p.tree, focusId: p.focusId, camera: p.camera, viewport
@@ -53500,7 +53691,7 @@ function useMobileSheetSync({
     isCompactViewport, isAnySidebarOpen, effectiveSheetSnap, bottomSheetHeight,
     canPeek, focusId, isResizingSidebar, setSheetSnap, setSidebarHeight, centerOnPerson, cameraRef
 }) {
-    const prevSnapRef = useRef(null);
+    const prevStateRef = useRef({ snap: null, canPeek: false, focusId: null });
 
     useEffect(() => {
         if (!isAnySidebarOpen) {
@@ -53510,12 +53701,14 @@ function useMobileSheetSync({
     }, [isAnySidebarOpen, setSheetSnap, setSidebarHeight]);
 
     useEffect(() => {
-        const prev = prevSnapRef.current;
-        prevSnapRef.current = effectiveSheetSnap;
-        if (!isCompactViewport || !isAnySidebarOpen || !canPeek || !focusId || isResizingSidebar) return;
-        if (!prev || prev === effectiveSheetSnap) return;
-        if (effectiveSheetSnap === 'peek' || effectiveSheetSnap === 'half') {
-            centerOnPerson(focusId, cameraRef?.current?.z ?? null, bottomSheetHeight);
+        const prevState = prevStateRef.current;
+        prevStateRef.current = { snap: effectiveSheetSnap, canPeek, focusId };
+        if (shouldRecenterOnSheetSnapChange({
+            isCompactViewport, isAnySidebarOpen, canPeek, focusId,
+            isResizingSidebar, prevState, effectiveSheetSnap
+        })) {
+            const currentZ = cameraRef?.current?.z;
+            centerOnPerson(focusId, currentZ >= 0.5 ? currentZ : null, bottomSheetHeight);
         }
     }, [isCompactViewport, isAnySidebarOpen, canPeek, focusId, isResizingSidebar, effectiveSheetSnap, bottomSheetHeight, centerOnPerson, cameraRef]);
 }

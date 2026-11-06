@@ -1528,13 +1528,16 @@ function resolveRestoredSidebarOpen(state) {
 }
 
 /**
- * Measures the canvas area that is actually visible to the user (the sidebar overlays the
- * right edge of the full-width canvas) together with the timeline gutter width.
+ * Measures the canvas area that is actually visible to the user (on desktop the sidebar overlays
+ * the right edge of the full-width canvas; on compact phones it docks below the canvas so
+ * horizontal sidebar reservation is `0`) together with the timeline gutter width.
  *
  * @param {Object} params
  * @param {HTMLElement|null} params.container - Canvas container element.
  * @param {boolean} params.isSidebarOpen - Whether any sidebar panel is open.
- * @param {number} params.sidebarWidth - Sidebar width in pixels.
+ * @param {number} params.sidebarWidth - Configured desktop sidebar width in pixels.
+ * @param {number} [params.bottomSheetHeight=0] - Reserved mobile bottom-sheet height in pixels.
+ * @param {boolean} [params.isCompactViewport=isCompactViewportWidth()] - Whether compact phone layout is active.
  * @returns {{visibleWidth: number, visibleHeight: number, timelineWidth: number}}
  *
  * @example
@@ -1542,11 +1545,16 @@ function resolveRestoredSidebarOpen(state) {
  * // => { visibleWidth: 1440, visibleHeight: 900, timelineWidth: 48 }
  *
  * @example
- * measureViewStateViewport({ container: null, isSidebarOpen: true, sidebarWidth: 400 });
- * // => { visibleWidth: 1040, visibleHeight: 900, timelineWidth: 48 }
+ * measureViewStateViewport({ container: null, isSidebarOpen: true, sidebarWidth: 360, bottomSheetHeight: 96, isCompactViewport: true });
+ * // => { visibleWidth: 390, visibleHeight: 748, timelineWidth: 32 }
  */
-function measureViewStateViewport({ container, isSidebarOpen, sidebarWidth, bottomSheetHeight = 0 }) {
-    const { contW, contH } = resolveViewportDimensions({ container, isSidebarOpen, sidebarWidth, bottomSheetHeight });
+function measureViewStateViewport({
+    container, isSidebarOpen, sidebarWidth, bottomSheetHeight = 0, isCompactViewport = isCompactViewportWidth()
+}) {
+    const dockedWidth = resolveDockedSidebarWidth(sidebarWidth, Boolean(isCompactViewport));
+    const { contW, contH } = resolveViewportDimensions({
+        container, isSidebarOpen, sidebarWidth: dockedWidth, bottomSheetHeight
+    });
     return { visibleWidth: contW, visibleHeight: contH, timelineWidth: resolveTimelineGutterWidth() };
 }
 
@@ -1727,6 +1735,59 @@ function applyRestoredSelection(state, actions) {
 }
 
 /**
+ * Keeps a focused person card visibly inside a compact phone viewport (`<= 639px` wide) when
+ * restoring a `#hash` URL that was shared from a wide desktop screen with a large `o=` pan offset
+ * or an off-screen cousin anchor. Desktop viewports (`> 639px`) are returned untouched.
+ *
+ * @param {Object} params
+ * @param {{x: number, y: number}|null} params.center - Candidate visible centre in unscaled tree pixels.
+ * @param {{x: number, y: number}|null} params.focusedAnchor - Focused person card centre in unscaled tree pixels.
+ * @param {number} params.zoom - Restored camera zoom level.
+ * @param {{visibleWidth: number, visibleHeight: number, timelineWidth?: number}|null} params.viewport - Target viewport metrics.
+ * @param {number} [params.topInset=MOBILE_TOP_CHROME_INSET_PX] - Reserved top toolbar height on phones.
+ * @returns {{x: number, y: number}|null} Clamped visible centre in unscaled tree pixels.
+ *
+ * @example
+ * clampCompactFocusCenter({
+ *     center: { x: 4300, y: 757 }, focusedAnchor: { x: 4012, y: 757 }, zoom: 0.8,
+ *     viewport: { visibleWidth: 390, visibleHeight: 748, timelineWidth: 32 }
+ * });
+ * // => { x: 4180.75, y: 757 }
+ *
+ * @example
+ * clampCompactFocusCenter({
+ *     center: { x: 4300, y: 757 }, focusedAnchor: { x: 4012, y: 757 }, zoom: 0.8,
+ *     viewport: { visibleWidth: 1080, visibleHeight: 800, timelineWidth: 48 }
+ * });
+ * // => { x: 4300, y: 757 }
+ */
+function clampCompactFocusCenter({ center, focusedAnchor, zoom, viewport, topInset = MOBILE_TOP_CHROME_INSET_PX }) {
+    if (!center || !focusedAnchor || !viewport || !(zoom > 0) || viewport.visibleWidth > COMPACT_VIEWPORT_MAX_WIDTH) {
+        return center;
+    }
+    const timelineWidth = viewport.timelineWidth ?? 32;
+    const centerScreenX = timelineWidth + (viewport.visibleWidth - timelineWidth) / 2;
+    const centerScreenY = viewport.visibleHeight / 2;
+    const padX = Math.min(48, Math.round(45 * zoom) + 8);
+    const padY = Math.min(44, Math.round(38 * zoom) + 8);
+    const minScreenX = timelineWidth + padX;
+    const maxScreenX = viewport.visibleWidth - padX;
+    const minScreenY = topInset + padY;
+    const maxScreenY = viewport.visibleHeight - padY;
+    const x = minScreenX >= maxScreenX ? focusedAnchor.x : Math.max(
+        focusedAnchor.x - (maxScreenX - centerScreenX) / zoom,
+        Math.min(focusedAnchor.x + (centerScreenX - minScreenX) / zoom, center.x)
+    );
+    const y = minScreenY >= maxScreenY
+        ? focusedAnchor.y + (centerScreenY - (topInset + (viewport.visibleHeight - topInset) / 2)) / zoom
+        : Math.max(
+            focusedAnchor.y - (maxScreenY - centerScreenY) / zoom,
+            Math.min(focusedAnchor.y + (centerScreenY - minScreenY) / zoom, center.y)
+        );
+    return { x, y };
+}
+
+/**
  * Rebuilds the visible centre of a shared view state on this screen: the anchor person (the
  * explicit `a=` anchor, else the focused person) is resolved against the tree, measured on the
  * current layout, and offset by the shared `o=` distance using this screen's pixels-per-year.
@@ -1745,10 +1806,16 @@ function applyRestoredSelection(state, actions) {
  * // => null  (no anchor in the URL)
  */
 function resolveRestoredCenter(state, env, zoom) {
-    const anchorId = resolveViewStatePersonId(env.tree, state.anchorId || state.focusId);
+    const resolvedFocusId = state.focusId ? resolveViewStatePersonId(env.tree, state.focusId) : null;
+    const anchorId = state.anchorId ? resolveViewStatePersonId(env.tree, state.anchorId) : resolvedFocusId;
     const anchor = anchorId ? env.measureAnchor(anchorId) : null;
     if (!anchor) return null;
-    return computeCenterFromAnchorOffset({ anchor, offset: state.offset || { dx: 0, dy: 0 }, ppy: env.getPpy(zoom) });
+    const center = computeCenterFromAnchorOffset({ anchor, offset: state.offset || { dx: 0, dy: 0 }, ppy: env.getPpy(zoom) });
+    if (!resolvedFocusId || !env.viewport || env.viewport.visibleWidth > COMPACT_VIEWPORT_MAX_WIDTH) {
+        return center;
+    }
+    const focusedAnchor = anchorId === resolvedFocusId ? anchor : env.measureAnchor(resolvedFocusId);
+    return clampCompactFocusCenter({ center, focusedAnchor, zoom, viewport: env.viewport });
 }
 
 /**
@@ -1813,10 +1880,13 @@ function buildRestoreCameraEnv(p, state) {
         : 0;
     const viewport = measureViewStateViewport({
         container: p.containerRef.current, isSidebarOpen: restoredOpen,
-        sidebarWidth: p.sidebarWidth, bottomSheetHeight: restoredSheetH
+        sidebarWidth: p.sidebarWidth, bottomSheetHeight: restoredSheetH,
+        isCompactViewport: Boolean(p.isCompactViewport)
     });
     return {
-        camera: p.camera, setCamera: p.setCamera, clampCamera: p.clampCamera, getPpy: p.getPpy, tree: p.tree, viewport,
+        camera: p.camera, setCamera: p.setCamera,
+        clampCamera: (cam) => p.clampCamera(cam, restoredSheetH),
+        getPpy: p.getPpy, tree: p.tree, viewport,
         measureAnchor: (id) => measurePersonNodeCenter(id, p.treeRef ? p.treeRef.current : null)
     };
 }
@@ -1900,14 +1970,16 @@ function useUrlViewStateRestore({ latest, initialState, phaseRef, rootId, isLoad
 function useUrlViewStateWriter(params) {
     const {
         focusId, isSidebarVisible, activeFilter, showMap, camera, ppy, collapsedNodes, isLoading,
-        isDragging, isShifting, isAnySidebarOpen, sidebarWidth, tree, phaseRef, writeNow
+        isDragging, isShifting, isAnySidebarOpen, sidebarWidth, isCompactViewport, bottomSheetHeight,
+        tree, phaseRef, writeNow
     } = params;
     useEffect(() => {
         if (!phaseRef.current.writable || isLoading || isDragging || isShifting) return undefined;
         const timer = setTimeout(writeNow, VIEW_STATE_WRITE_DEBOUNCE_MS);
         return () => clearTimeout(timer);
     }, [focusId, isSidebarVisible, activeFilter, showMap, camera, ppy, collapsedNodes, isLoading,
-        isDragging, isShifting, isAnySidebarOpen, sidebarWidth, tree, phaseRef, writeNow]);
+        isDragging, isShifting, isAnySidebarOpen, sidebarWidth, isCompactViewport, bottomSheetHeight,
+        tree, phaseRef, writeNow]);
 }
 
 /**
@@ -1928,7 +2000,8 @@ function useUrlViewStateWriter(params) {
 function captureAndWriteViewState(p) {
     const viewport = measureViewStateViewport({
         container: p.containerRef.current, isSidebarOpen: p.isAnySidebarOpen,
-        sidebarWidth: p.sidebarWidth, bottomSheetHeight: p.bottomSheetHeight || 0
+        sidebarWidth: p.sidebarWidth, bottomSheetHeight: p.bottomSheetHeight || 0,
+        isCompactViewport: Boolean(p.isCompactViewport)
     });
     const anchor = p.showMap ? null : chooseViewStateAnchor({
         treeElement: p.treeRef ? p.treeRef.current : null, tree: p.tree, focusId: p.focusId, camera: p.camera, viewport

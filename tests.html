@@ -298,7 +298,8 @@ try {
         extractConst(source, 'MOBILE_SHEET_HALF_VH'),
         extractConst(source, 'MOBILE_SHEET_FULL_VH'),
         extractConst(source, 'MOBILE_SHEET_DISMISS_PX'),
-        extractConst(source, 'MOBILE_TOP_CHROME_INSET_PX')
+        extractConst(source, 'MOBILE_TOP_CHROME_INSET_PX'),
+        extractConst(source, 'FRAME_REFLOW_REFINE_DELAYS_MS')
     ].concat([
         'withSetMembers', 'planSiblingBarToggle', 'isSiblingBarFolded', 'describeSiblingBarAction',
         'isCompactViewportWidth', 'resolveTimelineGutterWidth', 'resolveDockedSidebarWidth', 'resolveSidebarDockLayout',
@@ -306,11 +307,13 @@ try {
         'resolveBottomDockLift', 'shouldShowZoomControls',
         'resolveSheetSnapHeights', 'resolveSheetSnapCssHeight', 'cycleSheetSnapStop',
         'resolveEffectiveSheetSnap', 'resolveBottomSheetPixelHeight', 'resolveMobileSheetState',
+        'shouldRecenterOnSheetSnapChange',
         'clampMobileSheetDragHeight', 'resolveReleaseSheetSnap',
         'compareSidebarRelatives', 'parseCommaDelimitedTokens',
         'collectPeekJumpRelatives', 'formatPeekPersonSummary', 'isMobilePeekCardActive',
         'resolveFramedZoom', 'resolveFramedCameraX', 'resolveFramedBoxMetrics',
-        'computeFramedCamera', 'computeCameraBounds'
+        'computeFramedCamera', 'computeCameraBounds',
+        'getTreeElementWidth', 'getTreeElementHeight', 'createCancelableTimerGroup', 'resolveFramePeopleOptions'
     ].map(name => extractFunction(source, name))).join('\n');
     const urlViewStateSrc = [
         extractConst(source, 'VIEW_STATE_B64'),
@@ -336,7 +339,7 @@ try {
         'resolveRestoredSidebarOpen', 'buildCurrentViewState', 'writeViewStateHash',
         'resolveInitialViewStateHash',
         'applyRestoredFocus', 'resolveRestoredCollapsedIds', 'applyRestoredSelection',
-        'resolveRestoredCenter', 'applyRestoredCamera', 'resolveCanvasDisplayMode'
+        'clampCompactFocusCenter', 'resolveRestoredCenter', 'applyRestoredCamera', 'resolveCanvasDisplayMode'
     ].map(name => extractFunction(source, name))).join('\n');
 
     const [
@@ -400,9 +403,12 @@ try {
         MOBILE_SHEET_PEEK_PX, MOBILE_SHEET_HALF_VH, MOBILE_SHEET_FULL_VH, MOBILE_SHEET_DISMISS_PX, MOBILE_TOP_CHROME_INSET_PX,
         resolveSheetSnapHeights, resolveSheetSnapCssHeight, cycleSheetSnapStop,
         resolveEffectiveSheetSnap, resolveBottomSheetPixelHeight, resolveMobileSheetState,
+        shouldRecenterOnSheetSnapChange,
         clampMobileSheetDragHeight, resolveReleaseSheetSnap,
         collectPeekJumpRelatives, formatPeekPersonSummary, isMobilePeekCardActive,
-        computeFramedCamera, computeCameraBounds
+        computeFramedCamera, computeCameraBounds,
+        FRAME_REFLOW_REFINE_DELAYS_MS, getTreeElementHeight, createCancelableTimerGroup, resolveFramePeopleOptions,
+        clampCompactFocusCenter
     ] = new Function(`
         // Isolated cookie jar + localStorage + documentElement: preference & theme tests must never
         // touch the real browser state, and Stage 3 runs in node where neither exists. Every other
@@ -605,9 +611,12 @@ try {
         MOBILE_SHEET_PEEK_PX, MOBILE_SHEET_HALF_VH, MOBILE_SHEET_FULL_VH, MOBILE_SHEET_DISMISS_PX, MOBILE_TOP_CHROME_INSET_PX,
         resolveSheetSnapHeights, resolveSheetSnapCssHeight, cycleSheetSnapStop,
         resolveEffectiveSheetSnap, resolveBottomSheetPixelHeight, resolveMobileSheetState,
+        shouldRecenterOnSheetSnapChange,
         clampMobileSheetDragHeight, resolveReleaseSheetSnap,
         collectPeekJumpRelatives, formatPeekPersonSummary, isMobilePeekCardActive,
-        computeFramedCamera, computeCameraBounds
+        computeFramedCamera, computeCameraBounds,
+        FRAME_REFLOW_REFINE_DELAYS_MS, getTreeElementHeight, createCancelableTimerGroup, resolveFramePeopleOptions,
+        clampCompactFocusCenter
         ];
     `)();
 
@@ -15897,6 +15906,269 @@ const m3 = tree.all.find(n => n.id === '3');
                 '64|420|-420|64|16|16');
         } catch (e) {
             assertEqual('Test 220 execution failed', e.message, '');
+        }
+    }
+
+    // ══════════════════════════════════════════════════════════════════════════
+    //  221. Mobile Zoom-Reflow Camera Refinement & Compact URL Focus Clamping
+    // ══════════════════════════════════════════════════════════════════════════
+    {
+        section('221. Mobile Zoom-Reflow Camera Refinement & Compact URL Focus Clamping');
+        try {
+            // Simulate tapping Anto on a 390×844 portrait phone at initial fit-to-screen zoom z=0.05:
+            // At z=0.05, siblingGap=64 (treeW=14797, Anto center x=4625, y=969.5).
+            // Once setCamera transitions z -> 0.80, CompactTreeView reflows siblingGap -> 27 & ppy -> 8
+            // (treeW=13496, Anto center x=4012, y=757). Without post-reflow refinement, camera.x stays at
+            // -3489, leaving Anto at screen cx=-279px (490px left of the 211px canvas center!).
+            const reflowHarness = new Function(
+                'window',
+                'const isStandaloneExportMode = () => false;\n' +
+                [
+                    'isCompactViewportWidth', 'resolveDockedSidebarWidth', 'resolveTimelineGutterWidth',
+                    'resolveSheetSnapHeights', 'resolveBottomSheetPixelHeight',
+                    'resolveViewportDimensions', 'getTreeElementWidth', 'computePeopleBoundingBox',
+                    'resolveFramedZoom', 'resolveFramedCameraX', 'resolveFramedBoxMetrics', 'computeFramedCamera',
+                    'computeCameraBounds', 'applyFramedCamera', 'createCancelableTimerGroup',
+                    'resolveFramePeopleOptions', 'attemptFramePeople', 'pollFramePeople',
+                    'resolveRestoredSidebarOpen', 'measureViewStateViewport', 'measurePersonNodeCenter',
+                    'isAnchorInsideViewport', 'computeViewCenterFromCamera', 'pickNearestAnchor',
+                    'listRenderedPersonNodes', 'chooseViewStateAnchor', 'buildRestoreCameraEnv'
+                ].map(fn => extractFunction(appCode, fn)).join('\n') + `\n
+                const TIMELINE_GUTTER_WIDTH = 48;
+                const TIMELINE_GUTTER_COMPACT_WIDTH = 32;
+                const COMPACT_VIEWPORT_MAX_WIDTH = 639;
+                const MOBILE_SHEET_PEEK_PX = 96;
+                const MOBILE_SHEET_HALF_VH = 0.45;
+                const MOBILE_SHEET_FULL_VH = 0.85;
+                const FRAME_REFLOW_REFINE_DELAYS_MS = [40, 140, 320];
+                let nowMs = 0;
+                let nextId = 1;
+                const queue = [];
+                const setTimeout = (fn, delay) => {
+                    const id = nextId++;
+                    queue.push({ id, due: nowMs + delay, fn, active: true });
+                    return id;
+                };
+                const clearTimeout = (id) => {
+                    const item = queue.find(t => t.id === id);
+                    if (item) item.active = false;
+                };
+                const advanceTo = (targetMs) => {
+                    while (true) {
+                        const ready = queue.filter(t => t.active && t.due <= targetMs).sort((a, b) => a.due - b.due || a.id - b.id)[0];
+                        if (!ready) break;
+                        ready.active = false;
+                        nowMs = ready.due;
+                        ready.fn();
+                    }
+                    nowMs = targetMs;
+                };
+
+                let cam = { x: 40, y: 16, z: 0.05 };
+                let layout = { treeW: 14797, treeH: 3800, nodes: { Anto_1955_166: { x: 4625, y: 969.5 }, Beena_1958_167: { x: 4725, y: 969.5 } } };
+                const syncLayoutForZoom = (z) => {
+                    layout = z >= 0.75
+                        ? { treeW: 13496, treeH: 1400, nodes: { Anto_1955_166: { x: 4012, y: 757 }, Beena_1958_167: { x: 4112, y: 757 } } }
+                        : { treeW: 14797, treeH: 3800, nodes: { Anto_1955_166: { x: 4625, y: 969.5 }, Beena_1958_167: { x: 4725, y: 969.5 } } };
+                };
+                const document = {
+                    getElementById: (domId) => {
+                        const id = domId.slice(5);
+                        const n = layout.nodes[id];
+                        if (!n) return null;
+                        return {
+                            getBoundingClientRect: () => ({
+                                left: cam.x + (n.x - 45) * cam.z,
+                                right: cam.x + (n.x + 45) * cam.z,
+                                top: cam.y + (n.y - 38) * cam.z,
+                                bottom: cam.y + (n.y + 38) * cam.z
+                            })
+                        };
+                    }
+                };
+                const treeEl = {
+                    offsetWidth: 14797,
+                    scrollWidth: 14797,
+                    querySelector: () => ({ offsetWidth: layout.treeW }),
+                    getBoundingClientRect: () => ({
+                        left: cam.x,
+                        top: cam.y,
+                        width: layout.treeW * cam.z,
+                        height: layout.treeH * cam.z
+                    })
+                };
+                Object.defineProperty(treeEl, 'offsetWidth', { get: () => layout.treeW });
+                const contEl = { clientWidth: 390, clientHeight: 844 };
+                const setCamera = (updater) => {
+                    cam = typeof updater === 'function' ? updater(cam) : updater;
+                    syncLayoutForZoom(cam.z);
+                };
+                const clampCamera = (nextCam, sheetH = 0) => {
+                    const contH = 844 - sheetH;
+                    const b = computeCameraBounds({ treeW: layout.treeW, treeH: layout.treeH, contW: 390, contH, z: nextCam.z, timelineWidth: 32 });
+                    return {
+                        x: Math.max(b.minX, Math.min(b.maxX, nextCam.x)),
+                        y: Math.max(b.minY, Math.min(b.maxY, nextCam.y)),
+                        z: Math.max(b.minZ, Math.min(3, nextCam.z))
+                    };
+                };
+
+                const cancelRef = { current: null };
+                pollFramePeople({
+                    ids: ['Anto_1955_166'],
+                    options: { preferredZ: null, targetPadX: 0, targetPadY: 0, initialDelay: 15, bottomSheetHeight: 96, topInset: 56, cancelRef },
+                    treeRef: { current: treeEl }, containerRef: { current: contEl },
+                    isSidebarOpen: false, sidebarWidth: 0, setCamera, clampCamera
+                });
+
+                advanceTo(20); // Initial 15ms poll ran on pre-reflow layout; React then reflowed to z=0.80
+                const preRefineScreenX = Math.round(cam.x + layout.nodes.Anto_1955_166.x * cam.z);
+
+                advanceTo(80); // First 40ms post-reflow refinement pass re-centers on reflowed x=4012, y=757
+                const postRefineScreenX = Math.round(cam.x + layout.nodes.Anto_1955_166.x * cam.z);
+                const postRefineScreenY = Math.round(cam.y + layout.nodes.Anto_1955_166.y * cam.z);
+
+                // Now start framing Anto again, then immediately supersede with Beena before refinement fires:
+                pollFramePeople({
+                    ids: ['Anto_1955_166'],
+                    options: { preferredZ: 0.8, targetPadX: 0, targetPadY: 0, initialDelay: 15, bottomSheetHeight: 96, topInset: 56, cancelRef },
+                    treeRef: { current: treeEl }, containerRef: { current: contEl },
+                    isSidebarOpen: true, sidebarWidth: 0, setCamera, clampCamera
+                });
+                advanceTo(100); // Anto's initial frame ran; its [40, 140, 320] refinements are pending
+                pollFramePeople({
+                    ids: ['Beena_1958_167'],
+                    options: { preferredZ: 0.8, targetPadX: 0, targetPadY: 0, initialDelay: 15, bottomSheetHeight: 96, topInset: 56, cancelRef },
+                    treeRef: { current: treeEl }, containerRef: { current: contEl },
+                    isSidebarOpen: true, sidebarWidth: 0, setCamera, clampCamera
+                });
+                advanceTo(600); // Drain all remaining timers: Anto's cancelled refinements must NOT overwrite Beena!
+                const beenaScreenX = Math.round(cam.x + layout.nodes.Beena_1958_167.x * cam.z);
+
+                // Verify mobile URL view-state measurement & restore env with desktop sidebarWidth=360 still present in core state:
+                const mobileViewport = measureViewStateViewport({
+                    container: contEl, isSidebarOpen: true, sidebarWidth: 360, bottomSheetHeight: 96, isCompactViewport: true
+                });
+                const mobileAnchor = chooseViewStateAnchor({
+                    treeElement: treeEl,
+                    tree: { get: (id) => layout.nodes[id] ? { id } : null },
+                    focusId: 'Beena_1958_167',
+                    camera: cam,
+                    viewport: mobileViewport
+                });
+                let restoredFromEnvCam = null;
+                const restoreEnv = buildRestoreCameraEnv({
+                    containerRef: { current: contEl },
+                    treeRef: { current: treeEl },
+                    sidebarWidth: 360,
+                    isCompactViewport: true,
+                    camera: cam,
+                    setCamera: (next) => { restoredFromEnvCam = next; },
+                    clampCamera,
+                    getPpy: () => 8,
+                    tree: {
+                        get: (id) => layout.nodes[id] ? { id, _sourceId: 's1' } : null,
+                        all: Object.keys(layout.nodes).map((id) => ({ id, _sourceId: 's1' }))
+                    }
+                }, { focusId: 'Anto_1955_166', zoom: 0.8, offset: { dx: 280, dy: -2.6 } });
+
+                return {
+                    preRefineScreenX, postRefineScreenX, postRefineScreenY, beenaScreenX, z: cam.z,
+                    mobileViewport, mobileAnchorId: mobileAnchor ? mobileAnchor.id : null,
+                    restoreEnv, getRestoredFromEnvCam: () => restoredFromEnvCam,
+                    antoX: layout.nodes.Anto_1955_166.x
+                };
+                `
+            )({ innerWidth: 390, innerHeight: 844 });
+
+            assert('Test 221.01: pollFramePeople refines camera after zoom-dependent siblingGap/ppy reflow, moving Anto from off-screen (-279px) to exact mobile center (211px, 402px)',
+                reflowHarness.preRefineScreenX < 0 &&
+                reflowHarness.postRefineScreenX === 211 &&
+                reflowHarness.postRefineScreenY === 402 &&
+                reflowHarness.z === 0.8);
+
+            assertEqual('Test 221.02: Shared cancelRef cancels pending refinement timers when the user taps another relative chip so superseded targets never snap back',
+                reflowHarness.beenaScreenX,
+                211);
+
+            // Test 221.03: Shared desktop URLs with wide horizontal offsets or distant anchors keep the focused card visible on phones while leaving desktop untouched:
+            const compactTree221 = {
+                get: (id) => (id === 'Anto_1955_166' || id === 'Mani_1956_170' ? { id, _sourceId: 's1' } : null),
+                all: [{ id: 'Anto_1955_166', _sourceId: 's1' }, { id: 'Mani_1956_170', _sourceId: 's1' }]
+            };
+            const anchors221 = {
+                Anto_1955_166: { id: 'Anto_1955_166', x: 4012, y: 757 },
+                Mani_1956_170: { id: 'Mani_1956_170', x: 4625, y: 757 }
+            };
+            let mobileRestoredCam = null;
+            let desktopRestoredCam = null;
+            const mobileEnv221 = {
+                camera: { x: 0, y: 0, z: 0.8 }, getPpy: () => 8, tree: compactTree221,
+                viewport: { visibleWidth: 390, visibleHeight: 748, timelineWidth: 32 },
+                measureAnchor: (id) => anchors221[id] || null,
+                clampCamera: (c) => c, setCamera: (c) => { mobileRestoredCam = c; }
+            };
+            const desktopEnv221 = {
+                ...mobileEnv221,
+                viewport: { visibleWidth: 1080, visibleHeight: 800, timelineWidth: 48 },
+                setCamera: (c) => { desktopRestoredCam = c; }
+            };
+
+            applyRestoredCamera({ zoom: 0.8, focusId: 'Anto_1955_166', anchorId: 'Mani_1956_170', offset: { dx: 0, dy: 0 } }, mobileEnv221);
+            applyRestoredCamera({ zoom: 0.8, focusId: 'Anto_1955_166', anchorId: 'Mani_1956_170', offset: { dx: 0, dy: 0 } }, desktopEnv221);
+            const mobileAntoScreenX = mobileRestoredCam.x + anchors221.Anto_1955_166.x * mobileRestoredCam.z;
+            const desktopManiScreenX = desktopRestoredCam.x + anchors221.Mani_1956_170.x * desktopRestoredCam.z;
+
+            assert('Test 221.03: applyRestoredCamera clamps distant desktop offsets/anchors onto the mobile screen ([76px, 346px]) while preserving exact desktop framing',
+                mobileAntoScreenX >= 75.5 && mobileAntoScreenX <= 346.5 &&
+                Math.abs(desktopManiScreenX - (48 + (1080 - 48) / 2)) < 1e-6);
+
+            // Moderate desktop offset (dx=120) that already keeps Anto inside [76px, 346px] on mobile is preserved as-is:
+            const gentleClamped = clampCompactFocusCenter({
+                center: { x: 4132, y: 757 }, focusedAnchor: anchors221.Anto_1955_166, zoom: 0.8,
+                viewport: { visibleWidth: 390, visibleHeight: 748, timelineWidth: 32 }
+            });
+            assertEqual('Test 221.04: clampCompactFocusCenter preserves gentle offsets that already keep the focused person visible on mobile and getTreeElementHeight reads compact height safely',
+                [gentleClamped.x, getTreeElementHeight(null), getTreeElementHeight({ querySelector: () => ({ offsetHeight: 1420 }) })].join('|'),
+                '4132|0|1420');
+
+            assertEqual('Test 221.05: shouldRecenterOnSheetSnapChange ignores System Logs (half) -> first person tap (peek) so 0.05 fit zoom never clobbers 0.80 focus zoom, while re-centering same-person peek <-> half toggles',
+                [
+                    shouldRecenterOnSheetSnapChange({
+                        isCompactViewport: true, isAnySidebarOpen: true, canPeek: true, focusId: 'Anto_1955_166',
+                        prevState: { snap: 'half', canPeek: false, focusId: null }, effectiveSheetSnap: 'peek'
+                    }),
+                    shouldRecenterOnSheetSnapChange({
+                        isCompactViewport: true, isAnySidebarOpen: true, canPeek: true, focusId: 'Beena_1958_167',
+                        prevState: { snap: 'half', canPeek: true, focusId: 'Anto_1955_166' }, effectiveSheetSnap: 'peek'
+                    }),
+                    shouldRecenterOnSheetSnapChange({
+                        isCompactViewport: true, isAnySidebarOpen: true, canPeek: true, focusId: 'Anto_1955_166',
+                        prevState: { snap: 'peek', canPeek: true, focusId: 'Anto_1955_166' }, effectiveSheetSnap: 'half'
+                    }),
+                    shouldRecenterOnSheetSnapChange({
+                        isCompactViewport: true, isAnySidebarOpen: true, canPeek: true, focusId: 'Anto_1955_166',
+                        prevState: { snap: 'half', canPeek: true, focusId: 'Anto_1955_166' }, effectiveSheetSnap: 'peek'
+                    })
+                ].join('|'),
+                'false|false|true|true');
+
+            applyRestoredCamera({ focusId: 'Anto_1955_166', zoom: 0.8, offset: { dx: 280, dy: -2.6 } }, reflowHarness.restoreEnv);
+            const envRestoredCam = reflowHarness.getRestoredFromEnvCam();
+            const envAntoScreenX = Math.round(envRestoredCam.x + reflowHarness.antoX * envRestoredCam.z);
+
+            assertEqual('Test 221.06: Mobile URL view-state ignores desktop sidebarWidth=360 (visibleWidth=390, not 30), keeping centered cards anchored and clamping shared #hash offsets to cx=76px',
+                [
+                    reflowHarness.mobileViewport.visibleWidth,
+                    reflowHarness.mobileViewport.visibleHeight,
+                    reflowHarness.mobileViewport.timelineWidth,
+                    reflowHarness.mobileAnchorId,
+                    reflowHarness.restoreEnv.viewport.visibleWidth,
+                    envAntoScreenX
+                ].join('|'),
+                '390|748|32|Beena_1958_167|390|76');
+        } catch (e) {
+            assertEqual('Test 221 execution failed', e.message, '');
         }
     }
 

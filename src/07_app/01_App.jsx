@@ -123,7 +123,7 @@ function useMobileSheetSync({
     isCompactViewport, isAnySidebarOpen, effectiveSheetSnap, bottomSheetHeight,
     canPeek, focusId, isResizingSidebar, setSheetSnap, setSidebarHeight, centerOnPerson, cameraRef
 }) {
-    const prevSnapRef = useRef(null);
+    const prevStateRef = useRef({ snap: null, canPeek: false, focusId: null });
 
     useEffect(() => {
         if (!isAnySidebarOpen) {
@@ -133,12 +133,14 @@ function useMobileSheetSync({
     }, [isAnySidebarOpen, setSheetSnap, setSidebarHeight]);
 
     useEffect(() => {
-        const prev = prevSnapRef.current;
-        prevSnapRef.current = effectiveSheetSnap;
-        if (!isCompactViewport || !isAnySidebarOpen || !canPeek || !focusId || isResizingSidebar) return;
-        if (!prev || prev === effectiveSheetSnap) return;
-        if (effectiveSheetSnap === 'peek' || effectiveSheetSnap === 'half') {
-            centerOnPerson(focusId, cameraRef?.current?.z ?? null, bottomSheetHeight);
+        const prevState = prevStateRef.current;
+        prevStateRef.current = { snap: effectiveSheetSnap, canPeek, focusId };
+        if (shouldRecenterOnSheetSnapChange({
+            isCompactViewport, isAnySidebarOpen, canPeek, focusId,
+            isResizingSidebar, prevState, effectiveSheetSnap
+        })) {
+            const currentZ = cameraRef?.current?.z;
+            centerOnPerson(focusId, currentZ >= 0.5 ? currentZ : null, bottomSheetHeight);
         }
     }, [isCompactViewport, isAnySidebarOpen, canPeek, focusId, isResizingSidebar, effectiveSheetSnap, bottomSheetHeight, centerOnPerson, cameraRef]);
 }

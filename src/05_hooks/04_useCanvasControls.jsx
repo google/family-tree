@@ -17,9 +17,10 @@
  * @example
  * <div onWheel={handleWheel} />
  */
-function useCanvasWheelZoom({ onInteract, containerRef, setCamera, clampCamera, getBounds, getPpy }) {
+function useCanvasWheelZoom({ onInteract, onCancelFraming, containerRef, setCamera, clampCamera, getBounds, getPpy }) {
     return useCallback((e) => {
         if (e.target.closest('.interactive-element')) return;
+        if (onCancelFraming) onCancelFraming();
         
         const cont = containerRef.current ? containerRef.current.getBoundingClientRect() : { left: 0, top: 0 };
         const pointerX = e.clientX - cont.left;
@@ -351,7 +352,7 @@ function processPointerDown({
  */
 function useCanvasPointerCallbacks({
     activePointersRef, pointerPinchRef, cameraRef, setIsDragging, setDragStart,
-    isDragging, dragStart, onInteract, containerRef, getBounds, getPpy, setCamera, clampCamera
+    isDragging, dragStart, onInteract, onCancelFraming, containerRef, getBounds, getPpy, setCamera, clampCamera
 }) {
     const handlePointerDown = useCallback((e) => {
         processPointerDown({
@@ -365,7 +366,10 @@ function useCanvasPointerCallbacks({
             e, activePointersRef, pointerPinchRef, isDragging, dragStart,
             containerRef, getBounds, getPpy, setCamera, clampCamera
         });
-    }, [isDragging, dragStart, clampCamera, getBounds, getPpy, setCamera, containerRef]);
+        if (onCancelFraming && activePointersRef.current.get(e.pointerId)?.moved) {
+            onCancelFraming();
+        }
+    }, [isDragging, dragStart, onCancelFraming, clampCamera, getBounds, getPpy, setCamera, containerRef]);
     
     const handlePointerUp = useCallback((e) => {
         processPointerUp({
@@ -419,7 +423,7 @@ function useCanvasPointerCallbacks({
  * />
  */
 function useCanvasPointerGestures({
-    onInteract, cameraRef, setCamera, clampCamera, getBounds, getPpy, containerRef
+    onInteract, onCancelFraming, cameraRef, setCamera, clampCamera, getBounds, getPpy, containerRef
 }) {
     const [isDragging, setIsDragging] = useState(false);
     const [dragStart, setDragStart] = useState({ x: 0, y: 0 });
@@ -428,11 +432,11 @@ function useCanvasPointerGestures({
 
     const { handlePointerDown, handlePointerMove, handlePointerUp } = useCanvasPointerCallbacks({
         activePointersRef, pointerPinchRef, cameraRef, setIsDragging, setDragStart,
-        isDragging, dragStart, onInteract, containerRef, getBounds, getPpy, setCamera, clampCamera
+        isDragging, dragStart, onInteract, onCancelFraming, containerRef, getBounds, getPpy, setCamera, clampCamera
     });
 
     const handleWheel = useCanvasWheelZoom({
-        onInteract, containerRef, setCamera, clampCamera, getBounds, getPpy
+        onInteract, onCancelFraming, containerRef, setCamera, clampCamera, getBounds, getPpy
     });
 
     return { isDragging, handlePointerDown, handlePointerMove, handlePointerUp, handleWheel };
@@ -505,7 +509,7 @@ function calculateViewportCameraBounds({
         container, isSidebarOpen, sidebarWidth, forceFullWindow, bottomSheetHeight
     });
     const treeW = getTreeElementWidth(treeElement);
-    const treeH = computeTreeSpanHeight(treeStats, targetPpy);
+    const treeH = Math.max(computeTreeSpanHeight(treeStats, targetPpy), getTreeElementHeight(treeElement));
 
     return computeCameraBounds({ treeW, treeH, contW, contH, z, timelineWidth: resolveTimelineGutterWidth() });
 }
@@ -697,6 +701,41 @@ function resolveMobileSheetState({
         })
         : 0;
     return { canPeek, effectiveSheetSnap, bottomSheetHeight, focusBottomSheetHeight };
+}
+
+/**
+ * Determines whether changing the mobile bottom-sheet snap stop should trigger a camera re-center:
+ * true only when toggling between `'peek'` and `'half'` while keeping the same person focused in a
+ * peek-capable panel (never when transitioning from System Logs or Filter panels to a newly focused
+ * person, where `handleSetFocusId` already initiates full zoom-in framing).
+ *
+ * @param {Object} [params={}]
+ * @returns {boolean}
+ *
+ * @example
+ * shouldRecenterOnSheetSnapChange({
+ *     isCompactViewport: true, isAnySidebarOpen: true, canPeek: true, focusId: 'Anto_1955_166',
+ *     isResizingSidebar: false, prevState: { snap: 'peek', canPeek: true, focusId: 'Anto_1955_166' },
+ *     effectiveSheetSnap: 'half'
+ * });
+ * // => true
+ *
+ * @example
+ * shouldRecenterOnSheetSnapChange({
+ *     isCompactViewport: true, isAnySidebarOpen: true, canPeek: true, focusId: 'Anto_1955_166',
+ *     isResizingSidebar: false, prevState: { snap: 'half', canPeek: false, focusId: null },
+ *     effectiveSheetSnap: 'peek'
+ * });
+ * // => false
+ */
+function shouldRecenterOnSheetSnapChange({
+    isCompactViewport = false, isAnySidebarOpen = false, canPeek = false, focusId = null,
+    isResizingSidebar = false, prevState = null, effectiveSheetSnap = null
+} = {}) {
+    if (!isCompactViewport || !isAnySidebarOpen || !canPeek || !focusId || isResizingSidebar) return false;
+    if (!prevState || !prevState.canPeek || prevState.focusId !== focusId) return false;
+    if (!prevState.snap || prevState.snap === effectiveSheetSnap) return false;
+    return effectiveSheetSnap === 'peek' || effectiveSheetSnap === 'half';
 }
 
 /**
@@ -978,7 +1017,7 @@ function applyInitialFitToScreen({ treeElement, container, isSidebarOpen, sideba
  *   });
  */
 function executeFitToScreen({
-    treeRef, containerRef, treeStats, isSidebarOpen, sidebarWidth, forceFullWindow = false, setCamera
+    treeRef, containerRef, treeStats, isSidebarOpen, sidebarWidth, forceFullWindow = false, setCamera, cancelRef = null
 }) {
     const treeElement = treeRef.current;
     const cont = containerRef.current;
@@ -991,7 +1030,7 @@ function executeFitToScreen({
 
     scheduleFitToScreenRefinement({
         treeRef, containerRef, setCamera, isSidebarOpen, sidebarWidth, forceFullWindow,
-        timelineWidth: metrics.timelineWidth, paddingX: metrics.paddingX, topMargin: metrics.topMargin
+        timelineWidth: metrics.timelineWidth, paddingX: metrics.paddingX, topMargin: metrics.topMargin, cancelRef
     });
 }
 
@@ -1067,19 +1106,20 @@ function buildPersonCenterFramingOptions(targetZ = null, bottomSheetHeight = 0, 
  */
 function useCanvasCameraFraming({
     treeRef, containerRef, treeStats, isSidebarOpen, sidebarWidth, setCamera, clampCamera,
-    bottomSheetHeight = 0, focusBottomSheetHeight = 0, isCompactViewport = false
+    bottomSheetHeight = 0, focusBottomSheetHeight = 0, isCompactViewport = false, frameCancelRef = null
 }) {
     const framePeople = useCallback((ids, options = null) => {
         const baseOpts = typeof options === 'number' ? { preferredZ: options } : (options || {});
         const mergedOptions = {
             bottomSheetHeight,
             topInset: isCompactViewport ? MOBILE_TOP_CHROME_INSET_PX : 0,
+            cancelRef: frameCancelRef,
             ...baseOpts
         };
         pollFramePeople({
             ids, options: mergedOptions, treeRef, containerRef, isSidebarOpen, sidebarWidth, setCamera, clampCamera
         });
-    }, [clampCamera, isSidebarOpen, sidebarWidth, bottomSheetHeight, isCompactViewport, treeRef, containerRef, setCamera]);
+    }, [clampCamera, isSidebarOpen, sidebarWidth, bottomSheetHeight, isCompactViewport, frameCancelRef, treeRef, containerRef, setCamera]);
 
     const centerOnPerson = useCallback((id, targetZ = null, sheetHeightOverride = null) => {
         if (!id) return;
@@ -1090,9 +1130,9 @@ function useCanvasCameraFraming({
 
     const fitToScreen = useCallback((forceFullWindow = false) => {
         executeFitToScreen({
-            treeRef, containerRef, treeStats, isSidebarOpen, sidebarWidth, forceFullWindow, setCamera
+            treeRef, containerRef, treeStats, isSidebarOpen, sidebarWidth, forceFullWindow, setCamera, cancelRef: frameCancelRef
         });
-    }, [treeStats, isSidebarOpen, sidebarWidth, setCamera, treeRef, containerRef]);
+    }, [treeStats, isSidebarOpen, sidebarWidth, frameCancelRef, setCamera, treeRef, containerRef]);
 
     return { framePeople, centerOnPerson, fitToScreen };
 }
@@ -1201,13 +1241,13 @@ function useCanvasCameraState() {
  * @example
  * useCanvasTouchLifecycle({ containerRef, cameraRef, setCamera, clampCamera, getBounds, getPpy });
  */
-function useCanvasTouchLifecycle({ containerRef, onInteract, cameraRef, setCamera, clampCamera, getBounds, getPpy }) {
+function useCanvasTouchLifecycle({ containerRef, onInteract, onCancelFraming, cameraRef, setCamera, clampCamera, getBounds, getPpy }) {
     useEffect(() => {
         return setupCanvasTouchListeners({
-            container: containerRef.current, onInteract, cameraRef,
+            container: containerRef.current, onInteract, onCancelFraming, cameraRef,
             setCamera, clampCamera, getBounds, getPpy
         });
-    }, [clampCamera, getBounds, getPpy, onInteract]);
+    }, [clampCamera, getBounds, getPpy, onInteract, onCancelFraming]);
 }
 
 /**
@@ -1248,22 +1288,24 @@ function useCanvasControls(onInteract, treeStats, isSidebarOpen = false, sidebar
     const { camera, setCamera, cameraRef } = useCanvasCameraState();
     const containerRef = useRef(null);
     const treeRef = useRef(null);
+    const frameCancelRef = useRef(null);
+    const cancelFraming = useCallback(() => { if (frameCancelRef.current) frameCancelRef.current(); }, []);
 
     const { getPpy, getBounds, clampCamera } = useCanvasCameraBounds({
         treeStats, isSidebarOpen, sidebarWidth, bottomSheetHeight, containerRef, treeRef
     });
 
     const gestures = useCanvasPointerGestures({
-        onInteract, cameraRef, setCamera, clampCamera, getBounds, getPpy, containerRef
+        onInteract, onCancelFraming: cancelFraming, cameraRef, setCamera, clampCamera, getBounds, getPpy, containerRef
     });
 
     useCanvasTouchLifecycle({
-        containerRef, onInteract, cameraRef, setCamera, clampCamera, getBounds, getPpy
+        containerRef, onInteract, onCancelFraming: cancelFraming, cameraRef, setCamera, clampCamera, getBounds, getPpy
     });
 
     const { framePeople, centerOnPerson, fitToScreen } = useCanvasCameraFraming({
         treeRef, containerRef, treeStats, isSidebarOpen, sidebarWidth, setCamera, clampCamera,
-        bottomSheetHeight, focusBottomSheetHeight, isCompactViewport
+        bottomSheetHeight, focusBottomSheetHeight, isCompactViewport, frameCancelRef
     });
 
     useCanvasAutoClamp({
