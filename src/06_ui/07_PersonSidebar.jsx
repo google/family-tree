@@ -333,7 +333,7 @@ const SidebarSourceLink = ({ href, title, linkText }) => (
  * @example
  *   <SidebarPersonHeader focusPerson={unknownPerson} setFocusId={() => {}} />
  */
-const SidebarPersonHeader = ({ focusPerson, setFocusId, centerOnPerson }) => (
+const SidebarPersonHeader = ({ focusPerson, setFocusId, centerOnPerson, onSharePerson }) => (
     <>
         <div className="flex justify-between items-center gap-3 mb-4 pr-8">
             <div className="flex items-center gap-2.5 min-w-0">
@@ -359,6 +359,7 @@ const SidebarPersonHeader = ({ focusPerson, setFocusId, centerOnPerson }) => (
                     {focusPerson.name}
                             </h2>
                 </div>
+                <SidebarShareButton person={focusPerson} onShare={onSharePerson} />
             </div>
             {focusPerson.nick && <p className="text-sm italic text-slate-500 mb-2">"{focusPerson.nick}"</p>}
         </>
@@ -522,7 +523,7 @@ const SidebarSourceCitations = ({ focusPerson, sheetNames }) => {
  *   centerOnPerson={centerOnPerson}
  * />
  */
-const SidebarPersonDetails = ({ focusPerson, tree, setFocusId, onFilterBy, centerOnPerson, dockBottom = false }) => {
+const SidebarPersonDetails = ({ focusPerson, tree, setFocusId, onFilterBy, centerOnPerson, onSharePerson, dockBottom = false }) => {
     const siblings = useMemo(() => tree.getSiblings(focusPerson?.id), [focusPerson, tree]);
     const { dateStr, extraStr, isDeduced } = focusPerson ? focusPerson.getDateStrings() : {};
 
@@ -532,7 +533,7 @@ const SidebarPersonDetails = ({ focusPerson, tree, setFocusId, onFilterBy, cente
 
     return (
         <div className={`p-6 ${dockBottom ? 'pt-8' : 'pt-[72px]'} overflow-y-auto custom-scrollbar flex-1 pb-24 interactive-element w-full`}>
-            <SidebarPersonHeader focusPerson={focusPerson} setFocusId={setFocusId} centerOnPerson={centerOnPerson} />
+            <SidebarPersonHeader focusPerson={focusPerson} setFocusId={setFocusId} centerOnPerson={centerOnPerson} onSharePerson={onSharePerson} />
             <SidebarPersonBadges focusPerson={focusPerson} tree={tree} onFilterBy={onFilterBy} dateStr={dateStr} extraStr={extraStr} isDeduced={isDeduced} />
             <div className="mt-6">
                         {renderRelativeGroup('Parents', [focusPerson.momId, focusPerson.fatherId])}
@@ -738,15 +739,15 @@ const SidebarPersonPeekCard = ({ focusPerson, tree, setFocusId, centerOnPerson, 
 
     return (
         <div data-testid="person-peek-card" className="px-3.5 pt-5 pb-2 h-full flex flex-col justify-between overflow-hidden select-none interactive-element w-full">
-            <div className="flex items-baseline gap-2 min-w-0 pr-24">
+            <div className="flex items-baseline gap-2 min-w-0 pr-44">
                 <span className={`w-2.5 h-2.5 rounded-full ${dotColor} shrink-0 self-center`} />
                 <button type="button" data-testid="peek-person-name"
                         onClick={() => focusPerson.id && centerOnPerson?.(focusPerson.id)}
-                        className="text-base font-bold text-slate-800 leading-tight truncate text-left cursor-pointer hover:text-blue-600 transition-colors">
+                        className="text-base font-bold text-slate-800 leading-tight shrink-0 max-w-[128px] truncate text-left cursor-pointer hover:text-blue-600 transition-colors">
                     {focusPerson.name}
                 </button>
                 {summary && (
-                    <span data-testid="peek-person-summary" className="text-xs text-slate-500 truncate min-w-0">
+                    <span data-testid="peek-person-summary" className="text-xs text-slate-500 flex-1 truncate min-w-0">
                         {summary}
                     </span>
                 )}
@@ -772,11 +773,12 @@ const SidebarPersonPeekCard = ({ focusPerson, tree, setFocusId, centerOnPerson, 
  * @example
  * <SidebarSheetSnapControls sheetSnap="half" canPeek={false} onSelectSnap={setSheetSnap} />
  */
-const SidebarSheetSnapControls = ({ sheetSnap, canPeek = false, onSelectSnap }) => {
+const SidebarSheetSnapControls = ({ sheetSnap, canPeek = false, onSelectSnap, sharePerson = null, onSharePerson }) => {
     if (typeof onSelectSnap !== 'function' || !sheetSnap) return null;
     const btnCls = "px-2 py-1 rounded-md text-[11px] font-semibold bg-slate-100 hover:bg-slate-200/80 text-slate-600 hover:text-slate-800 border border-slate-200/80 transition-colors cursor-pointer leading-none";
     return (
         <div data-testid="sheet-snap-controls" className="absolute top-2 right-11 z-50 flex items-center gap-1 interactive-element">
+            {sheetSnap === 'peek' && <SidebarShareButton person={sharePerson} onShare={onSharePerson} compact={true} />}
             {sheetSnap === 'peek' && (
                 <button type="button" data-testid="sheet-snap-half" onClick={() => onSelectSnap('half')} className={btnCls} title="Expand details panel">
                     More ▲
@@ -865,7 +867,7 @@ const SidebarCloseButton = ({ onClose, dockBottom = false }) => {
 const SidebarMainPanels = (props) => {
     const {
         showLogs, showAI, setShowAI, logs, isLoading, setShowLogs, activeFilter, focusPerson, tree,
-        setFocusId, onFilterBy, centerOnPerson, dockBottom = false, isPeekCard = false, onSelectSnap,
+        setFocusId, onFilterBy, centerOnPerson, onSharePerson, dockBottom = false, isPeekCard = false, onSelectSnap,
         isAILoading, setIsAILoading, onAiProfilesResponded, pendingAiQuery, setPendingAiQuery,
         setShowMap, omniSelectedIndex, setOmniSelectedIndex
     } = props;
@@ -889,7 +891,7 @@ const SidebarMainPanels = (props) => {
                                        centerOnPerson={centerOnPerson} onSelectSnap={onSelectSnap} />
             )}
             {showPerson && !isPeekCard && (
-                <SidebarPersonDetails focusPerson={focusPerson} tree={tree} setFocusId={setFocusId}
+                <SidebarPersonDetails focusPerson={focusPerson} tree={tree} setFocusId={setFocusId} onSharePerson={onSharePerson}
                                       onFilterBy={onFilterBy} centerOnPerson={centerOnPerson} dockBottom={dockBottom} />
             )}
         </>
@@ -999,7 +1001,7 @@ const PersonSidebar = (props) => {
     const {
         focusPerson, activeFilter, onFilterBy, tree, isVisible, sidebarWidth = 360, sidebarHeight = null,
         dockBottom = false, sheetSnap = null, canPeek = false, onSelectSnap, onResizeStart, onVerticalResizeStart,
-        onClose, isResizing = false, showLogs, showAI, showMap
+        onClose, onSharePerson, isResizing = false, showLogs, showAI, showMap
     } = props;
     const isDirectoryMode = (activeFilter?.filterType === 'directory') || (!focusPerson && !activeFilter && showMap);
     if (!focusPerson && !activeFilter && !showLogs && !showAI && !isDirectoryMode) return null;
@@ -1012,7 +1014,7 @@ const PersonSidebar = (props) => {
         <div data-testid="person-sidebar" style={dock.style}
              className={`bg-white border-slate-200 shadow-2xl flex flex-col z-40 sidebar-scroll relative shrink-0 overflow-hidden ${dock.className} ${isResizing ? 'transition-none' : 'transition-all duration-300 ease-in-out'} ${isVisible ? 'opacity-100' : 'border-none opacity-0 pointer-events-none'}`}>
             {isVisible && <SidebarResizeHandle onResizeStart={dockBottom ? onVerticalResizeStart : onResizeStart} dockBottom={dockBottom} />}
-            {isVisible && dockBottom && !showLogs && <SidebarSheetSnapControls sheetSnap={sheetSnap} canPeek={canPeek} onSelectSnap={onSelectSnap} />}
+            {isVisible && dockBottom && !showLogs && <SidebarSheetSnapControls sheetSnap={sheetSnap} canPeek={canPeek} onSelectSnap={onSelectSnap} sharePerson={isPeekCard ? focusPerson : null} onSharePerson={onSharePerson} />}
             {showCloseBtn && <SidebarCloseButton onClose={onClose} dockBottom={dockBottom} />}
             <SidebarMainPanels {...props} isPeekCard={isPeekCard} />
             {isDirectoryMode && !focusPerson && !showLogs && !showAI && (

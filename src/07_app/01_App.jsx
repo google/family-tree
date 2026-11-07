@@ -390,13 +390,13 @@ function buildViewportProps(core, viewport, focusNav, layoutExp) {
  * @example
  * <PersonSidebar {...buildSidebarProps(core, viewport, focusNav)} />
  */
-function buildSidebarProps(core, viewport, focusNav) {
+function buildSidebarProps(core, viewport, focusNav, onSharePerson) {
     return {
         focusPerson: core.tree.get(core.focusId), activeFilter: core.activeFilter,
         onFilterBy: focusNav.handleFilterBy, sidebarWidth: core.sidebarWidth, sidebarHeight: core.sidebarHeight,
         dockBottom: core.isCompactViewport, sheetSnap: core.effectiveSheetSnap, canPeek: core.canPeek,
         onSelectSnap: (snap) => { core.setSidebarHeight(null); core.setSheetSnap(snap); },
-        onResizeStart: core.handleResizeStart,
+        onResizeStart: core.handleResizeStart, onSharePerson,
         onVerticalResizeStart: core.handleVerticalResizeStart, onClose: core.closeAllPanels,
         isResizing: core.isResizingSidebar, tree: core.tree, setFocusId: focusNav.handleSetFocusId,
         isVisible: core.isAnySidebarOpen, centerOnPerson: viewport.centerOnPerson,
@@ -495,7 +495,7 @@ function dispatchRadialFabAction(actionId, { core, layoutExp, clearAllStoredData
  * @example
  * const { homeButtonProps, settingsPanelProps, settingsFabProps } = buildShellProps(core, viewport, focusNav, layoutExp, applyDraft);
  */
-function buildShellProps(core, viewport, focusNav, layoutExp, applyDemographicSettingsDraft) {
+function buildShellProps(core, viewport, focusNav, layoutExp, applyDemographicSettingsDraft, shareModalProps = {}) {
     const openSheet = (url) => {
         core.setIsHomeOpen(false);
         focusNav.handleImport(url);
@@ -505,7 +505,7 @@ function buildShellProps(core, viewport, focusNav, layoutExp, applyDemographicSe
         core.setThemeId(DEFAULT_COLOR_THEME_ID);
     };
     return {
-        isHomeOpen: core.isHomeOpen,
+        isHomeOpen: core.isHomeOpen, shareModalProps,
         homeButtonProps: { onClick: () => core.setIsHomeOpen(true) },
         homeScreenProps: {
             isOpen: core.isHomeOpen, hasTree: Boolean(core.tree.rootId), isLoading: core.isLoading,
@@ -587,6 +587,7 @@ function useAppViewModel() {
         sheetUrl: core.sheetUrl, setTree: core.setTree, appendLog: core.appendLog,
         fetchFromUrl: core.fetchFromUrl, setIsSettingsOpen: core.setIsSettingsOpen
     });
+    const profileShare = useProfileShareController(core);
 
     return {
         showZoom: shouldShowZoomControls(core),
@@ -594,8 +595,8 @@ function useAppViewModel() {
         topNavProps: buildTopNavProps(core, viewport, focusNav, layoutExp),
         zoomProps: buildZoomProps(core, viewport),
         viewportProps: buildViewportProps(core, viewport, focusNav, layoutExp),
-        sidebarProps: buildSidebarProps(core, viewport, focusNav),
-        shellProps: buildShellProps(core, viewport, focusNav, layoutExp, applyDemographicSettingsDraft)
+        sidebarProps: buildSidebarProps(core, viewport, focusNav, profileShare.openShareForPerson),
+        shellProps: buildShellProps(core, viewport, focusNav, layoutExp, applyDemographicSettingsDraft, profileShare)
     };
 }
 
@@ -648,6 +649,7 @@ const AppRootView = ({ topNavProps, zoomProps, viewportProps, sidebarProps, shel
         <PersonSidebar {...sidebarProps} />
         <AppSettingsPanel {...shellProps.settingsPanelProps} />
         <SheetSourceHomeScreen {...shellProps.homeScreenProps} />
+        <ProfileShareModal {...shellProps.shareModalProps} />
         <SettingsRadialFab {...shellProps.settingsFabProps} />
     </div>
 );

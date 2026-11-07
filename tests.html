@@ -347,6 +347,21 @@ try {
         'countRealTreeProfiles', 'summarizeTreeLoadingProgress',
         'resolveInitialPreviewTarget', 'shouldCenterRootAfterImport', 'shouldAutoOpenLogsOnLoad'
     ].map(name => extractFunction(source, name))).join('\n');
+    const profileShareSrc = [
+        extractConst(source, 'SHARE_CARD_WIDTH'),
+        extractConst(source, 'SHARE_CARD_HEIGHT'),
+        extractConst(source, 'DEFAULT_SHARE_ORIGIN')
+    ].concat([
+        'formatShareNodeSubtitle', 'toMiniShareNode', 'resolveRealRelativeNodes',
+        'extractImmediateFamilySnapshot', 'buildPersonShareUrl',
+        'formatShareBioParenthetical', 'formatShareRelativesLine',
+        'buildWhatsAppShareCaption', 'buildWhatsAppDirectUrl',
+        'computeMiniTreeCardLayout', 'addParentTierToMiniLayout', 'addChildTierToMiniLayout',
+        'drawRoundedRectPath', 'truncateCanvasText', 'drawShareCardBackdrop',
+        'drawShareCardLeafEmblem', 'drawShareCardHeroHeader', 'drawShareCardHeroPills',
+        'drawShareCardLineageRows', 'drawMiniPersonNodeCard', 'drawMiniFamilyTreeDiagram',
+        'renderProfileShareCardCanvas', 'canBrowserNativeShareFiles'
+    ].map(name => extractFunction(source, name))).join('\n');
 
     const [
         CSVParser, Person, FamilyTree, FamilyTreeBuilder,
@@ -418,7 +433,13 @@ try {
         consumePrefetchedCsv, sortSpreadsheetRows, registerUnvisitedSheetLinks,
         renderPreliminaryRootTree, handleSheetNodeResults, createProgressiveTreeUpdater,
         countRealTreeProfiles, summarizeTreeLoadingProgress,
-        resolveInitialPreviewTarget, shouldCenterRootAfterImport, shouldAutoOpenLogsOnLoad
+        resolveInitialPreviewTarget, shouldCenterRootAfterImport, shouldAutoOpenLogsOnLoad,
+        SHARE_CARD_WIDTH, SHARE_CARD_HEIGHT, DEFAULT_SHARE_ORIGIN,
+        formatShareNodeSubtitle, toMiniShareNode, resolveRealRelativeNodes,
+        extractImmediateFamilySnapshot, buildPersonShareUrl,
+        formatShareBioParenthetical, formatShareRelativesLine,
+        buildWhatsAppShareCaption, buildWhatsAppDirectUrl,
+        computeMiniTreeCardLayout, renderProfileShareCardCanvas, canBrowserNativeShareFiles
     ] = new Function(`
         // Isolated cookie jar + localStorage + documentElement: preference & theme tests must never
         // touch the real browser state, and Stage 3 runs in node where neither exists. Every other
@@ -546,6 +567,7 @@ try {
             contH: container ? container.clientHeight : 800
         });
         ${urlViewStateSrc}
+        ${profileShareSrc}
         FamilyTreeBuilder.matchesPersonFilter = matchesPersonFilter;
         FamilyTreeBuilder.FILTER_BADGE_CONFIG = FILTER_BADGE_CONFIG;
         FamilyTreeBuilder.computeFilterHighlightedIds = function(tree, activeFilter) {
@@ -630,7 +652,13 @@ try {
         consumePrefetchedCsv, sortSpreadsheetRows, registerUnvisitedSheetLinks,
         renderPreliminaryRootTree, handleSheetNodeResults, createProgressiveTreeUpdater,
         countRealTreeProfiles, summarizeTreeLoadingProgress,
-        resolveInitialPreviewTarget, shouldCenterRootAfterImport, shouldAutoOpenLogsOnLoad
+        resolveInitialPreviewTarget, shouldCenterRootAfterImport, shouldAutoOpenLogsOnLoad,
+        SHARE_CARD_WIDTH, SHARE_CARD_HEIGHT, DEFAULT_SHARE_ORIGIN,
+        formatShareNodeSubtitle, toMiniShareNode, resolveRealRelativeNodes,
+        extractImmediateFamilySnapshot, buildPersonShareUrl,
+        formatShareBioParenthetical, formatShareRelativesLine,
+        buildWhatsAppShareCaption, buildWhatsAppDirectUrl,
+        computeMiniTreeCardLayout, renderProfileShareCardCanvas, canBrowserNativeShareFiles
         ];
     `)();
 
@@ -16327,6 +16355,170 @@ const m3 = tree.all.find(n => n.id === '3');
                 'true|0.7|true|0.8|true|false');
         } catch (e) {
             assertEqual('Test 222 execution failed', e.message, '');
+        }
+    }
+
+    // ══════════════════════════════════════════════════════════════════════════
+    //  223. Open Graph Preview & WhatsApp Profile Share Card
+    // ══════════════════════════════════════════════════════════════════════════
+    section('223. Open Graph Preview & WhatsApp Profile Share Card');
+    {
+        try {
+            const customSheetId = '1SvPspyHtIV2E9UHwpZON8sUTf3FxIuqJZO-wx0WPl3k';
+            rememberSheetTitle(customSheetId, 'Kizhakumthala Family');
+            const rows223 = [
+                { _sourceId: customSheetId, _sheetRow: 4, Name: 'Chacko', Gender: 'M', 'Year of Birth': '1924', 'Year of Death': '2014', Spouse: 'Regina', Career: 'Banker', Place: 'Chalakkudy' },
+                { _sourceId: customSheetId, _sheetRow: 5, Name: 'Regina', Gender: 'F', 'Year of Birth': '1924', 'Year of Death': '2014', Spouse: 'Chacko', Career: 'Teacher', Place: 'Ollur' },
+                { _sourceId: customSheetId, _sheetRow: 22, Name: 'Anto', Nickname: 'Antony', Gender: 'M', Father: 'Chacko', Mother: 'Regina', Spouse: 'Beena', 'Year of Birth': '1955', Family: 'Kizhakumthala', Career: 'Banker, Advisor', Place: 'Chelakkara, Kerala' },
+                { _sourceId: customSheetId, _sheetRow: 23, Name: 'Beena', Gender: 'F', Spouse: 'Anto', 'Year of Birth': '1958', Career: 'Teacher', Place: 'Chelakkara' },
+                { _sourceId: customSheetId, _sheetRow: 24, Name: 'Jose', Gender: 'M', Father: 'Chacko', Mother: 'Regina', 'Year of Birth': '1949', Career: 'Banker', Place: 'Chalakkudy' },
+                { _sourceId: customSheetId, _sheetRow: 40, Name: 'Rupak', Gender: 'M', Father: 'Anto', Mother: 'Beena', 'Year of Birth': '1984', Career: 'IT', Place: 'California' },
+                { _sourceId: customSheetId, _sheetRow: 41, Name: 'Innez', Gender: 'F', Father: 'Anto', Mother: 'Beena', 'Year of Birth': '1989', Career: 'Test Analyst', Place: 'Perth' }
+            ];
+            const tree223 = buildTree(rows223, { [customSheetId]: 'Root sheet' });
+            const anto = findPerson(tree223, 'Anto');
+
+            // 223.01: Immediate-family snapshot extraction & null safety
+            const snap = extractImmediateFamilySnapshot(anto, tree223, `https://docs.google.com/spreadsheets/d/${customSheetId}/edit`);
+            assert('Test 223.01: extractImmediateFamilySnapshot extracts person badges, sheet title, parents, partner, children, and sibling count while handling null safely',
+                extractImmediateFamilySnapshot(null, tree223, '') === null &&
+                snap.name === 'Anto' && snap.nick === 'Antony' &&
+                snap.familyName === 'Kizhakumthala' && snap.primaryJob === 'Banker' && snap.primaryPlace === 'Chelakkara' &&
+                snap.sheetTitle === 'Kizhakumthala Family' &&
+                snap.parents.length === 2 && snap.allParentNames.includes('Chacko') && snap.allParentNames.includes('Regina') &&
+                snap.partners.length === 1 && snap.partners[0].name === 'Beena' &&
+                snap.children.length === 2 && snap.children[0].name === 'Rupak' && snap.children[1].name === 'Innez' &&
+                snap.extraChildrenCount === 0 && snap.siblingsCount === 1);
+
+            // 223.02: Canonical ultra-short share URL round-trip (?d#<hash> and ?<sheetId>#<hash>)
+            const locMock = { origin: 'https://google.github.io', pathname: '/family-tree/', search: '' };
+            const customShareUrl = buildPersonShareUrl({
+                person: anto,
+                tree: tree223,
+                sheetUrl: `https://docs.google.com/spreadsheets/d/${customSheetId}/edit`,
+                locationObj: locMock
+            });
+            const demoShareUrl = buildPersonShareUrl({
+                person: anto,
+                tree: tree223,
+                sheetUrl: `https://docs.google.com/spreadsheets/d/${DEMO_SHEET_ID}/edit`,
+                locationObj: locMock
+            });
+            const parsedHash = parseViewStateHash(`#${customShareUrl.split('#')[1]}`);
+            const resolvedPersonId = resolveViewStatePersonId(tree223, parsedHash.focusId);
+            assertEqual('Test 223.02: buildPersonShareUrl emits ultra-short ?<sheetId>#<hash> and ?d#<hash> deep links that round-trip back to the exact person at 0.8 zoom',
+                [
+                    customShareUrl.startsWith(`https://google.github.io/family-tree/?${customSheetId}#`),
+                    demoShareUrl.startsWith('https://google.github.io/family-tree/?d#'),
+                    resolvedPersonId === anto.id,
+                    parsedHash.zoom
+                ].join('|'),
+                'true|true|true|0.8');
+
+            // 223.03: Formatted WhatsApp caption & direct api.whatsapp.com URL
+            const caption = buildWhatsAppShareCaption(snap, customShareUrl);
+            const captionLines = caption.split('\n');
+            const waUrl = buildWhatsAppDirectUrl(caption);
+            assert('Test 223.03: buildWhatsAppShareCaption & buildWhatsAppDirectUrl format bold profile headline, immediate family summary, and final clickable link',
+                captionLines.length === 3 &&
+                captionLines[0].startsWith('🌳 *Anto* (b. 1955 · ') &&
+                captionLines[0].includes('Banker · Chelakkara)') &&
+                captionLines[1] === 'Parents: Chacko & Regina · Partner: Beena · Children: Rupak, Innez' &&
+                captionLines[2] === customShareUrl &&
+                waUrl === `https://api.whatsapp.com/send?text=${encodeURIComponent(caption)}`);
+
+            // 223.04: Mini-tree layout geometry across 1-gen, 2-gen, and 3-gen + overflow children (zero card overlaps)
+            const diagramBox = { x: 572, y: 48, width: 572, height: 534 };
+            const sixChildSnap = {
+                ...snap,
+                children: [
+                    { id: 'c1', name: 'Rupak', gender: 'M', badge: '42y', subtitle: 'California' },
+                    { id: 'c2', name: 'Innez', gender: 'F', badge: '37y', subtitle: 'Perth' },
+                    { id: 'c3', name: 'Kiran', gender: 'M', badge: '34y', subtitle: 'Kochi' },
+                    { id: 'c4', name: 'Meera', gender: 'F', badge: '31y', subtitle: 'Pune' }
+                ],
+                extraChildrenCount: 2
+            };
+            const layout3Gen = computeMiniTreeCardLayout(sixChildSnap, diagramBox);
+            const layoutSolo = computeMiniTreeCardLayout({
+                focusNode: snap.focusNode, parents: [], partners: [], children: [], extraChildrenCount: 0
+            }, diagramBox);
+
+            let hasOverlap = false;
+            let outOfBounds = false;
+            for (let i = 0; i < layout3Gen.cards.length; i++) {
+                const a = layout3Gen.cards[i];
+                if (a.x < diagramBox.x || a.y < diagramBox.y || a.x + a.w > diagramBox.x + diagramBox.width || a.y + a.h > diagramBox.y + diagramBox.height) {
+                    outOfBounds = true;
+                }
+                for (let j = i + 1; j < layout3Gen.cards.length; j++) {
+                    const b = layout3Gen.cards[j];
+                    const sep = (a.x + a.w <= b.x) || (b.x + b.w <= a.x) || (a.y + a.h <= b.y) || (b.y + b.h <= a.y);
+                    if (!sep) hasOverlap = true;
+                }
+            }
+            assertEqual('Test 223.04: computeMiniTreeCardLayout places 8 cards across 3 generations inside diagram bounds with zero card overlap and +2 more children badge',
+                [
+                    layoutSolo.cards.length,
+                    layoutSolo.lines.length,
+                    layout3Gen.cards.length,
+                    hasOverlap,
+                    outOfBounds,
+                    layout3Gen.overflowBadge?.text
+                ].join('|'),
+                '1|0|8|false|false|+2 more children');
+
+            // 223.05: 1200x630 Canvas rendering & native file-share probe safety
+            const drawnLabels = [];
+            const origCreateElement = globalThis.document.createElement;
+            const probeEl = origCreateElement.call(globalThis.document, 'canvas');
+            const needsMockCanvas = !probeEl || typeof probeEl.getContext !== 'function';
+            if (needsMockCanvas) {
+                globalThis.document.createElement = (tag) => {
+                    if (tag !== 'canvas') return origCreateElement.call(globalThis.document, tag);
+                    const grad = { addColorStop: () => {} };
+                    const ctx2d = {
+                        fillStyle: '', strokeStyle: '', lineWidth: 1, lineCap: 'butt', font: '', textAlign: 'left',
+                        shadowColor: '', shadowBlur: 0,
+                        save: () => {}, restore: () => {}, beginPath: () => {}, closePath: () => {},
+                        moveTo: () => {}, lineTo: () => {}, arc: () => {}, arcTo: () => {},
+                        fill: () => {}, stroke: () => {}, fillRect: () => {}, setLineDash: () => {},
+                        createLinearGradient: () => grad, createRadialGradient: () => grad,
+                        measureText: (txt) => ({ width: String(txt || '').length * 8 }),
+                        fillText: (txt) => { drawnLabels.push(String(txt)); }
+                    };
+                    return {
+                        width: 0, height: 0,
+                        getContext: (kind) => (kind === '2d' ? ctx2d : null),
+                        toDataURL: () => 'data:image/png;base64,MOCKPNG'
+                    };
+                };
+            }
+            let renderedCanvas = null;
+            let dataUrl = '';
+            try {
+                renderedCanvas = renderProfileShareCardCanvas(snap);
+                dataUrl = renderedCanvas ? renderedCanvas.toDataURL('image/png') : '';
+            } finally {
+                if (needsMockCanvas) globalThis.document.createElement = origCreateElement;
+            }
+            const labelsCheck = needsMockCanvas
+                ? (drawnLabels.includes('Anto') && drawnLabels.includes('Beena') && drawnLabels.includes('Rupak') && drawnLabels.includes('Chacko & Regina'))
+                : dataUrl.startsWith('data:image/png;base64,');
+            assertEqual('Test 223.05: renderProfileShareCardCanvas produces a 1200x630 PNG share card with immediate-family nodes and safe null/probe fallbacks',
+                [
+                    SHARE_CARD_WIDTH,
+                    SHARE_CARD_HEIGHT,
+                    DEFAULT_SHARE_ORIGIN,
+                    renderedCanvas?.width,
+                    renderedCanvas?.height,
+                    labelsCheck,
+                    renderProfileShareCardCanvas(null) === null,
+                    canBrowserNativeShareFiles(null)
+                ].join('|'),
+                '1200|630|https://google.github.io|1200|630|true|true|false');
+        } catch (e) {
+            assertEqual('Test 223 execution failed', e.message, '');
         }
     }
 
