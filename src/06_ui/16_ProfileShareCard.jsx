@@ -883,21 +883,31 @@ async function copyTextToSystemClipboard(text) {
 }
 
 /**
- * Writes a PNG `Blob` to the system clipboard via `ClipboardItem` when supported by the browser.
+ * Writes a PNG `Blob` (paired with `captionText` as `text/plain` when multi-MIME `ClipboardItem`
+ * is supported) to the system clipboard so `Ctrl+V` pastes the card image into WhatsApp Web and a
+ * second `Ctrl+V` in WhatsApp's caption field pastes the formatted text + link.
  *
  * @param {Blob|null} pngBlob - Rendered PNG image blob.
+ * @param {string} [captionText=''] - Companion plain-text caption and short URL.
  * @returns {Promise<boolean>} True when the image blob was written to the clipboard.
  *
  * @example
- * await copyClipboardPngBlob(pngBlob);
+ * await copyClipboardPngBlob(pngBlob, '🌳 *Anto*\nhttps://google.github.io/family-tree/?d#abc');
  *
  * @example
  * await copyClipboardPngBlob(null); // => false
  */
-async function copyClipboardPngBlob(pngBlob) {
+async function copyClipboardPngBlob(pngBlob, captionText = '') {
+    if (!pngBlob || typeof navigator === 'undefined' || !navigator.clipboard?.write) return false;
+    if (typeof window === 'undefined' || !window.ClipboardItem) return false;
+    if (captionText && window.Blob) {
+        try {
+            const textBlob = new window.Blob([captionText], { type: 'text/plain' });
+            await navigator.clipboard.write([new window.ClipboardItem({ 'image/png': pngBlob, 'text/plain': textBlob })]);
+            return true;
+        } catch (_) {}
+    }
     try {
-        if (!pngBlob || typeof navigator === 'undefined' || !navigator.clipboard?.write) return false;
-        if (typeof window === 'undefined' || !window.ClipboardItem) return false;
         await navigator.clipboard.write([new window.ClipboardItem({ 'image/png': pngBlob })]);
         return true;
     } catch (_) {
@@ -984,8 +994,8 @@ function useProfileShareActions({ snapshot, caption, cardAsset, setStatusMsg }) 
     }, [snapshot, cardAsset.blob, caption, setStatusMsg]);
 
     const handleCopyImage = useCallback(async () => {
-        if (await copyClipboardPngBlob(cardAsset.blob)) {
-            setStatusMsg('Card image copied! Paste (Ctrl+V / ⌘V) into WhatsApp chat');
+        if (await copyClipboardPngBlob(cardAsset.blob, caption)) {
+            setStatusMsg('Copied! Press Ctrl+V / ⌘V in WhatsApp (and Ctrl+V again for caption & link)');
             return;
         }
         await copyTextToSystemClipboard(caption);
