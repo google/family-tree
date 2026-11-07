@@ -272,25 +272,6 @@ function buildWhatsAppShareCaption(snapshot, shareUrl) {
 }
 
 /**
- * Builds a `https://api.whatsapp.com/send?text=...` deep link that opens WhatsApp Web or the
- * native WhatsApp app pre-populated with `captionText`.
- *
- * @param {string} captionText - Formatted caption text including URL.
- * @returns {string} WhatsApp share URL.
- *
- * @example
- * buildWhatsAppDirectUrl('Hello Family Tree');
- * // => 'https://api.whatsapp.com/send?text=Hello%20Family%20Tree'
- *
- * @example
- * buildWhatsAppDirectUrl('');
- * // => 'https://api.whatsapp.com/send?text='
- */
-function buildWhatsAppDirectUrl(captionText) {
-    return `https://api.whatsapp.com/send?text=${encodeURIComponent(String(captionText || ''))}`;
-}
-
-/**
  * Computes non-overlapping mini-card positions and orthogonal SVG/Canvas connector segments for
  * the 3-generation immediate-family diagram on the right half of the `1200x630` share card.
  *
@@ -804,22 +785,66 @@ function renderProfileShareCardCanvas(snapshot) {
 }
 
 /**
- * Converts a rendered `<canvas>` element into a PNG `Blob`.
+ * Synchronously decodes a `data:image/png;base64,...` data URL into a `Blob` (`image/png`)
+ * without awaiting `canvas.toBlob`, keeping WebKit/Chromium transient user-gesture activation
+ * intact so `navigator.share` and `navigator.clipboard.write` succeed on the first click.
  *
- * @param {HTMLCanvasElement|null} canvas - Source canvas element.
- * @returns {Promise<Blob|null>} Resolved PNG blob, or `null` if unavailable.
+ * @param {string} dataUrl - PNG data URL emitted by `canvas.toDataURL('image/png')`.
+ * @returns {Blob|null} Decoded PNG `Blob`, or `null` when unavailable or malformed.
  *
  * @example
- * const blob = await canvasToPngBlob(canvas);
+ * const blob = dataUrlToPngBlob(canvas.toDataURL('image/png'));
  *
  * @example
- * await canvasToPngBlob(null); // => null
+ * dataUrlToPngBlob(''); // => null
  */
-function canvasToPngBlob(canvas) {
-    if (!canvas || typeof canvas.toBlob !== 'function') return Promise.resolve(null);
-    return new Promise((resolve) => {
-        canvas.toBlob((blob) => resolve(blob || null), 'image/png');
-    });
+function dataUrlToPngBlob(dataUrl) {
+    if (!dataUrl || typeof dataUrl !== 'string' || !globalThis.Blob || !globalThis.Uint8Array || typeof globalThis.atob !== 'function') {
+        return null;
+    }
+    const commaIdx = dataUrl.indexOf(',');
+    if (commaIdx < 0) return null;
+    try {
+        const binary = globalThis.atob(dataUrl.slice(commaIdx + 1));
+        const bytes = new globalThis.Uint8Array(binary.length);
+        for (let i = 0; i < binary.length; i++) {
+            bytes[i] = binary.charCodeAt(i);
+        }
+        return new globalThis.Blob([bytes], { type: 'image/png' });
+    } catch (_) {
+        return null;
+    }
+}
+
+/**
+ * Builds the richest Web Share API payload supported by `nav.canShare` for sharing `file`
+ * alongside `title` and `caption`, or returns `null` when native file sharing is unavailable.
+ *
+ * @param {File|null} file - Rendered PNG `File` instance.
+ * @param {string} title - Share sheet title (`"<Name> — Family Tree"`).
+ * @param {string} caption - Formatted text summary and short URL.
+ * @param {Object|null} [nav] - Navigator object (injectable for tests).
+ * @returns {Object|null} Supported `navigator.share` payload, or `null`.
+ *
+ * @example
+ * buildNativeSharePayload(pngFile, 'Anto — Family Tree', '🌳 *Anto*\nhttps://...');
+ *
+ * @example
+ * buildNativeSharePayload(null, 'Anto — Family Tree', '', null); // => null
+ */
+function buildNativeSharePayload(file, title, caption, nav = (typeof navigator !== 'undefined' ? navigator : null)) {
+    if (!file || !nav || typeof nav.share !== 'function' || typeof nav.canShare !== 'function') return null;
+    const candidates = [
+        { files: [file], title, text: caption },
+        { files: [file], text: caption },
+        { files: [file] }
+    ];
+    for (const candidate of candidates) {
+        try {
+            if (nav.canShare(candidate)) return candidate;
+        } catch (_) {}
+    }
+    return null;
 }
 
 /**
@@ -838,10 +863,9 @@ function canvasToPngBlob(canvas) {
 function canBrowserNativeShareFiles(pngBlob) {
     try {
         if (!pngBlob || typeof navigator === 'undefined' || typeof window === 'undefined' || !window.File) return false;
-        if (typeof navigator.share !== 'function' || typeof navigator.canShare !== 'function') return false;
         const probe = new window.File([pngBlob], 'family-tree-card.png', { type: 'image/png' });
-        return Boolean(navigator.canShare({ files: [probe] }));
-    } catch (err) {
+        return Boolean(buildNativeSharePayload(probe, 'Family Tree', '', navigator));
+    } catch (_) {
         return false;
     }
 }
@@ -850,6 +874,7 @@ function canBrowserNativeShareFiles(pngBlob) {
  * Copies plain text to the system clipboard with a hidden `<textarea>` fallback.
  *
  * @param {string} text - Text to copy.
+ * @param {Object|null} [nav] - Optional `navigator` override for tests.
  * @returns {Promise<boolean>} True if copying succeeded.
  *
  * @example
@@ -858,11 +883,11 @@ function canBrowserNativeShareFiles(pngBlob) {
  * @example
  * await copyTextToSystemClipboard('');
  */
-async function copyTextToSystemClipboard(text) {
+async function copyTextToSystemClipboard(text, nav = (typeof navigator !== 'undefined' ? navigator : null)) {
     if (!text) return false;
     try {
-        if (typeof navigator !== 'undefined' && navigator.clipboard && navigator.clipboard.writeText) {
-            await navigator.clipboard.writeText(text);
+        if (nav?.clipboard?.writeText) {
+            await nav.clipboard.writeText(text);
             return true;
         }
     } catch (_) {}
@@ -889,6 +914,8 @@ async function copyTextToSystemClipboard(text) {
  *
  * @param {Blob|null} pngBlob - Rendered PNG image blob.
  * @param {string} [captionText=''] - Companion plain-text caption and short URL.
+ * @param {Object|null} [nav] - Optional `navigator` override for tests.
+ * @param {Object|null} [win] - Optional `window`/`globalThis` override for tests.
  * @returns {Promise<boolean>} True when the image blob was written to the clipboard.
  *
  * @example
@@ -897,18 +924,22 @@ async function copyTextToSystemClipboard(text) {
  * @example
  * await copyClipboardPngBlob(null); // => false
  */
-async function copyClipboardPngBlob(pngBlob, captionText = '') {
-    if (!pngBlob || typeof navigator === 'undefined' || !navigator.clipboard?.write) return false;
-    if (typeof window === 'undefined' || !window.ClipboardItem) return false;
-    if (captionText && window.Blob) {
+async function copyClipboardPngBlob(
+    pngBlob,
+    captionText = '',
+    nav = (typeof navigator !== 'undefined' ? navigator : null),
+    win = (typeof globalThis !== 'undefined' ? globalThis : null)
+) {
+    if (!pngBlob || !nav?.clipboard?.write || !win?.ClipboardItem) return false;
+    if (captionText && win.Blob) {
         try {
-            const textBlob = new window.Blob([captionText], { type: 'text/plain' });
-            await navigator.clipboard.write([new window.ClipboardItem({ 'image/png': pngBlob, 'text/plain': textBlob })]);
+            const textBlob = new win.Blob([captionText], { type: 'text/plain' });
+            await nav.clipboard.write([new win.ClipboardItem({ 'image/png': pngBlob, 'text/plain': textBlob })]);
             return true;
         } catch (_) {}
     }
     try {
-        await navigator.clipboard.write([new window.ClipboardItem({ 'image/png': pngBlob })]);
+        await nav.clipboard.write([new win.ClipboardItem({ 'image/png': pngBlob })]);
         return true;
     } catch (_) {
         return false;
@@ -916,109 +947,176 @@ async function copyClipboardPngBlob(pngBlob, captionText = '') {
 }
 
 /**
- * Generates and manages the preview image URL, PNG blob, document title sync, and share actions.
+ * Synchronously assembles the `1200x630` PNG card `Blob`, formatted text caption, and short
+ * deep-link URL for `person` so clicking Share can invoke the OS share sheet or clipboard
+ * immediately within the active user gesture.
+ *
+ * @param {Object} [params={}]
+ * @param {Person|null} params.person - Selected person record.
+ * @param {FamilyTree|null} params.tree - Active family tree model.
+ * @param {string} [params.sheetUrl=''] - Active Google Sheets URL.
+ * @param {Object|null} [params.locationObj=null] - Optional location override for tests.
+ * @returns {{ snapshot: Object, shareUrl: string, caption: string, pngBlob: Blob|null, fileName: string, title: string }|null}
+ *
+ * @example
+ * const bundle = buildProfileShareBundle({ person: tree.get('Anto_1955_22'), tree, sheetUrl });
+ *
+ * @example
+ * buildProfileShareBundle({ person: null, tree: null }); // => null
+ */
+function buildProfileShareBundle({ person, tree, sheetUrl = '', locationObj = null } = {}) {
+    const snapshot = extractImmediateFamilySnapshot(person, tree, sheetUrl);
+    if (!snapshot) return null;
+    const shareUrl = buildPersonShareUrl({ person, tree, sheetUrl, locationObj });
+    const caption = buildWhatsAppShareCaption(snapshot, shareUrl);
+    const canvas = renderProfileShareCardCanvas(snapshot);
+    const dataUrl = (canvas && typeof canvas.toDataURL === 'function') ? canvas.toDataURL('image/png') : '';
+    const pngBlob = dataUrlToPngBlob(dataUrl);
+    const safeSlug = snapshot.name.replace(/[^a-zA-Z0-9_-]+/g, '_') || 'Profile';
+    return {
+        snapshot,
+        shareUrl,
+        caption,
+        pngBlob,
+        fileName: `${safeSlug}_Family_Tree.png`,
+        title: `${snapshot.name} — Family Tree`
+    };
+}
+
+/**
+ * Executes desktop/non-file-share fallbacks for `executeDirectProfileShare`: writes the
+ * multi-MIME PNG card + text to the clipboard, or falls back to text `navigator.share` / text copy.
+ *
+ * @param {{ title: string, caption: string, shareUrl: string, pngBlob: Blob|null }} bundle - Prepared share bundle.
+ * @param {Object|null} nav - Navigator instance.
+ * @param {Object|null} win - Global window object.
+ * @returns {Promise<{ mode: string, message: string, shareUrl: string, caption: string }>}
+ *
+ * @example
+ * await executeFallbackProfileShare(bundle, navigator, window);
+ *
+ * @example
+ * await executeFallbackProfileShare({ title: 'Anto', caption: 'hi', shareUrl: 'https://...', pngBlob: null }, null, null);
+ */
+async function executeFallbackProfileShare(bundle, nav, win) {
+    if (await copyClipboardPngBlob(bundle.pngBlob, bundle.caption, nav, win)) {
+        return {
+            mode: 'clipboard-card',
+            message: 'Copied preview card, text & link — paste into WhatsApp',
+            shareUrl: bundle.shareUrl,
+            caption: bundle.caption
+        };
+    }
+    if (typeof nav?.share === 'function') {
+        try {
+            await nav.share({ title: bundle.title, text: bundle.caption });
+            return { mode: 'native-text', message: '', shareUrl: bundle.shareUrl, caption: bundle.caption };
+        } catch (err) {
+            if (err && err.name === 'AbortError') {
+                return { mode: 'aborted', message: '', shareUrl: bundle.shareUrl, caption: bundle.caption };
+            }
+        }
+    }
+    const ok = await copyTextToSystemClipboard(bundle.caption, nav);
+    return {
+        mode: ok ? 'clipboard-text' : 'failed',
+        message: ok ? 'Copied text & short link — paste into WhatsApp' : 'Unable to share from this browser',
+        shareUrl: bundle.shareUrl,
+        caption: bundle.caption
+    };
+}
+
+/**
+ * Shares a profile's `1200x630` preview card, formatted text, and short deep link directly on
+ * button click without any intermediate modal dialog: invokes `navigator.share` with the PNG
+ * file + caption when supported, or copies both to the system clipboard on desktop browsers.
+ *
+ * @param {Object} [params={}]
+ * @param {Person|null} params.person - Selected person record to share.
+ * @param {FamilyTree|null} params.tree - Active family tree model.
+ * @param {string} [params.sheetUrl=''] - Active Google Sheets URL.
+ * @param {Object|null} [params.locationObj=null] - Optional location override for tests.
+ * @param {Object|null} [params.nav] - Optional `navigator` override for tests.
+ * @param {Object|null} [params.win] - Optional `window`/`globalThis` override for tests.
+ * @returns {Promise<{ mode: string, message: string, shareUrl: string, caption: string }>}
+ *
+ * @example
+ * await executeDirectProfileShare({ person: tree.get('Anto_1955_22'), tree, sheetUrl });
+ *
+ * @example
+ * await executeDirectProfileShare({ person: null, tree: null }); // => { mode: 'noop', message: '', shareUrl: '', caption: '' }
+ */
+async function executeDirectProfileShare({
+    person, tree, sheetUrl = '', locationObj = null,
+    nav = (typeof navigator !== 'undefined' ? navigator : null),
+    win = (typeof globalThis !== 'undefined' ? globalThis : null)
+} = {}) {
+    const bundle = buildProfileShareBundle({ person, tree, sheetUrl, locationObj });
+    if (!bundle) return { mode: 'noop', message: '', shareUrl: '', caption: '' };
+    const file = (bundle.pngBlob && typeof win?.File === 'function')
+        ? new win.File([bundle.pngBlob], bundle.fileName, { type: 'image/png' })
+        : null;
+    const nativePayload = buildNativeSharePayload(file, bundle.title, bundle.caption, nav);
+    if (nativePayload) {
+        try {
+            // Invoke navigator.share first before any clipboard call so transient user activation stays intact.
+            const sharePromise = nav.share(nativePayload);
+            if (nav?.clipboard?.writeText) nav.clipboard.writeText(bundle.caption).catch(() => {});
+            await sharePromise;
+            return { mode: 'native-file', message: '', shareUrl: bundle.shareUrl, caption: bundle.caption };
+        } catch (err) {
+            if (err && err.name === 'AbortError') {
+                return { mode: 'aborted', message: '', shareUrl: bundle.shareUrl, caption: bundle.caption };
+            }
+        }
+    }
+    return executeFallbackProfileShare(bundle, nav, win);
+}
+
+/**
+ * Coordinates `document.title` synchronization, 1-click profile sharing, and non-modal toast
+ * feedback when falling back to clipboard copy on desktop browsers.
  *
  * @param {Object} params
  * @param {FamilyTree} params.tree - Active family tree model.
  * @param {string} [params.sheetUrl=''] - Active Google Sheets URL.
  * @param {string|null} [params.focusId=null] - Active focused person ID for `document.title` sync.
- * @returns {Object} Share modal state and action callbacks.
+ * @returns {{ toastMessage: string, sharePerson: Function }}
  *
  * @example
  * const share = useProfileShareController({ tree, sheetUrl, focusId: 'Anto_1955_22' });
- * share.openShareForPerson(tree.get('Anto_1955_22'));
+ * share.sharePerson(tree.get('Anto_1955_22'));
  *
  * @example
- * const { isOpen, closeShareModal } = useProfileShareController({ tree: new FamilyTree(), sheetUrl: '' });
+ * const { toastMessage } = useProfileShareController({ tree: new FamilyTree(), sheetUrl: '' });
  */
 function useProfileShareController({ tree, sheetUrl = '', focusId = null }) {
     useDocumentTitleSync(focusId && tree ? tree.get(focusId) : null);
-    const [sharePersonId, setSharePersonId] = useState(null);
-    const [cardAsset, setCardAsset] = useState({ dataUrl: '', blob: null });
-    const [statusMsg, setStatusMsg] = useState('');
-    const sharePerson = sharePersonId && tree ? tree.get(sharePersonId) : null;
-    const snapshot = useMemo(() => extractImmediateFamilySnapshot(sharePerson, tree, sheetUrl), [sharePerson, tree, sheetUrl]);
-    const shareUrl = useMemo(() => (sharePerson ? buildPersonShareUrl({ person: sharePerson, tree, sheetUrl }) : ''), [sharePerson, tree, sheetUrl]);
-    const caption = useMemo(() => buildWhatsAppShareCaption(snapshot, shareUrl), [snapshot, shareUrl]);
+    const [toastMessage, setToastMessage] = useState('');
+    const timerRef = useRef(null);
 
-    useEffect(() => {
-        let cancelled = false;
-        setStatusMsg('');
-        if (!snapshot) { setCardAsset({ dataUrl: '', blob: null }); return undefined; }
-        const canvas = renderProfileShareCardCanvas(snapshot);
-        const dataUrl = canvas ? canvas.toDataURL('image/png') : '';
-        setCardAsset({ dataUrl, blob: null });
-        canvasToPngBlob(canvas).then((blob) => { if (!cancelled) setCardAsset({ dataUrl, blob }); });
-        return () => { cancelled = true; };
-    }, [snapshot]);
+    useEffect(() => () => {
+        if (timerRef.current) clearTimeout(timerRef.current);
+    }, []);
 
-    const actions = useProfileShareActions({ snapshot, caption, cardAsset, setStatusMsg });
-    return {
-        isOpen: Boolean(sharePerson && snapshot), snapshot, shareUrl, caption,
-        whatsappUrl: buildWhatsAppDirectUrl(caption), previewDataUrl: cardAsset.dataUrl,
-        canNativeFileShare: canBrowserNativeShareFiles(cardAsset.blob), statusMsg,
-        openShareForPerson: useCallback((p) => { if (p?.id) setSharePersonId(p.id); }, []),
-        closeShareModal: useCallback(() => setSharePersonId(null), []),
-        ...actions
-    };
-}
-
-/**
- * Action handlers for native OS file sharing, clipboard image/caption copying, and PNG download.
- *
- * @param {Object} params
- * @param {Object|null} params.snapshot - Immediate-family snapshot.
- * @param {string} params.caption - Formatted WhatsApp caption with link.
- * @param {{ dataUrl: string, blob: Blob|null }} params.cardAsset - Pre-rendered card image asset.
- * @param {Function} params.setStatusMsg - Feedback banner message setter.
- * @returns {{ handleNativeShare: Function, handleCopyImage: Function, handleCopyCaption: Function, handleDownloadPng: Function }}
- *
- * @example
- * const actions = useProfileShareActions({ snapshot, caption: 'text', cardAsset: { dataUrl: '', blob: null }, setStatusMsg: () => {} });
- *
- * @example
- * actions.handleCopyCaption();
- */
-function useProfileShareActions({ snapshot, caption, cardAsset, setStatusMsg }) {
-    const handleNativeShare = useCallback(async () => {
-        if (!snapshot || !cardAsset.blob || typeof window === 'undefined' || !window.File) return;
-        const safeSlug = snapshot.name.replace(/[^a-zA-Z0-9_-]+/g, '_') || 'Profile';
-        const file = new window.File([cardAsset.blob], `${safeSlug}_Family_Tree.png`, { type: 'image/png' });
-        copyTextToSystemClipboard(caption);
-        try {
-            await navigator.share({ files: [file], title: `${snapshot.name} — Family Tree`, text: caption });
-            setStatusMsg('Shared! (Caption + link also copied to clipboard)');
-        } catch (err) {
-            if (err && err.name !== 'AbortError') setStatusMsg('Link copied — paste directly into WhatsApp');
+    const sharePerson = useCallback(async (person) => {
+        if (!person || person._isUnknown) return;
+        const res = await executeDirectProfileShare({ person, tree, sheetUrl });
+        if (timerRef.current) clearTimeout(timerRef.current);
+        if (res.message) {
+            setToastMessage(res.message);
+            timerRef.current = setTimeout(() => setToastMessage(''), 3200);
+        } else {
+            setToastMessage('');
         }
-    }, [snapshot, cardAsset.blob, caption, setStatusMsg]);
+    }, [tree, sheetUrl]);
 
-    const handleCopyImage = useCallback(async () => {
-        if (await copyClipboardPngBlob(cardAsset.blob, caption)) {
-            setStatusMsg('Copied! Press Ctrl+V / ⌘V in WhatsApp (and Ctrl+V again for caption & link)');
-            return;
-        }
-        await copyTextToSystemClipboard(caption);
-        setStatusMsg('Caption & link copied to clipboard!');
-    }, [cardAsset.blob, caption, setStatusMsg]);
-
-    const handleCopyCaption = useCallback(async () => {
-        const ok = await copyTextToSystemClipboard(caption);
-        setStatusMsg(ok ? 'Caption & short link copied — paste into WhatsApp!' : 'Unable to access clipboard');
-    }, [caption, setStatusMsg]);
-
-    const handleDownloadPng = useCallback(() => {
-        if (!snapshot || !cardAsset.blob) return;
-        const safeSlug = snapshot.name.replace(/[^a-zA-Z0-9_-]+/g, '_') || 'Profile';
-        ExportUtils.triggerDownload(cardAsset.blob, `${safeSlug}_Family_Tree.png`);
-        setStatusMsg('Saved preview card PNG!');
-    }, [snapshot, cardAsset.blob, setStatusMsg]);
-
-    return { handleNativeShare, handleCopyImage, handleCopyCaption, handleDownloadPng };
+    return { toastMessage, sharePerson };
 }
 
 /**
  * Compact Share button rendered in the person details header and on the mobile Peek bar.
+ * Shares the `1200x630` preview card, formatted text, and short link directly on click.
  *
  * @param {Object} props
  * @param {Person|null} props.person - Person profile to share.
@@ -1027,10 +1125,10 @@ function useProfileShareActions({ snapshot, caption, cardAsset, setStatusMsg }) 
  * @returns {React.ReactNode|null}
  *
  * @example
- * <SidebarShareButton person={focusPerson} onShare={openShareForPerson} />
+ * <SidebarShareButton person={focusPerson} onShare={sharePerson} />
  *
  * @example
- * <SidebarShareButton person={focusPerson} onShare={openShareForPerson} compact={true} />
+ * <SidebarShareButton person={focusPerson} onShare={sharePerson} compact={true} />
  */
 function SidebarShareButton({ person, onShare, compact = false }) {
     if (!person || person._isUnknown || typeof onShare !== 'function') return null;
@@ -1038,7 +1136,7 @@ function SidebarShareButton({ person, onShare, compact = false }) {
         return (
             <button type="button" data-testid="share-person-peek-btn" onClick={() => onShare(person)}
                     className="px-2 py-1 rounded-md text-[11px] font-semibold bg-emerald-50 hover:bg-emerald-100 text-emerald-700 border border-emerald-200 transition-colors cursor-pointer leading-none inline-flex items-center gap-1 interactive-element"
-                    title={`Share ${person.name} to WhatsApp`} aria-label={`Share ${person.name}`}>
+                    title={`Share ${person.name} preview card & link`} aria-label={`Share ${person.name}`}>
                 <Icons.Share />
                 <span>Share</span>
             </button>
@@ -1047,7 +1145,7 @@ function SidebarShareButton({ person, onShare, compact = false }) {
     return (
         <button type="button" data-testid="share-person-btn" onClick={() => onShare(person)}
                 className="shrink-0 inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs font-semibold bg-emerald-50 hover:bg-emerald-100 text-emerald-700 border border-emerald-200 shadow-2xs transition-colors cursor-pointer interactive-element"
-                title={`Share ${person.name} with preview card to WhatsApp`} aria-label={`Share ${person.name}`}>
+                title={`Share ${person.name} preview card & link`} aria-label={`Share ${person.name}`}>
             <Icons.Share />
             <span>Share</span>
         </button>
@@ -1055,126 +1153,28 @@ function SidebarShareButton({ person, onShare, compact = false }) {
 }
 
 /**
- * Action button cluster inside `ProfileShareModal` adapting to mobile native file-share vs.
- * desktop WhatsApp Web clipboard/deep-link workflows.
+ * Non-modal floating status pill rendered briefly when desktop browsers without a native OS
+ * file-share sheet copy the `1200x630` preview card, text, and short link to the clipboard.
+ * Keeps fixed geometry (`visibility`/`opacity` toggle) so appearing/hiding causes zero layout shift.
  *
  * @param {Object} props
- * @returns {React.ReactNode}
+ * @param {string} [props.message=''] - Active feedback message, or empty string when hidden.
+ * @returns {React.ReactElement}
  *
  * @example
- * <ProfileShareActionButtons canNativeFileShare={true} whatsappUrl="https://api.whatsapp.com/send?text=hi" handleNativeShare={() => {}} handleCopyImage={() => {}} handleCopyCaption={() => {}} handleDownloadPng={() => {}} />
+ * <ProfileShareToast message="Copied preview card, text & link — paste into WhatsApp" />
  *
  * @example
- * <ProfileShareActionButtons canNativeFileShare={false} whatsappUrl="https://api.whatsapp.com/send?text=hi" handleNativeShare={() => {}} handleCopyImage={() => {}} handleCopyCaption={() => {}} handleDownloadPng={() => {}} />
+ * <ProfileShareToast message="" />
  */
-function ProfileShareActionButtons({
-    canNativeFileShare, whatsappUrl, handleNativeShare, handleCopyImage, handleCopyCaption, handleDownloadPng
-}) {
+function ProfileShareToast({ message = '' }) {
+    const visible = Boolean(message);
     return (
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
-            {canNativeFileShare ? (
-                <button type="button" data-testid="share-native-btn" onClick={handleNativeShare}
-                        className="sm:col-span-2 w-full py-2.5 px-4 rounded-xl font-bold text-sm bg-emerald-600 hover:bg-emerald-700 text-white shadow-sm flex items-center justify-center gap-2 cursor-pointer transition-colors">
-                    <Icons.WhatsApp />
-                    <span>Share Preview Card &amp; Link…</span>
-                </button>
-            ) : (
-                <button type="button" data-testid="share-copy-image-btn" onClick={handleCopyImage}
-                        className="w-full py-2.5 px-3.5 rounded-xl font-bold text-xs sm:text-sm bg-emerald-600 hover:bg-emerald-700 text-white shadow-sm flex items-center justify-center gap-2 cursor-pointer transition-colors">
-                    <Icons.Copy />
-                    <span>Copy Preview Card Image</span>
-                </button>
-            )}
-            <a data-testid="share-whatsapp-link" href={whatsappUrl} target="_blank" rel="noopener noreferrer"
-               className="w-full py-2.5 px-3.5 rounded-xl font-semibold text-xs sm:text-sm bg-slate-100 hover:bg-emerald-50 text-slate-800 hover:text-emerald-800 border border-slate-200 flex items-center justify-center gap-2 transition-colors">
-                <Icons.WhatsApp />
-                <span>Open Text &amp; Link in WhatsApp</span>
-            </a>
-            <button type="button" data-testid="share-copy-caption-btn" onClick={handleCopyCaption}
-                    className="w-full py-2 px-3.5 rounded-xl font-semibold text-xs bg-slate-100 hover:bg-slate-200/80 text-slate-700 border border-slate-200 flex items-center justify-center gap-1.5 cursor-pointer transition-colors">
-                <Icons.Link />
-                <span>Copy Caption &amp; Short Link</span>
-            </button>
-            <button type="button" data-testid="share-download-png-btn" onClick={handleDownloadPng}
-                    className={`${canNativeFileShare ? 'sm:col-span-2' : ''} w-full py-2 px-3.5 rounded-xl font-semibold text-xs bg-slate-100 hover:bg-slate-200/80 text-slate-700 border border-slate-200 flex items-center justify-center gap-1.5 cursor-pointer transition-colors`}>
-                <Icons.Download />
-                <span>Download Card PNG</span>
-            </button>
-        </div>
-    );
-}
-
-/**
- * Header bar for `ProfileShareModal` displaying the person title and Escape/click dismiss button.
- *
- * @param {Object} props
- * @param {string} props.personName - Name of the profile being shared.
- * @param {Function} [props.onClose] - Callback to dismiss the modal.
- * @returns {React.ReactNode}
- *
- * @example
- * <ProfileShareModalHeader personName="Anto" onClose={closeShareModal} />
- *
- * @example
- * <ProfileShareModalHeader personName="Regina" />
- */
-function ProfileShareModalHeader({ personName, onClose }) {
-    return (
-        <div className="flex items-center justify-between px-4 sm:px-5 py-3 border-b border-slate-100">
-            <div className="flex items-center gap-2 text-sm font-bold text-slate-800 truncate">
-                <Icons.Share />
-                <span className="truncate">Share {personName} to WhatsApp</span>
-            </div>
-            <button type="button" data-testid="close-share-modal" onClick={onClose} aria-label="Dismiss share dialog"
-                    className="p-1.5 rounded-lg text-slate-400 hover:text-slate-700 hover:bg-slate-100 cursor-pointer transition-colors">
-                <Icons.Close />
-            </button>
-        </div>
-    );
-}
-
-/**
- * Modal dialog displaying the generated `1200x630` person + immediate-family preview card,
- * formatted WhatsApp caption, and 1-tap share/copy actions.
- *
- * @param {Object} props
- * @returns {React.ReactNode|null}
- *
- * @example
- * <ProfileShareModal isOpen={true} snapshot={snapshot} caption={caption} whatsappUrl={url} previewDataUrl={dataUrl} closeShareModal={() => {}} />
- *
- * @example
- * <ProfileShareModal isOpen={false} />
- */
-function ProfileShareModal(props) {
-    const { isOpen, snapshot, caption, previewDataUrl, statusMsg, closeShareModal } = props;
-    useEffect(() => {
-        if (!isOpen) return undefined;
-        const onKey = (e) => { if (e.key === 'Escape') closeShareModal?.(); };
-        window.addEventListener('keydown', onKey);
-        return () => window.removeEventListener('keydown', onKey);
-    }, [isOpen, closeShareModal]);
-
-    if (!isOpen || !snapshot) return null;
-    return (
-        <div data-testid="profile-share-modal" role="dialog" aria-modal="true" aria-label={`Share ${snapshot.name}`}
-             onClick={closeShareModal}
-             className="fixed inset-0 z-[95] bg-black/55 backdrop-blur-xs flex items-center justify-center p-3 sm:p-5 interactive-element">
-            <div onClick={(e) => e.stopPropagation()}
-                 className="w-full max-w-xl bg-white border border-slate-200 rounded-2xl shadow-2xl overflow-hidden flex flex-col max-h-[92dvh]">
-                <ProfileShareModalHeader personName={snapshot.name} onClose={closeShareModal} />
-                <div className="p-4 sm:p-5 overflow-y-auto space-y-3.5 custom-scrollbar">
-                    <div className="rounded-xl overflow-hidden border border-slate-200 bg-slate-950 aspect-[1200/630] w-full shadow-md">
-                        {previewDataUrl && <img data-testid="profile-share-preview-img" src={previewDataUrl} alt={`${snapshot.name} family preview card`} className="w-full h-full object-cover block" />}
-                    </div>
-                    <pre data-testid="profile-share-caption" className="text-xs font-sans whitespace-pre-wrap break-all bg-slate-50 border border-slate-200 rounded-xl px-3.5 py-2.5 text-slate-700 leading-relaxed m-0">{caption}</pre>
-                    <div data-testid="profile-share-status" style={{ visibility: statusMsg ? 'visible' : 'hidden', opacity: statusMsg ? 1 : 0 }}
-                         className="min-h-[20px] text-xs font-semibold text-emerald-700 text-center transition-opacity">
-                        {statusMsg || 'Ready to share'}
-                    </div>
-                    <ProfileShareActionButtons {...props} />
-                </div>
-            </div>
+        <div data-testid="profile-share-toast" role="status" aria-live="polite"
+             style={{ visibility: visible ? 'visible' : 'hidden', opacity: visible ? 1 : 0 }}
+             className="fixed top-16 left-1/2 -translate-x-1/2 z-[95] pointer-events-none px-4 py-2 rounded-full bg-emerald-50 text-emerald-800 border border-emerald-300 shadow-xl text-xs font-semibold flex items-center gap-2 whitespace-nowrap max-w-[92vw] truncate transition-opacity duration-150">
+            <span className="text-emerald-600 shrink-0 inline-flex"><Icons.Check /></span>
+            <span className="truncate">{message || 'Ready'}</span>
         </div>
     );
 }

@@ -355,12 +355,14 @@ try {
         'formatShareNodeSubtitle', 'toMiniShareNode', 'resolveRealRelativeNodes',
         'extractImmediateFamilySnapshot', 'buildPersonShareUrl',
         'formatShareBioParenthetical', 'formatShareRelativesLine',
-        'buildWhatsAppShareCaption', 'buildWhatsAppDirectUrl',
+        'buildWhatsAppShareCaption',
         'computeMiniTreeCardLayout', 'addParentTierToMiniLayout', 'addChildTierToMiniLayout',
         'drawRoundedRectPath', 'truncateCanvasText', 'drawShareCardBackdrop',
         'drawShareCardLeafEmblem', 'drawShareCardHeroHeader', 'drawShareCardHeroPills',
         'drawShareCardLineageRows', 'drawMiniPersonNodeCard', 'drawMiniFamilyTreeDiagram',
-        'renderProfileShareCardCanvas', 'canBrowserNativeShareFiles'
+        'renderProfileShareCardCanvas', 'dataUrlToPngBlob', 'buildNativeSharePayload',
+        'canBrowserNativeShareFiles', 'copyTextToSystemClipboard', 'copyClipboardPngBlob',
+        'buildProfileShareBundle', 'executeFallbackProfileShare', 'executeDirectProfileShare'
     ].map(name => extractFunction(source, name))).join('\n');
 
     const [
@@ -438,8 +440,10 @@ try {
         formatShareNodeSubtitle, toMiniShareNode, resolveRealRelativeNodes,
         extractImmediateFamilySnapshot, buildPersonShareUrl,
         formatShareBioParenthetical, formatShareRelativesLine,
-        buildWhatsAppShareCaption, buildWhatsAppDirectUrl,
-        computeMiniTreeCardLayout, renderProfileShareCardCanvas, canBrowserNativeShareFiles
+        buildWhatsAppShareCaption,
+        computeMiniTreeCardLayout, renderProfileShareCardCanvas,
+        dataUrlToPngBlob, buildNativeSharePayload, canBrowserNativeShareFiles,
+        buildProfileShareBundle, executeDirectProfileShare
     ] = new Function(`
         // Isolated cookie jar + localStorage + documentElement: preference & theme tests must never
         // touch the real browser state, and Stage 3 runs in node where neither exists. Every other
@@ -657,8 +661,10 @@ try {
         formatShareNodeSubtitle, toMiniShareNode, resolveRealRelativeNodes,
         extractImmediateFamilySnapshot, buildPersonShareUrl,
         formatShareBioParenthetical, formatShareRelativesLine,
-        buildWhatsAppShareCaption, buildWhatsAppDirectUrl,
-        computeMiniTreeCardLayout, renderProfileShareCardCanvas, canBrowserNativeShareFiles
+        buildWhatsAppShareCaption,
+        computeMiniTreeCardLayout, renderProfileShareCardCanvas,
+        dataUrlToPngBlob, buildNativeSharePayload, canBrowserNativeShareFiles,
+        buildProfileShareBundle, executeDirectProfileShare
         ];
     `)();
 
@@ -16415,17 +16421,15 @@ const m3 = tree.all.find(n => n.id === '3');
                 ].join('|'),
                 'true|true|true|0.8');
 
-            // 223.03: Formatted WhatsApp caption & direct api.whatsapp.com URL
+            // 223.03: Formatted WhatsApp caption (headline + immediate relatives + final clickable link)
             const caption = buildWhatsAppShareCaption(snap, customShareUrl);
             const captionLines = caption.split('\n');
-            const waUrl = buildWhatsAppDirectUrl(caption);
-            assert('Test 223.03: buildWhatsAppShareCaption & buildWhatsAppDirectUrl format bold profile headline, immediate family summary, and final clickable link',
+            assert('Test 223.03: buildWhatsAppShareCaption formats bold profile headline, immediate family summary, and final clickable link',
                 captionLines.length === 3 &&
                 captionLines[0].startsWith('🌳 *Anto* (b. 1955 · ') &&
                 captionLines[0].includes('Banker · Chelakkara)') &&
                 captionLines[1] === 'Parents: Chacko & Regina · Partner: Beena · Children: Rupak, Innez' &&
-                captionLines[2] === customShareUrl &&
-                waUrl === `https://api.whatsapp.com/send?text=${encodeURIComponent(caption)}`);
+                captionLines[2] === customShareUrl);
 
             // 223.04: Mini-tree layout geometry across 1-gen, 2-gen, and 3-gen + overflow children (zero card overlaps)
             const diagramBox = { x: 572, y: 48, width: 572, height: 534 };
@@ -16468,7 +16472,7 @@ const m3 = tree.all.find(n => n.id === '3');
                 ].join('|'),
                 '1|0|8|false|false|+2 more children');
 
-            // 223.05: 1200x630 Canvas rendering & native file-share probe safety
+            // 223.05: 1200x630 synchronous share bundle & direct native/fallback payload assembly (zero modal dialog)
             const drawnLabels = [];
             const origCreateElement = globalThis.document.createElement;
             const probeEl = origCreateElement.call(globalThis.document, 'canvas');
@@ -16490,22 +16494,39 @@ const m3 = tree.all.find(n => n.id === '3');
                     return {
                         width: 0, height: 0,
                         getContext: (kind) => (kind === '2d' ? ctx2d : null),
-                        toDataURL: () => 'data:image/png;base64,MOCKPNG'
+                        toDataURL: () => 'data:image/png;base64,TU9DS1BORw=='
                     };
                 };
             }
             let renderedCanvas = null;
             let dataUrl = '';
+            let shareBundle = null;
             try {
                 renderedCanvas = renderProfileShareCardCanvas(snap);
                 dataUrl = renderedCanvas ? renderedCanvas.toDataURL('image/png') : '';
+                shareBundle = buildProfileShareBundle({
+                    person: anto,
+                    tree: tree223,
+                    sheetUrl: `https://docs.google.com/spreadsheets/d/${customSheetId}/edit`,
+                    locationObj: locMock
+                });
             } finally {
                 if (needsMockCanvas) globalThis.document.createElement = origCreateElement;
             }
             const labelsCheck = needsMockCanvas
                 ? (drawnLabels.includes('Anto') && drawnLabels.includes('Beena') && drawnLabels.includes('Rupak') && drawnLabels.includes('Chacko & Regina'))
                 : dataUrl.startsWith('data:image/png;base64,');
-            assertEqual('Test 223.05: renderProfileShareCardCanvas produces a 1200x630 PNG share card with immediate-family nodes and safe null/probe fallbacks',
+            const decodedMockBlob = dataUrlToPngBlob('data:image/png;base64,TU9DS1BORw==');
+            const mockFile = { name: 'Anto_Family_Tree.png', type: 'image/png' };
+            const fullNativePayload = buildNativeSharePayload(mockFile, 'Anto — Family Tree', caption, {
+                share: () => Promise.resolve(),
+                canShare: () => true
+            });
+            const noTitleNativePayload = buildNativeSharePayload(mockFile, 'Anto — Family Tree', caption, {
+                share: () => Promise.resolve(),
+                canShare: (p) => !('title' in p)
+            });
+            assertEqual('Test 223.05: renderProfileShareCardCanvas, dataUrlToPngBlob, buildProfileShareBundle, and buildNativeSharePayload assemble synchronous 1-click share payloads without a modal',
                 [
                     SHARE_CARD_WIDTH,
                     SHARE_CARD_HEIGHT,
@@ -16514,9 +16535,19 @@ const m3 = tree.all.find(n => n.id === '3');
                     renderedCanvas?.height,
                     labelsCheck,
                     renderProfileShareCardCanvas(null) === null,
-                    canBrowserNativeShareFiles(null)
+                    canBrowserNativeShareFiles(null),
+                    decodedMockBlob?.type,
+                    decodedMockBlob?.size,
+                    dataUrlToPngBlob('') === null,
+                    shareBundle?.fileName,
+                    shareBundle?.title,
+                    shareBundle?.shareUrl === customShareUrl,
+                    Boolean(shareBundle?.pngBlob && shareBundle.pngBlob.size > 0),
+                    fullNativePayload?.title === 'Anto — Family Tree' && fullNativePayload?.text === caption,
+                    noTitleNativePayload && !('title' in noTitleNativePayload) && noTitleNativePayload.text === caption,
+                    buildNativeSharePayload(mockFile, 'Anto', caption, null) === null
                 ].join('|'),
-                '1200|630|https://google.github.io|1200|630|true|true|false');
+                '1200|630|https://google.github.io|1200|630|true|true|false|image/png|7|true|Anto_Family_Tree.png|Anto — Family Tree|true|true|true|true|true');
         } catch (e) {
             assertEqual('Test 223 execution failed', e.message, '');
         }

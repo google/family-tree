@@ -495,7 +495,7 @@ function dispatchRadialFabAction(actionId, { core, layoutExp, clearAllStoredData
  * @example
  * const { homeButtonProps, settingsPanelProps, settingsFabProps } = buildShellProps(core, viewport, focusNav, layoutExp, applyDraft);
  */
-function buildShellProps(core, viewport, focusNav, layoutExp, applyDemographicSettingsDraft, shareModalProps = {}) {
+function buildShellProps(core, viewport, focusNav, layoutExp, applyDemographicSettingsDraft, shareToastMessage = '') {
     const openSheet = (url) => {
         core.setIsHomeOpen(false);
         focusNav.handleImport(url);
@@ -505,7 +505,7 @@ function buildShellProps(core, viewport, focusNav, layoutExp, applyDemographicSe
         core.setThemeId(DEFAULT_COLOR_THEME_ID);
     };
     return {
-        isHomeOpen: core.isHomeOpen, shareModalProps,
+        isHomeOpen: core.isHomeOpen, shareToastMessage,
         homeButtonProps: { onClick: () => core.setIsHomeOpen(true) },
         homeScreenProps: {
             isOpen: core.isHomeOpen, hasTree: Boolean(core.tree.rootId), isLoading: core.isLoading,
@@ -595,8 +595,8 @@ function useAppViewModel() {
         topNavProps: buildTopNavProps(core, viewport, focusNav, layoutExp),
         zoomProps: buildZoomProps(core, viewport),
         viewportProps: buildViewportProps(core, viewport, focusNav, layoutExp),
-        sidebarProps: buildSidebarProps(core, viewport, focusNav, profileShare.openShareForPerson),
-        shellProps: buildShellProps(core, viewport, focusNav, layoutExp, applyDemographicSettingsDraft, profileShare)
+        sidebarProps: buildSidebarProps(core, viewport, focusNav, profileShare.sharePerson),
+        shellProps: buildShellProps(core, viewport, focusNav, layoutExp, applyDemographicSettingsDraft, profileShare.toastMessage)
     };
 }
 
@@ -649,7 +649,7 @@ const AppRootView = ({ topNavProps, zoomProps, viewportProps, sidebarProps, shel
         <PersonSidebar {...sidebarProps} />
         <AppSettingsPanel {...shellProps.settingsPanelProps} />
         <SheetSourceHomeScreen {...shellProps.homeScreenProps} />
-        <ProfileShareModal {...shellProps.shareModalProps} />
+        <ProfileShareToast message={shellProps.shareToastMessage} />
         <SettingsRadialFab {...shellProps.settingsFabProps} />
     </div>
 );
