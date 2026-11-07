@@ -324,7 +324,10 @@ function buildSheetTreeLogItems(lines) {
             time: new Date().toLocaleTimeString([], { hour12: false }),
             msg: _renderSheetLogStatusMessage(sheetLink, item),
             type: item.status === 'loading' ? 'info' : item.status,
-            prefix: item.prefix
+            prefix: item.prefix,
+            sheetStatus: item.status,
+            sheetCount: item.count || 0,
+            sheetTag: item.tag
         };
     });
 }
@@ -1079,6 +1082,48 @@ function computeDataFingerprint(rows) {
 }
 
 /**
+ * Consumes an in-flight root CSV prefetch started in `index.html` (`window.__FT_CSV_PREFETCH__`)
+ * so the parallel network head-start overlaps with script loading without issuing duplicate requests.
+ *
+ * @param {string} url - Exact Google Sheet export/gviz URL
+ * @param {string} sheetId - Google Sheets document ID
+ * @param {string} [sheetName=''] - Tab name (`''` for default tab)
+ * @param {Object|null} [prefetchStore=typeof window !== 'undefined' ? window.__FT_CSV_PREFETCH__ : null] - Prefetch map
+ * @returns {Promise<string|null>} Prefetched CSV text when valid, else `null`
+ *
+ * @example
+ * await consumePrefetchedCsv('https://docs.google.com/.../export?format=csv', '1abc', '', {});
+ * // => null
+ *
+ * @example
+ * const store = { u: Promise.resolve({ ok: true, contentDisposition: null, text: 'Name,Gender\nA,M' }) };
+ * await consumePrefetchedCsv('u', '1abc', '', store);
+ * // => 'Name,Gender\nA,M'
+ */
+async function consumePrefetchedCsv(
+    url,
+    sheetId,
+    sheetName = '',
+    prefetchStore = (typeof window !== 'undefined' ? window.__FT_CSV_PREFETCH__ : null)
+) {
+    if (!prefetchStore || !prefetchStore[url]) return null;
+    const pending = prefetchStore[url];
+    delete prefetchStore[url];
+    try {
+        const pre = await pending;
+        if (!pre || !pre.ok || !pre.text || pre.text.trim().startsWith('<html')) return null;
+        if (!sheetName && pre.contentDisposition) {
+            rememberSheetTitleFromResponse(sheetId, {
+                headers: { get: (k) => (k && k.toLowerCase() === 'content-disposition' ? pre.contentDisposition : null) }
+            });
+        }
+        return pre.text;
+    } catch (err) {
+        return null;
+    }
+}
+
+/**
  * Fetches CSV text for a specific Google Sheet tab with timeout and fallback to GViz.
  *
  * @param {string} sheetId - Google Sheets document ID
@@ -1094,9 +1139,13 @@ function computeDataFingerprint(rows) {
  * const defaultCsv = await fetchCSVData('1abc...', '', 8000, true);
  */
 async function fetchCSVData(sheetId, sheetName = '', timeoutMs = 8000, bypassCache = false) {
+    const url = buildGoogleSheetCsvUrl(sheetId, sheetName, bypassCache);
+    if (!bypassCache) {
+        const prefetched = await consumePrefetchedCsv(url, sheetId, sheetName);
+        if (prefetched) return prefetched;
+    }
     const controller = new AbortController();
     const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
-    const url = buildGoogleSheetCsvUrl(sheetId, sheetName, bypassCache);
     try {
         const fetchOptions = { signal: controller.signal };
         if (bypassCache) {
@@ -1360,7 +1409,7 @@ function loadTreeFromCache(sheetUrl, appendLog) {
             const cachedBuilder = new FamilyTreeBuilder(cached.rows, cached.sheetTags || {});
             const cachedTree = cachedBuilder.build();
             const cacheDurationMs = Math.round(performance.now() - tCacheStart);
-            appendLog(<span>⚡ Loaded <b>{cached.rows.length} profiles</b> instantly from cache in <b>{cacheDurationMs}ms</b>. Synchronizing live data in background...</span>, 'info');
+            appendLog(<span>⚡ Loaded <b>{cached.rows.length} profiles</b> instantly from cache in <b>{cacheDurationMs}ms</b>. Synchronizing live data in background...</span>, 'info', 'cache-hydrated');
             return cachedTree;
         } catch (e) {
             console.log("Cached tree build failed:", e);
@@ -1465,7 +1514,7 @@ function handleSheetNodeResults({
 }) {
     node.count = res.extractedCount;
     node.status = res.extractedCount > 0 ? 'success' : 'warning';
-    if (!background && !hasLoadedFromCache && isRoot && allRows.length > 0 && onPreliminaryRoot) {
+    if (!background && !hasLoadedFromCache && (isRoot || res.extractedCount > 0) && allRows.length > 0 && onPreliminaryRoot) {
         onPreliminaryRoot(allRows);
     }
     registerUnvisitedSheetLinks(res.links, visited, sheetTags, node);

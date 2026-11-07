@@ -2254,20 +2254,6 @@ class ScriptLoader {
  * // => [{ data: ['A', 'B'], sheetRow: 1 }, { data: ['C', 'D'], sheetRow: 2 }]
  */
 class CSVParser {
-    static {
-        if (typeof window !== 'undefined' && !window.appCode) {
-            try {
-                const xhr = new XMLHttpRequest();
-                xhr.open('GET', 'App.jsx?t=' + Date.now(), false);
-                xhr.send(null);
-                if (xhr.status === 200 || xhr.status === 0) {
-                    window.appCode = xhr.responseText;
-                    globalThis.appCode = xhr.responseText;
-                }
-            } catch (e) {}
-        }
-    }
-
     static HEADER_WORDS = new Set([
         'name', 'nickname', 'nick', 'year', 'of', 'birth', 'age', 'death',
         'years', 'after', 'mother', 'mom', 'father', 'dad', 'family',
@@ -26317,7 +26303,10 @@ function buildSheetTreeLogItems(lines) {
             time: new Date().toLocaleTimeString([], { hour12: false }),
             msg: _renderSheetLogStatusMessage(sheetLink, item),
             type: item.status === 'loading' ? 'info' : item.status,
-            prefix: item.prefix
+            prefix: item.prefix,
+            sheetStatus: item.status,
+            sheetCount: item.count || 0,
+            sheetTag: item.tag
         };
     });
 }
@@ -27072,6 +27061,48 @@ function computeDataFingerprint(rows) {
 }
 
 /**
+ * Consumes an in-flight root CSV prefetch started in `index.html` (`window.__FT_CSV_PREFETCH__`)
+ * so the parallel network head-start overlaps with script loading without issuing duplicate requests.
+ *
+ * @param {string} url - Exact Google Sheet export/gviz URL
+ * @param {string} sheetId - Google Sheets document ID
+ * @param {string} [sheetName=''] - Tab name (`''` for default tab)
+ * @param {Object|null} [prefetchStore=typeof window !== 'undefined' ? window.__FT_CSV_PREFETCH__ : null] - Prefetch map
+ * @returns {Promise<string|null>} Prefetched CSV text when valid, else `null`
+ *
+ * @example
+ * await consumePrefetchedCsv('https://docs.google.com/.../export?format=csv', '1abc', '', {});
+ * // => null
+ *
+ * @example
+ * const store = { u: Promise.resolve({ ok: true, contentDisposition: null, text: 'Name,Gender\nA,M' }) };
+ * await consumePrefetchedCsv('u', '1abc', '', store);
+ * // => 'Name,Gender\nA,M'
+ */
+async function consumePrefetchedCsv(
+    url,
+    sheetId,
+    sheetName = '',
+    prefetchStore = (typeof window !== 'undefined' ? window.__FT_CSV_PREFETCH__ : null)
+) {
+    if (!prefetchStore || !prefetchStore[url]) return null;
+    const pending = prefetchStore[url];
+    delete prefetchStore[url];
+    try {
+        const pre = await pending;
+        if (!pre || !pre.ok || !pre.text || pre.text.trim().startsWith('<html')) return null;
+        if (!sheetName && pre.contentDisposition) {
+            rememberSheetTitleFromResponse(sheetId, {
+                headers: { get: (k) => (k && k.toLowerCase() === 'content-disposition' ? pre.contentDisposition : null) }
+            });
+        }
+        return pre.text;
+    } catch (err) {
+        return null;
+    }
+}
+
+/**
  * Fetches CSV text for a specific Google Sheet tab with timeout and fallback to GViz.
  *
  * @param {string} sheetId - Google Sheets document ID
@@ -27087,9 +27118,13 @@ function computeDataFingerprint(rows) {
  * const defaultCsv = await fetchCSVData('1abc...', '', 8000, true);
  */
 async function fetchCSVData(sheetId, sheetName = '', timeoutMs = 8000, bypassCache = false) {
+    const url = buildGoogleSheetCsvUrl(sheetId, sheetName, bypassCache);
+    if (!bypassCache) {
+        const prefetched = await consumePrefetchedCsv(url, sheetId, sheetName);
+        if (prefetched) return prefetched;
+    }
     const controller = new AbortController();
     const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
-    const url = buildGoogleSheetCsvUrl(sheetId, sheetName, bypassCache);
     try {
         const fetchOptions = { signal: controller.signal };
         if (bypassCache) {
@@ -27353,7 +27388,7 @@ function loadTreeFromCache(sheetUrl, appendLog) {
             const cachedBuilder = new FamilyTreeBuilder(cached.rows, cached.sheetTags || {});
             const cachedTree = cachedBuilder.build();
             const cacheDurationMs = Math.round(performance.now() - tCacheStart);
-            appendLog(<span>⚡ Loaded <b>{cached.rows.length} profiles</b> instantly from cache in <b>{cacheDurationMs}ms</b>. Synchronizing live data in background...</span>, 'info');
+            appendLog(<span>⚡ Loaded <b>{cached.rows.length} profiles</b> instantly from cache in <b>{cacheDurationMs}ms</b>. Synchronizing live data in background...</span>, 'info', 'cache-hydrated');
             return cachedTree;
         } catch (e) {
             console.log("Cached tree build failed:", e);
@@ -27458,7 +27493,7 @@ function handleSheetNodeResults({
 }) {
     node.count = res.extractedCount;
     node.status = res.extractedCount > 0 ? 'success' : 'warning';
-    if (!background && !hasLoadedFromCache && isRoot && allRows.length > 0 && onPreliminaryRoot) {
+    if (!background && !hasLoadedFromCache && (isRoot || res.extractedCount > 0) && allRows.length > 0 && onPreliminaryRoot) {
         onPreliminaryRoot(allRows);
     }
     registerUnvisitedSheetLinks(res.links, visited, sheetTags, node);
@@ -27641,6 +27676,56 @@ function applyConstructedTree({
 }
 
 /**
+ * Creates a throttled progressive tree updater that renders the first incoming sheet immediately
+ * and coalesces subsequent linked-sheet arrivals so users can browse partial branches smoothly.
+ *
+ * @param {Object} sheetTags - Live map from sheet ID to display tag
+ * @param {Function} setTree - Active tree state setter
+ * @param {number} [minIntervalMs=220] - Minimum interval between partial rebuilds after the first paint
+ * @returns {{ pushRows: Function, cancel: Function }} Progressive update controller
+ *
+ * @example
+ * const updater = createProgressiveTreeUpdater({ s1: 'Root sheet' }, setTree, 220);
+ * updater.pushRows([{ Name: 'Thomas', 'Year of Birth': '1920', _sourceId: 's1', _sheetRow: 2 }]);
+ * updater.cancel();
+ *
+ * @example
+ * const updater = createProgressiveTreeUpdater({}, () => {}, 0);
+ * updater.cancel();
+ */
+function createProgressiveTreeUpdater(sheetTags, setTree, minIntervalMs = 220) {
+    let hasPaintedFirst = false;
+    let lastPaintTime = 0;
+    let pendingTimer = null;
+    let latestRows = null;
+    const flush = (rows) => {
+        if (!rows || rows.length === 0) return;
+        const snapshot = [...rows];
+        sortSpreadsheetRows(snapshot);
+        lastPaintTime = Date.now();
+        hasPaintedFirst = true;
+        renderPreliminaryRootTree(snapshot, sheetTags, setTree);
+    };
+    const cancel = () => {
+        if (pendingTimer !== null) { clearTimeout(pendingTimer); pendingTimer = null; }
+        latestRows = null;
+    };
+    const pushRows = (rows) => {
+        latestRows = rows;
+        const elapsed = Date.now() - lastPaintTime;
+        if (!hasPaintedFirst || minIntervalMs <= 0 || elapsed >= minIntervalMs) {
+            cancel();
+            flush(rows);
+            return;
+        }
+        if (pendingTimer === null) {
+            pendingTimer = setTimeout(() => { pendingTimer = null; flush(latestRows); }, minIntervalMs - elapsed);
+        }
+    };
+    return { pushRows, cancel };
+}
+
+/**
  * Coordinates recursive discovery and parallel crawling of linked spreadsheet trees,
  * reporting real-time hierarchical progress into the audit logs.
  *
@@ -27679,6 +27764,7 @@ async function executeSpreadsheetCrawl({
     const visited = new Set();
     const sheetTags = { [startId]: 'Root sheet' };
     const rootTreeNode = { id: startId, tag: 'Root sheet', status: 'loading', count: 0, children: [] };
+    const progressiveUpdater = createProgressiveTreeUpdater(sheetTags, setTree);
 
     const refreshTreeInLogs = () => {
         if (background) return;
@@ -27686,12 +27772,16 @@ async function executeSpreadsheetCrawl({
         setLogs(prev => mergeTreeLogEntries(prev, buildSheetTreeLogItems(lines)));
     };
 
-    const allRows = await crawlLinkedSpreadsheets({
-        rootTreeNode, visited, sheetTags, skipCache, background, hasLoadedFromCache,
-        onPreliminaryRoot: (rootRows) => renderPreliminaryRootTree(rootRows, sheetTags, setTree),
-        onRefreshTreeInLogs: refreshTreeInLogs
-    });
-    return { allRows, visited, sheetTags };
+    try {
+        const allRows = await crawlLinkedSpreadsheets({
+            rootTreeNode, visited, sheetTags, skipCache, background, hasLoadedFromCache,
+            onPreliminaryRoot: (rows) => progressiveUpdater.pushRows(rows),
+            onRefreshTreeInLogs: refreshTreeInLogs
+        });
+        return { allRows, visited, sheetTags };
+    } finally {
+        progressiveUpdater.cancel();
+    }
 }
 
 /**
@@ -44572,26 +44662,142 @@ const TopNavigationInactiveToolbar = ({
 };
 
 /**
- * Large brand emblem and "Family Tree" title displayed in the empty tree area while loading
- * (when the activity log drawer is open), and removed once loading completes.
+ * Counts real genealogical profiles in a tree model (excluding synthetic sibling-holder ghost parents).
  *
+ * @param {FamilyTree|null} tree - Family tree instance
+ * @returns {number} Count of non-synthetic profiles
+ *
+ * @example
+ * countRealTreeProfiles(new FamilyTree());
+ * // => 0
+ *
+ * @example
+ * countRealTreeProfiles(new FamilyTree({ p1: { id: 'p1', name: 'Anto' } }, 'p1'));
+ * // => 1
+ */
+function countRealTreeProfiles(tree) {
+    if (!tree || !Array.isArray(tree.all)) return 0;
+    return tree.all.filter(p => !FamilyTree.isSyntheticSiblingParent(p)).length;
+}
+
+/**
+ * Summarizes live Google Sheets crawl progress into friendly splash and partial-tree status copy.
+ *
+ * @param {Object} [params={}] - Progress inputs
+ * @param {Array<Object>} [params.logs=[]] - Activity log entries (including `sheetStatus` items)
+ * @param {string} [params.sheetUrl=''] - Active Google Sheet URL or ID
+ * @param {number} [params.loadedProfileCount=0] - Number of profiles currently rendered on canvas
+ * @returns {{
+ *   primaryText: string,
+ *   detailText: string,
+ *   bannerText: string,
+ *   completedSheets: number,
+ *   totalSheets: number,
+ *   fetchedRows: number,
+ *   fromCache: boolean,
+ *   sheetTitle: string
+ * }}
+ *
+ * @example
+ * summarizeTreeLoadingProgress({ logs: [], sheetUrl: '' }).primaryText;
+ * // => 'Please wait for the family tree to load...'
+ *
+ * @example
+ * summarizeTreeLoadingProgress({
+ *   logs: [{ id: 's1', sheetStatus: 'success', sheetCount: 84 }, { id: 's2', sheetStatus: 'loading', sheetCount: 0 }],
+ *   loadedProfileCount: 84
+ * }).completedSheets;
+ * // => 1
+ */
+function summarizeTreeLoadingProgress({ logs = [], sheetUrl = '', loadedProfileCount = 0 } = {}) {
+    const safeLogs = Array.isArray(logs) ? logs : [];
+    const sheetEntries = safeLogs.filter(entry => Boolean(entry && entry.sheetStatus));
+    const totalSheets = sheetEntries.length;
+    const completedSheets = sheetEntries.filter(entry => entry.sheetStatus !== 'loading').length;
+    const fetchedRows = sheetEntries.reduce((sum, entry) => sum + (Number(entry.sheetCount) || 0), 0);
+    const fromCache = safeLogs.some(entry => Boolean(entry && entry.id === 'cache-hydrated'));
+    const sheetTitle = sheetUrl ? resolveKnownSheetTitle(sheetUrl) : '';
+    const shownCount = loadedProfileCount || fetchedRows;
+    const detailText = (fetchedRows > 0 && totalSheets > 1)
+        ? `Reading linked family sheets (${completedSheets} of ${totalSheets}) · ${fetchedRows} profiles found…`
+        : fetchedRows > 0
+            ? `Building family tree from ${fetchedRows} profiles…`
+            : sheetTitle
+                ? `Connecting to "${sheetTitle}" on Google Sheets…`
+                : 'Connecting to Google Sheets…';
+    const bannerText = fromCache
+        ? (shownCount > 0 ? `Showing saved tree (${shownCount} profiles) · Checking Google Sheets for updates…` : 'Showing saved tree · Checking Google Sheets for updates…')
+        : totalSheets > 1
+            ? `Loading linked family sheets (${completedSheets} of ${totalSheets}) · ${shownCount} profiles shown so far — please wait…`
+            : `Loading family tree (${shownCount} profiles shown so far) — please wait…`;
+    return {
+        primaryText: 'Please wait for the family tree to load...',
+        detailText, bannerText, completedSheets, totalSheets, fetchedRows, fromCache, sheetTitle
+    };
+}
+
+/**
+ * Large brand emblem and "Family Tree" title displayed in the empty tree area while the initial
+ * spreadsheet is still arriving, showing explicit reassurance and live sheet progress.
+ *
+ * @param {Object} [props={}]
+ * @param {Array<Object>} [props.logs=[]] - Live crawl log items
+ * @param {string} [props.sheetUrl=''] - Sheet URL being loaded
  * @returns {React.ReactNode}
  *
  * @example
  * <TreeLoadingBrandSplash />
  *
  * @example
- * {isLoading && <TreeLoadingBrandSplash />}
+ * <TreeLoadingBrandSplash logs={logs} sheetUrl={sheetUrl} />
  */
-const TreeLoadingBrandSplash = () => (
-    <div data-testid="tree-loading-brand-splash" className="w-full h-full flex flex-col items-center justify-center gap-5 select-none pointer-events-none relative z-10 px-6">
-        <div className="flex items-center justify-center gap-5 bg-white/85 backdrop-blur-xl px-8 py-6 rounded-3xl shadow-[0_0_40px_rgba(92,124,51,0.16),0_0_12px_rgba(0,0,0,0.08)] border border-outline-variant/60">
-            <BrandLogo size={96} idPrefix="splash" className="w-[96px] h-[96px] shrink-0 drop-shadow-md" />
-            <h1 className="text-[44px] leading-none tracking-wide font-bold bg-clip-text text-transparent bg-gradient-to-r from-slate-700 via-primary to-inverse-primary opacity-90" style={{ fontFamily: "'Uncial Antiqua', serif" }}>Family Tree</h1>
+const TreeLoadingBrandSplash = ({ logs = [], sheetUrl = '' } = {}) => {
+    const { primaryText, detailText } = summarizeTreeLoadingProgress({ logs, sheetUrl, loadedProfileCount: 0 });
+    return (
+        <div data-testid="tree-loading-brand-splash" role="status" aria-live="polite" className="w-full h-full flex flex-col items-center justify-center gap-4 select-none pointer-events-none relative z-10 px-6 text-center">
+            <div className="flex flex-wrap items-center justify-center gap-4 sm:gap-5 bg-white/85 backdrop-blur-xl px-6 sm:px-8 py-5 sm:py-6 rounded-3xl shadow-[0_0_40px_rgba(92,124,51,0.16),0_0_12px_rgba(0,0,0,0.08)] border border-outline-variant/60 max-w-[92vw]">
+                <BrandLogo size={96} idPrefix="splash" className="w-[72px] h-[72px] sm:w-[96px] sm:h-[96px] shrink-0 drop-shadow-md" />
+                <h1 className="text-[36px] sm:text-[44px] leading-none tracking-wide font-bold bg-clip-text text-transparent bg-gradient-to-r from-slate-700 via-primary to-inverse-primary opacity-90" style={{ fontFamily: "'Uncial Antiqua', serif" }}>Family Tree</h1>
+            </div>
+            <div className="text-sm sm:text-base font-medium text-slate-600 font-sans tracking-wide">{primaryText}</div>
+            <div className="w-60 max-w-[72vw] h-1 rounded-full bg-slate-200 overflow-hidden">
+                <div className="h-full w-1/2 rounded-full bg-primary animate-pulse" />
+            </div>
+            <div className="text-xs text-slate-400 font-sans min-h-[18px]">{detailText}</div>
         </div>
-        <div className="text-sm text-slate-400 font-sans tracking-wide animate-pulse">Fetching and building tree...</div>
-    </div>
-);
+    );
+};
+
+/**
+ * Compact non-blocking progress banner shown at the top of the tree canvas while a partial or
+ * cached tree is already interactive and remaining linked sheets are still streaming in.
+ *
+ * @param {Object} props
+ * @param {Array<Object>} [props.logs=[]] - Live crawl log items
+ * @param {string} [props.sheetUrl=''] - Sheet URL being loaded
+ * @param {number} [props.loadedProfileCount=0] - Number of profiles currently rendered on canvas
+ * @returns {React.ReactNode}
+ *
+ * @example
+ * <TreeLoadingProgressBanner logs={logs} sheetUrl={sheetUrl} loadedProfileCount={84} />
+ *
+ * @example
+ * <TreeLoadingProgressBanner loadedProfileCount={120} />
+ */
+const TreeLoadingProgressBanner = ({ logs = [], sheetUrl = '', loadedProfileCount = 0 }) => {
+    const { bannerText } = summarizeTreeLoadingProgress({ logs, sheetUrl, loadedProfileCount });
+    return (
+        <div
+            data-testid="tree-loading-progress"
+            role="status"
+            aria-live="polite"
+            className="pointer-events-none absolute top-14 sm:top-4 left-1/2 -translate-x-1/2 z-20 max-w-[calc(100%-1.5rem)] flex items-center gap-2.5 bg-white/90 backdrop-blur-md px-3.5 py-1.5 rounded-full shadow-md border border-outline-variant/70 text-xs font-medium text-slate-700"
+        >
+            <span className="w-3.5 h-3.5 rounded-full border-2 border-primary/30 border-t-primary animate-spin shrink-0" aria-hidden="true" />
+            <span className="truncate">{bannerText}</span>
+        </div>
+    );
+};
 
 /**
  * Hook providing toggle action handlers for map and AI assistant in top navigation.
@@ -47051,8 +47257,11 @@ function executeBackgroundTreeTransition({
     setFocusId(prev => (prev && newTree.get(prev) ? prev : null));
 }
 
+const LIVE_SYNC_MIN_COOLDOWN_MS = 15000;
+
 /**
- * Executes a silent background fetch cycle if no other sync is currently in progress.
+ * Executes a silent background fetch cycle if no other sync is currently in progress
+ * and at least `LIVE_SYNC_MIN_COOLDOWN_MS` has elapsed since the previous foreground or background sync.
  *
  * @param {Object} options
  * @param {Function} options.fetchFromUrl - Network fetch dispatcher
@@ -47060,6 +47269,7 @@ function executeBackgroundTreeTransition({
  * @param {Function} options.onBackgroundUpdate - Handler for updated tree models
  * @param {React.MutableRefObject<boolean>} options.isSyncingRef - Reentrancy lock ref
  * @param {boolean} options.isLoading - Whether a foreground load is currently active
+ * @param {React.MutableRefObject<number>} [options.lastSyncAtRef={ current: 0 }] - Timestamp of last completed sync
  * @returns {Promise<void>}
  *
  * @example
@@ -47080,8 +47290,11 @@ function executeBackgroundTreeTransition({
  *   isLoading: true
  * });
  */
-async function performLiveSyncFetch({ fetchFromUrl, sheetUrl, onBackgroundUpdate, isSyncingRef, isLoading }) {
+async function performLiveSyncFetch({
+    fetchFromUrl, sheetUrl, onBackgroundUpdate, isSyncingRef, isLoading, lastSyncAtRef = { current: 0 }
+}) {
     if (isSyncingRef.current || isLoading || !sheetUrl) return;
+    if (Date.now() - (lastSyncAtRef.current || 0) < LIVE_SYNC_MIN_COOLDOWN_MS) return;
     isSyncingRef.current = true;
     try {
         await fetchFromUrl(sheetUrl, { 
@@ -47089,6 +47302,7 @@ async function performLiveSyncFetch({ fetchFromUrl, sheetUrl, onBackgroundUpdate
             skipCache: true, 
             onBackgroundUpdate 
         });
+        lastSyncAtRef.current = Date.now();
     } catch (err) {
         console.log('[LiveSync] Silent background check note:', err);
     } finally {
@@ -47137,6 +47351,10 @@ function useLiveSync({
     getPpy, siblingGap, setIsShifting, sheetUrl, isLoading, fetchFromUrl
 }) {
     const isSyncingRef = useRef(false);
+    const lastSyncAtRef = useRef(Date.now());
+    useEffect(() => {
+        if (!isLoading) lastSyncAtRef.current = Date.now();
+    }, [isLoading]);
     const liveParamsRef = useRef();
     liveParamsRef.current = {
         tree, layoutConfig, camera, containerEl: containerRef ? containerRef.current : null,
@@ -47157,7 +47375,7 @@ function useLiveSync({
     const triggerBackgroundSync = useCallback(async () => {
         await performLiveSyncFetch({
             fetchFromUrl, sheetUrl, onBackgroundUpdate: applyBackgroundTreeUpdate,
-            isSyncingRef, isLoading
+            isSyncingRef, isLoading, lastSyncAtRef
         });
     }, [isLoading, sheetUrl, fetchFromUrl, applyBackgroundTreeUpdate]);
 
@@ -48353,24 +48571,97 @@ function useGlobalFocusPersonListener(onFocusPerson) {
 }
 
 /**
- * Automatically fits the tree to the screen upon initial tree load and keeps camera
+/**
+ * Resolves the person card and readable zoom level to frame as soon as partial or initial tree
+ * nodes mount: honors any `#hash` focus/anchor person already present in `tree` (so deep links
+ * preview the requested relative immediately without camera whip), falling back to `tree.rootId`
+ * at `0.70` zoom instead of zooming out to microscopic dots on large multi-sheet trees.
+ *
+ * @param {FamilyTree|null} tree - Current partial or complete tree model
+ * @param {string} [initialHash=resolveInitialViewStateHash()] - Initial URL/stored view-state hash
+ * @returns {{ personId: string, zoom: number }|null} Target person and zoom, or `null` when empty
+ *
+ * @example
+ * resolveInitialPreviewTarget(new FamilyTree(), '');
+ * // => null
+ *
+ * @example
+ * resolveInitialPreviewTarget(new FamilyTree({ r1: { id: 'r1', name: 'Root' } }, 'r1'), '');
+ * // => { personId: 'r1', zoom: 0.7 }
+ */
+function resolveInitialPreviewTarget(tree, initialHash = resolveInitialViewStateHash()) {
+    if (!tree || !tree.rootId) return null;
+    const state = parseViewStateHash(initialHash);
+    const wantedRef = state && !state.showMap ? (state.focusId || state.anchorId) : null;
+    const resolvedTarget = wantedRef ? resolveViewStatePersonId(tree, wantedRef) : null;
+    const zoom = (resolvedTarget && Number.isFinite(state.zoom) && state.zoom > 0) ? state.zoom : 0.70;
+    return { personId: resolvedTarget || tree.rootId, zoom };
+}
+
+/**
+ * Decides whether `applyImportSuccessFocus` should center `newRootId` after import completes.
+ * Returns `false` when an initial `#hash` (or saved view state) already targets a person, anchor,
+ * filter, or map view so `useUrlViewStateRestore` frames the target directly without a camera whip.
+ *
+ * @param {string} [initialHash=resolveInitialViewStateHash()] - Initial URL/stored view-state hash
+ * @returns {boolean} `true` when import completion should center `newRootId`
+ *
+ * @example
+ * shouldCenterRootAfterImport('');
+ * // => true
+ *
+ * @example
+ * shouldCenterRootAfterImport('#p=Anto_1955_166&z=0.8');
+ * // => false
+ */
+function shouldCenterRootAfterImport(initialHash = resolveInitialViewStateHash()) {
+    const state = parseViewStateHash(initialHash);
+    return !Boolean(state && (state.focusId || state.anchorId || state.showMap || state.activeFilter));
+}
+
+/**
+ * Decides whether the System Logs drawer should auto-open while spreadsheet data is loading.
+ * Enabled on desktop (where the side drawer leaves ~72% of the wide canvas visible) and disabled
+ * on compact mobile phones (`<= 639px`, where a `45vh` bottom sheet would cover half the portrait screen).
+ *
+ * @param {boolean} [isCompact=isCompactViewportWidth()] - Whether compact mobile layout is active
+ * @returns {boolean} `true` on desktop, `false` on compact viewports
+ *
+ * @example
+ * shouldAutoOpenLogsOnLoad(false);
+ * // => true
+ *
+ * @example
+ * shouldAutoOpenLogsOnLoad(true);
+ * // => false
+ */
+function shouldAutoOpenLogsOnLoad(isCompact = isCompactViewportWidth()) {
+    return !Boolean(isCompact);
+}
+
+/**
+ * Automatically frames a readable preview upon initial/partial tree load and keeps camera
  * framed or centered when the tree root changes (e.g., following re-rooting or import).
- * 
+ *
  * @param {Object} options
+ * @param {FamilyTree|null} [options.tree=null] - Active tree model used to resolve initial preview targets.
  * @param {React.RefObject} options.treeRef - Reference to the tree DOM container element.
  * @param {string|null} options.rootId - Currently active root person ID in the family tree.
  * @param {number} options.collapsedCount - Number of currently collapsed nodes.
  * @param {string|null} options.focusId - ID of currently focused person, if any.
+ * @param {boolean} [options.isLoading=false] - Whether progressive sheet loading is still in progress.
  * @param {Function} options.onFitToScreen - Callback to auto-fit tree in viewport.
  * @param {Function} options.onCenterPerson - Callback to center viewport on a specific person.
  * @returns {{ resetInitialFit: Function }}
- * 
+ *
  * @example
  *   const { resetInitialFit } = useTreeAutoFit({
+ *       tree,
  *       treeRef,
  *       rootId: tree.rootId,
  *       collapsedCount: collapsedNodes.size,
  *       focusId,
+ *       isLoading,
  *       onFitToScreen: handleFitToScreen,
  *       onCenterPerson: centerOnPerson
  *   });
@@ -48386,27 +48677,33 @@ function useGlobalFocusPersonListener(onFocusPerson) {
  *   });
  *   resetInitialFit();
  */
-function useTreeAutoFit({ treeRef, rootId, collapsedCount, focusId, onFitToScreen, onCenterPerson }) {
+function useTreeAutoFit({ tree = null, treeRef, rootId, collapsedCount, focusId, isLoading = false, onFitToScreen, onCenterPerson }) {
     const hasInitialFitDone = useRef(false);
+
+    const frameReadablePreview = useCallback(() => {
+        const preview = resolveInitialPreviewTarget(tree);
+        if (preview) onCenterPerson(preview.personId, preview.zoom);
+        else onFitToScreen();
+    }, [tree, onCenterPerson, onFitToScreen]);
 
     useLayoutEffect(() => {
         if (!hasInitialFitDone.current && treeRef.current && rootId && !collapsedCount && !focusId) {
             hasInitialFitDone.current = true;
-            onFitToScreen();
+            frameReadablePreview();
         }
-    }, [rootId, collapsedCount, focusId, onFitToScreen, treeRef]);
+    }, [rootId, collapsedCount, focusId, frameReadablePreview, treeRef]);
 
     const prevRootIdRef = useRef(rootId);
     useLayoutEffect(() => {
         if (prevRootIdRef.current !== rootId) {
+            const wasEmpty = !prevRootIdRef.current;
             prevRootIdRef.current = rootId;
-            if (focusId) {
-                onCenterPerson(focusId);
-            } else {
-                onFitToScreen();
-            }
+            if (!rootId) return;
+            if (focusId) onCenterPerson(focusId);
+            else if (wasEmpty || isLoading) frameReadablePreview();
+            else onFitToScreen();
         }
-    }, [rootId, focusId, onCenterPerson, onFitToScreen]);
+    }, [rootId, focusId, isLoading, onCenterPerson, onFitToScreen, frameReadablePreview]);
 
     const resetInitialFit = useCallback(() => {
         hasInitialFitDone.current = false;
@@ -48608,7 +48905,7 @@ function useAppPanels(isLoading) {
     const { isSidebarVisible, showLogs, setShowLogs, showAI, showMap, activeFilter, setIsSidebarVisible, setShowAI, setShowMap, setActiveFilter } = panelStates;
 
     useEffect(() => {
-        if (isLoading) {
+        if (isLoading && shouldAutoOpenLogsOnLoad()) {
             setShowLogs(true);
         }
     }, [isLoading, setShowLogs]);
@@ -48991,7 +49288,7 @@ function initiateImportUIState({
 }) {
     setSheetUrl(urlToLoad);
     resetInitialFit();
-    setShowLogs(true);
+    setShowLogs(shouldAutoOpenLogsOnLoad());
     setShowAI(false);
     setActiveFilter(null);
     resetNavHistory();
@@ -49025,7 +49322,9 @@ function applyImportSuccessFocus({
     centerOnPerson, setShowLogs
 }) {
     clearAllFocusSelection({ setFocusId, setActiveFilter, setIsSidebarVisible });
-    setTimeout(() => centerOnPerson(newRootId, 0.70), 200);
+    if (shouldCenterRootAfterImport()) {
+        setTimeout(() => centerOnPerson(newRootId, 0.70), 200);
+    }
     setTimeout(() => setShowLogs(false), 1500);
 }
 
@@ -49854,8 +50153,9 @@ function useTreeSearchState(openAiPanel) {
  * />
  */
 /**
- * Decides what the tree canvas displays: the large brand splash while loading (even if cached or
- * preliminary rows have already arrived), the import prompt when idle with no tree, or the tree.
+ * Decides what the tree canvas displays: renders `'tree'` immediately as soon as cached or
+ * preliminary partial nodes exist (so users can browse partial data while linked sheets finish
+ * loading), `'loading-splash'` only while `isLoading` with zero nodes yet, or `'empty-prompt'`.
  *
  * @param {FamilyTree|null} tree - Current tree model
  * @param {boolean} isLoading - Whether a foreground spreadsheet import is running
@@ -49866,22 +50166,23 @@ function useTreeSearchState(openAiPanel) {
  * // => 'loading-splash'
  *
  * @example
- * resolveCanvasDisplayMode(populatedTree, false);
+ * resolveCanvasDisplayMode(populatedTree, true);
  * // => 'tree'
  */
 function resolveCanvasDisplayMode(tree, isLoading) {
+    if (tree?.rootId && tree?.root) return 'tree';
     if (isLoading) return 'loading-splash';
-    if (!tree?.rootId || !tree?.root) return 'empty-prompt';
-    return 'tree';
+    return 'empty-prompt';
 }
 
 const TreeCanvasContent = ({
     tree, isStandalone, dynamicYears, treeStats, camera, ppy,
-    isDragging, isShifting, treeRef, layoutConfig, isLoading, timelineGutterWidth = 48
+    isDragging, isShifting, treeRef, layoutConfig, isLoading,
+    timelineGutterWidth = 48, logs = [], sheetUrl = ''
 }) => {
     const mode = resolveCanvasDisplayMode(tree, isLoading);
     if (mode === 'loading-splash') {
-        return <TreeLoadingBrandSplash />;
+        return <TreeLoadingBrandSplash logs={logs} sheetUrl={sheetUrl} />;
     }
 
     if (mode === 'empty-prompt') {
@@ -49894,6 +50195,13 @@ const TreeCanvasContent = ({
 
     return (
         <>
+            {isLoading && (
+                <TreeLoadingProgressBanner
+                    logs={logs}
+                    sheetUrl={sheetUrl}
+                    loadedProfileCount={countRealTreeProfiles(tree)}
+                />
+            )}
             {!isStandalone && <TimelineLabels dynamicYears={dynamicYears} rootNodeYob={treeStats.rootNodeYob} maxYear={treeStats.maxYear} camera={camera} ppy={ppy} gutterWidth={timelineGutterWidth} />}
             <TimelineGrid dynamicYears={dynamicYears} rootNodeYob={treeStats.rootNodeYob} camera={camera} ppy={ppy} isStandalone={isStandalone} gutterWidth={timelineGutterWidth} />
             {/* `--camera-z` lets zoom-independent hit areas (sibling bus-bars) size themselves in screen pixels. */}
@@ -50088,10 +50396,10 @@ const MainCanvasViewport = (props) => {
         handlePointerUp, handleWheel, tree, activeFilter, handleFilterBy,
         handleExportMapCSV, setShowMap, sidebarWidth, isAnySidebarOpen,
         isStandalone, dynamicYears, treeStats, camera, ppy, isShifting,
-        treeRef, layoutConfig, isLoading, timelineGutterWidth
+        treeRef, layoutConfig, isLoading, timelineGutterWidth, logs, sheetUrl
     } = props;
     const mapOverlayProps = { showMap, tree, activeFilter, handleFilterBy, handleExportMapCSV, setShowMap, sidebarWidth, isAnySidebarOpen };
-    const canvasContentProps = { tree, isStandalone, dynamicYears, treeStats, camera, ppy, isDragging, isShifting, treeRef, layoutConfig, isLoading, timelineGutterWidth };
+    const canvasContentProps = { tree, isStandalone, dynamicYears, treeStats, camera, ppy, isDragging, isShifting, treeRef, layoutConfig, isLoading, timelineGutterWidth, logs, sheetUrl };
 
     return (
         <div 
@@ -53822,8 +54130,8 @@ function useAppFocusAndNavigation(params) {
         stepHistory: params.stepHistory, handleSetFocusId
     });
     const { resetInitialFit } = useTreeAutoFit({
-        treeRef: params.treeRef, rootId: params.tree.rootId, collapsedCount: params.collapsedCount,
-        focusId: params.focusId, onFitToScreen: params.handleFitToScreen, onCenterPerson: params.centerOnPerson
+        tree: params.tree, treeRef: params.treeRef, rootId: params.tree.rootId, collapsedCount: params.collapsedCount,
+        focusId: params.focusId, isLoading: params.isLoading, onFitToScreen: params.handleFitToScreen, onCenterPerson: params.centerOnPerson
     });
     const handleImport = useTreeImportHandler({
         setSheetUrl: params.setSheetUrl, resetInitialFit, setShowLogs: params.setShowLogs,
@@ -53940,7 +54248,7 @@ function buildViewportProps(core, viewport, focusNav, layoutExp) {
         isStandalone: core.isStandalone, dynamicYears: viewport.dynamicYears, treeStats: core.treeStats,
         camera: viewport.camera, ppy: viewport.ppy, isShifting: viewport.isShifting,
         treeRef: viewport.treeRef, layoutConfig: layoutExp.layoutConfig, isLoading: core.isLoading,
-        timelineGutterWidth: core.timelineGutterWidth
+        timelineGutterWidth: core.timelineGutterWidth, logs: core.logs, sheetUrl: core.sheetUrl
     };
 }
 

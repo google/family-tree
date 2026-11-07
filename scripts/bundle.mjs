@@ -11,17 +11,24 @@
  *   node scripts/bundle.mjs --watch   # Watch src/ and auto-bundle on change
  */
 
+import crypto from 'crypto';
 import fs from 'fs';
+import { createRequire } from 'module';
 import path from 'path';
+
+const require = createRequire(import.meta.url);
 
 const SRC_DIR = 'src';
 const OUTPUT_FILE = 'App.jsx';
+const COMPILED_FILE = 'App.compiled.js';
 const INDEX_FILE = 'index.html';
 const THEME_MODULE_SUFFIX = '08_ColorThemes.jsx';
 const THEME_CONFIG_BEGIN = '<!-- FT_TAILWIND_THEME_CONFIG:BEGIN -->';
 const THEME_CONFIG_END = '<!-- FT_TAILWIND_THEME_CONFIG:END -->';
 const THEME_BOOT_BEGIN = '<!-- FT_THEME_BOOT:BEGIN -->';
 const THEME_BOOT_END = '<!-- FT_THEME_BOOT:END -->';
+const BUNDLE_VERSION_BEGIN = '<!-- FT_BUNDLE_VERSION:BEGIN -->';
+const BUNDLE_VERSION_END = '<!-- FT_BUNDLE_VERSION:END -->';
 
 // ANSI colors
 const GREEN = '\x1b[32m';
@@ -91,43 +98,110 @@ function stampScriptBetweenMarkers(html, begin, end, script) {
 }
 
 /**
- * Returns the index.html text with the theme config and boot scripts stamped between their
- * markers (unchanged when the markers are missing).
+ * Loads @babel/core and presets from either local node_modules or the system Node install.
+ *
+ * @returns {{ babel: any, presetReact: any, presetEnv: any }}
+ */
+function loadBabelCompiler() {
+    const resolvePkg = (pkg, systemFallback) => {
+        try {
+            return require(pkg);
+        } catch (_) {
+            return require(systemFallback);
+        }
+    };
+    return {
+        babel: resolvePkg('@babel/core', '/usr/share/nodejs/@babel/core'),
+        presetReact: resolvePkg('@babel/preset-react', '/usr/share/nodejs/@babel/preset-react'),
+        presetEnv: resolvePkg('@babel/preset-env', '/usr/share/nodejs/@babel/preset-env')
+    };
+}
+
+/**
+ * Ensures `App.compiled.js` matches the current `bundledCode` SHA-256 fingerprint, avoiding
+ * expensive re-transpilation on no-op runs while guaranteeing zero in-browser Babel overhead.
+ *
+ * @param {string} bundledCode - Concatenated JSX bundle source.
+ * @param {{ silent: boolean, checkOnly: boolean }} options
+ * @returns {{ success: boolean, changed: boolean, bundleVersion: string }}
+ */
+function syncCompiledBundle(bundledCode, { silent, checkOnly }) {
+    const srcHash = crypto.createHash('sha256').update(bundledCode).digest('hex').slice(0, 12);
+    const headerPrefix = `/* FT-SRC-SHA256: ${srcHash} */`;
+    if (fs.existsSync(COMPILED_FILE)) {
+        const existingCompiled = fs.readFileSync(COMPILED_FILE, 'utf8');
+        if (existingCompiled.startsWith(headerPrefix)) {
+            const bundleVersion = crypto.createHash('sha256').update(existingCompiled).digest('hex').slice(0, 8);
+            return { success: true, changed: false, bundleVersion };
+        }
+    }
+    if (checkOnly) {
+        if (!silent) console.error(`${RED}${BOLD}OUT OF SYNC:${RESET} ${COMPILED_FILE} does not match ${SRC_DIR}/.`);
+        return { success: false, changed: true, bundleVersion: srcHash.slice(0, 8) };
+    }
+    const compileStart = Date.now();
+    const { babel, presetReact, presetEnv } = loadBabelCompiler();
+    const transformed = babel.transformSync(bundledCode, {
+        presets: [[presetReact], [presetEnv, { targets: { chrome: '90', safari: '15', firefox: '90', edge: '90' } }]],
+        filename: OUTPUT_FILE,
+        compact: true,
+        comments: false
+    }).code;
+    const compiledOutput = `${headerPrefix}\n${transformed}\n`;
+    fs.writeFileSync(COMPILED_FILE, compiledOutput, 'utf8');
+    const bundleVersion = crypto.createHash('sha256').update(compiledOutput).digest('hex').slice(0, 8);
+    if (!silent) {
+        const kb = (Buffer.byteLength(compiledOutput, 'utf8') / 1024).toFixed(1);
+        console.log(`${GREEN}✓${RESET} Pre-compiled ${BOLD}${COMPILED_FILE}${RESET} (${kb} KB, v=${bundleVersion}) in ${Date.now() - compileStart}ms.`);
+    }
+    return { success: true, changed: true, bundleVersion };
+}
+
+/**
+ * Returns the index.html text with the theme config, boot script, and optional bundle version
+ * stamped between their markers (unchanged when the markers are missing).
  *
  * @param {string} html - Current index.html content.
- * @param {{ config: string, boot: string }} scripts - Script bodies from buildThemeScripts().
+ * @param {{ config: string, boot: string, bundleVersion?: string }} scripts - Script bodies.
  * @returns {string}
  */
 export function stampThemeConfigIntoHtml(html, scripts) {
     const withConfig = stampScriptBetweenMarkers(html, THEME_CONFIG_BEGIN, THEME_CONFIG_END, scripts.config);
-    return stampScriptBetweenMarkers(withConfig, THEME_BOOT_BEGIN, THEME_BOOT_END, scripts.boot);
+    const withBoot = stampScriptBetweenMarkers(withConfig, THEME_BOOT_BEGIN, THEME_BOOT_END, scripts.boot);
+    if (!scripts.bundleVersion) return withBoot;
+    return stampScriptBetweenMarkers(
+        withBoot,
+        BUNDLE_VERSION_BEGIN,
+        BUNDLE_VERSION_END,
+        `var FT_APP_BUNDLE_VERSION = '${scripts.bundleVersion}';`
+    );
 }
 
 /**
- * Keeps index.html's embedded Tailwind theme config and theme boot script in sync with the theme module.
+ * Keeps index.html's embedded Tailwind theme config, theme boot script, and bundle cache hash in sync.
  *
  * @param {Array<string>} sourceFiles - Discovered source files.
- * @param {{ silent: boolean, checkOnly: boolean }} options
+ * @param {{ silent: boolean, checkOnly: boolean, bundleVersion?: string }} options
  * @returns {{ success: boolean, changed: boolean }}
  */
-function syncIndexHtmlThemeConfig(sourceFiles, { silent, checkOnly }) {
+function syncIndexHtmlThemeConfig(sourceFiles, { silent, checkOnly, bundleVersion }) {
     if (!fs.existsSync(INDEX_FILE)) return { success: true, changed: false };
     const scripts = buildThemeScripts(sourceFiles);
     if (!scripts) return { success: true, changed: false };
     const html = fs.readFileSync(INDEX_FILE, 'utf8');
-    const stamped = stampThemeConfigIntoHtml(html, scripts);
+    const stamped = stampThemeConfigIntoHtml(html, { ...scripts, bundleVersion });
     if (stamped === html) return { success: true, changed: false };
     if (checkOnly) {
-        if (!silent) console.error(`${RED}${BOLD}OUT OF SYNC:${RESET} ${INDEX_FILE} theme config does not match ${THEME_MODULE_SUFFIX}.`);
+        if (!silent) console.error(`${RED}${BOLD}OUT OF SYNC:${RESET} ${INDEX_FILE} stamped scripts do not match ${SRC_DIR}/.`);
         return { success: false, changed: true };
     }
     fs.writeFileSync(INDEX_FILE, stamped, 'utf8');
-    if (!silent) console.log(`${GREEN}✓${RESET} Stamped Tailwind theme config into ${BOLD}${INDEX_FILE}${RESET}.`);
+    if (!silent) console.log(`${GREEN}✓${RESET} Stamped Tailwind theme config and bundle version into ${BOLD}${INDEX_FILE}${RESET}.`);
     return { success: true, changed: true };
 }
 
 /**
- * Bundles all files under `src/` into `App.jsx`.
+ * Bundles all files under `src/` into `App.jsx` and pre-compiled `App.compiled.js`.
  *
  * @param {Object} [options={}]
  * @param {boolean} [options.silent=false] - Suppress console output.
@@ -164,18 +238,21 @@ export function bundleApp(options = {}) {
     }
 
     const isDifferent = existingCode !== bundledCode;
-    const indexSync = syncIndexHtmlThemeConfig(sourceFiles, { silent, checkOnly });
+    const compiledSync = syncCompiledBundle(bundledCode, { silent, checkOnly });
+    const indexSync = syncIndexHtmlThemeConfig(sourceFiles, {
+        silent, checkOnly, bundleVersion: compiledSync.bundleVersion
+    });
     const durationMs = Date.now() - startTime;
 
     if (checkOnly) {
-        if (isDifferent || !indexSync.success) {
+        if (isDifferent || !compiledSync.success || !indexSync.success) {
             if (!silent) {
                 if (isDifferent) console.error(`${RED}${BOLD}OUT OF SYNC:${RESET} ${OUTPUT_FILE} does not match ${SRC_DIR}/.`);
                 console.log(`Run ${CYAN}node scripts/bundle.mjs${RESET} to synchronize.`);
             }
             return { success: false, changed: true, fileCount: sourceFiles.length, lineCount, sizeBytes, durationMs };
         } else {
-            if (!silent) console.log(`${GREEN}✓${RESET} ${OUTPUT_FILE} and ${INDEX_FILE} are in sync with ${SRC_DIR}/ (${sourceFiles.length} files).`);
+            if (!silent) console.log(`${GREEN}✓${RESET} ${OUTPUT_FILE}, ${COMPILED_FILE}, and ${INDEX_FILE} are in sync with ${SRC_DIR}/ (${sourceFiles.length} files).`);
             return { success: true, changed: false, fileCount: sourceFiles.length, lineCount, sizeBytes, durationMs };
         }
     }
@@ -185,13 +262,13 @@ export function bundleApp(options = {}) {
         if (!silent) {
             console.log(`${GREEN}✓${RESET} Bundled ${BOLD}${OUTPUT_FILE}${RESET} from ${CYAN}${sourceFiles.length} files${RESET} in ${SRC_DIR}/ (${lineCount.toLocaleString()} lines, ${(sizeBytes / (1024 * 1024)).toFixed(2)} MB) in ${durationMs}ms.`);
         }
-    } else {
+    } else if (!compiledSync.changed) {
         if (!silent) {
-            console.log(`${GREEN}✓${RESET} ${OUTPUT_FILE} already up to date (${sourceFiles.length} files, ${lineCount.toLocaleString()} lines) [${durationMs}ms].`);
+            console.log(`${GREEN}✓${RESET} ${OUTPUT_FILE} and ${COMPILED_FILE} already up to date (${sourceFiles.length} files, ${lineCount.toLocaleString()} lines) [${durationMs}ms].`);
         }
     }
 
-    return { success: true, changed: isDifferent || indexSync.changed, fileCount: sourceFiles.length, lineCount, sizeBytes, durationMs };
+    return { success: true, changed: isDifferent || compiledSync.changed || indexSync.changed, fileCount: sourceFiles.length, lineCount, sizeBytes, durationMs };
 }
 
 // ─── CLI Entrypoint ──────────────────────────────────────────────────────────

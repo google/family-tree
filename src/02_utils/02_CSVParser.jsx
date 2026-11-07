@@ -1,18 +1,4 @@
 class CSVParser {
-    static {
-        if (typeof window !== 'undefined' && !window.appCode) {
-            try {
-                const xhr = new XMLHttpRequest();
-                xhr.open('GET', 'App.jsx?t=' + Date.now(), false);
-                xhr.send(null);
-                if (xhr.status === 200 || xhr.status === 0) {
-                    window.appCode = xhr.responseText;
-                    globalThis.appCode = xhr.responseText;
-                }
-            } catch (e) {}
-        }
-    }
-
     static HEADER_WORDS = new Set([
         'name', 'nickname', 'nick', 'year', 'of', 'birth', 'age', 'death',
         'years', 'after', 'mother', 'mom', 'father', 'dad', 'family',

@@ -760,26 +760,142 @@ const TopNavigationInactiveToolbar = ({
 };
 
 /**
- * Large brand emblem and "Family Tree" title displayed in the empty tree area while loading
- * (when the activity log drawer is open), and removed once loading completes.
+ * Counts real genealogical profiles in a tree model (excluding synthetic sibling-holder ghost parents).
  *
+ * @param {FamilyTree|null} tree - Family tree instance
+ * @returns {number} Count of non-synthetic profiles
+ *
+ * @example
+ * countRealTreeProfiles(new FamilyTree());
+ * // => 0
+ *
+ * @example
+ * countRealTreeProfiles(new FamilyTree({ p1: { id: 'p1', name: 'Anto' } }, 'p1'));
+ * // => 1
+ */
+function countRealTreeProfiles(tree) {
+    if (!tree || !Array.isArray(tree.all)) return 0;
+    return tree.all.filter(p => !FamilyTree.isSyntheticSiblingParent(p)).length;
+}
+
+/**
+ * Summarizes live Google Sheets crawl progress into friendly splash and partial-tree status copy.
+ *
+ * @param {Object} [params={}] - Progress inputs
+ * @param {Array<Object>} [params.logs=[]] - Activity log entries (including `sheetStatus` items)
+ * @param {string} [params.sheetUrl=''] - Active Google Sheet URL or ID
+ * @param {number} [params.loadedProfileCount=0] - Number of profiles currently rendered on canvas
+ * @returns {{
+ *   primaryText: string,
+ *   detailText: string,
+ *   bannerText: string,
+ *   completedSheets: number,
+ *   totalSheets: number,
+ *   fetchedRows: number,
+ *   fromCache: boolean,
+ *   sheetTitle: string
+ * }}
+ *
+ * @example
+ * summarizeTreeLoadingProgress({ logs: [], sheetUrl: '' }).primaryText;
+ * // => 'Please wait for the family tree to load...'
+ *
+ * @example
+ * summarizeTreeLoadingProgress({
+ *   logs: [{ id: 's1', sheetStatus: 'success', sheetCount: 84 }, { id: 's2', sheetStatus: 'loading', sheetCount: 0 }],
+ *   loadedProfileCount: 84
+ * }).completedSheets;
+ * // => 1
+ */
+function summarizeTreeLoadingProgress({ logs = [], sheetUrl = '', loadedProfileCount = 0 } = {}) {
+    const safeLogs = Array.isArray(logs) ? logs : [];
+    const sheetEntries = safeLogs.filter(entry => Boolean(entry && entry.sheetStatus));
+    const totalSheets = sheetEntries.length;
+    const completedSheets = sheetEntries.filter(entry => entry.sheetStatus !== 'loading').length;
+    const fetchedRows = sheetEntries.reduce((sum, entry) => sum + (Number(entry.sheetCount) || 0), 0);
+    const fromCache = safeLogs.some(entry => Boolean(entry && entry.id === 'cache-hydrated'));
+    const sheetTitle = sheetUrl ? resolveKnownSheetTitle(sheetUrl) : '';
+    const shownCount = loadedProfileCount || fetchedRows;
+    const detailText = (fetchedRows > 0 && totalSheets > 1)
+        ? `Reading linked family sheets (${completedSheets} of ${totalSheets}) · ${fetchedRows} profiles found…`
+        : fetchedRows > 0
+            ? `Building family tree from ${fetchedRows} profiles…`
+            : sheetTitle
+                ? `Connecting to "${sheetTitle}" on Google Sheets…`
+                : 'Connecting to Google Sheets…';
+    const bannerText = fromCache
+        ? (shownCount > 0 ? `Showing saved tree (${shownCount} profiles) · Checking Google Sheets for updates…` : 'Showing saved tree · Checking Google Sheets for updates…')
+        : totalSheets > 1
+            ? `Loading linked family sheets (${completedSheets} of ${totalSheets}) · ${shownCount} profiles shown so far — please wait…`
+            : `Loading family tree (${shownCount} profiles shown so far) — please wait…`;
+    return {
+        primaryText: 'Please wait for the family tree to load...',
+        detailText, bannerText, completedSheets, totalSheets, fetchedRows, fromCache, sheetTitle
+    };
+}
+
+/**
+ * Large brand emblem and "Family Tree" title displayed in the empty tree area while the initial
+ * spreadsheet is still arriving, showing explicit reassurance and live sheet progress.
+ *
+ * @param {Object} [props={}]
+ * @param {Array<Object>} [props.logs=[]] - Live crawl log items
+ * @param {string} [props.sheetUrl=''] - Sheet URL being loaded
  * @returns {React.ReactNode}
  *
  * @example
  * <TreeLoadingBrandSplash />
  *
  * @example
- * {isLoading && <TreeLoadingBrandSplash />}
+ * <TreeLoadingBrandSplash logs={logs} sheetUrl={sheetUrl} />
  */
-const TreeLoadingBrandSplash = () => (
-    <div data-testid="tree-loading-brand-splash" className="w-full h-full flex flex-col items-center justify-center gap-5 select-none pointer-events-none relative z-10 px-6">
-        <div className="flex items-center justify-center gap-5 bg-white/85 backdrop-blur-xl px-8 py-6 rounded-3xl shadow-[0_0_40px_rgba(92,124,51,0.16),0_0_12px_rgba(0,0,0,0.08)] border border-outline-variant/60">
-            <BrandLogo size={96} idPrefix="splash" className="w-[96px] h-[96px] shrink-0 drop-shadow-md" />
-            <h1 className="text-[44px] leading-none tracking-wide font-bold bg-clip-text text-transparent bg-gradient-to-r from-slate-700 via-primary to-inverse-primary opacity-90" style={{ fontFamily: "'Uncial Antiqua', serif" }}>Family Tree</h1>
+const TreeLoadingBrandSplash = ({ logs = [], sheetUrl = '' } = {}) => {
+    const { primaryText, detailText } = summarizeTreeLoadingProgress({ logs, sheetUrl, loadedProfileCount: 0 });
+    return (
+        <div data-testid="tree-loading-brand-splash" role="status" aria-live="polite" className="w-full h-full flex flex-col items-center justify-center gap-4 select-none pointer-events-none relative z-10 px-6 text-center">
+            <div className="flex flex-wrap items-center justify-center gap-4 sm:gap-5 bg-white/85 backdrop-blur-xl px-6 sm:px-8 py-5 sm:py-6 rounded-3xl shadow-[0_0_40px_rgba(92,124,51,0.16),0_0_12px_rgba(0,0,0,0.08)] border border-outline-variant/60 max-w-[92vw]">
+                <BrandLogo size={96} idPrefix="splash" className="w-[72px] h-[72px] sm:w-[96px] sm:h-[96px] shrink-0 drop-shadow-md" />
+                <h1 className="text-[36px] sm:text-[44px] leading-none tracking-wide font-bold bg-clip-text text-transparent bg-gradient-to-r from-slate-700 via-primary to-inverse-primary opacity-90" style={{ fontFamily: "'Uncial Antiqua', serif" }}>Family Tree</h1>
+            </div>
+            <div className="text-sm sm:text-base font-medium text-slate-600 font-sans tracking-wide">{primaryText}</div>
+            <div className="w-60 max-w-[72vw] h-1 rounded-full bg-slate-200 overflow-hidden">
+                <div className="h-full w-1/2 rounded-full bg-primary animate-pulse" />
+            </div>
+            <div className="text-xs text-slate-400 font-sans min-h-[18px]">{detailText}</div>
         </div>
-        <div className="text-sm text-slate-400 font-sans tracking-wide animate-pulse">Fetching and building tree...</div>
-    </div>
-);
+    );
+};
+
+/**
+ * Compact non-blocking progress banner shown at the top of the tree canvas while a partial or
+ * cached tree is already interactive and remaining linked sheets are still streaming in.
+ *
+ * @param {Object} props
+ * @param {Array<Object>} [props.logs=[]] - Live crawl log items
+ * @param {string} [props.sheetUrl=''] - Sheet URL being loaded
+ * @param {number} [props.loadedProfileCount=0] - Number of profiles currently rendered on canvas
+ * @returns {React.ReactNode}
+ *
+ * @example
+ * <TreeLoadingProgressBanner logs={logs} sheetUrl={sheetUrl} loadedProfileCount={84} />
+ *
+ * @example
+ * <TreeLoadingProgressBanner loadedProfileCount={120} />
+ */
+const TreeLoadingProgressBanner = ({ logs = [], sheetUrl = '', loadedProfileCount = 0 }) => {
+    const { bannerText } = summarizeTreeLoadingProgress({ logs, sheetUrl, loadedProfileCount });
+    return (
+        <div
+            data-testid="tree-loading-progress"
+            role="status"
+            aria-live="polite"
+            className="pointer-events-none absolute top-14 sm:top-4 left-1/2 -translate-x-1/2 z-20 max-w-[calc(100%-1.5rem)] flex items-center gap-2.5 bg-white/90 backdrop-blur-md px-3.5 py-1.5 rounded-full shadow-md border border-outline-variant/70 text-xs font-medium text-slate-700"
+        >
+            <span className="w-3.5 h-3.5 rounded-full border-2 border-primary/30 border-t-primary animate-spin shrink-0" aria-hidden="true" />
+            <span className="truncate">{bannerText}</span>
+        </div>
+    );
+};
 
 /**
  * Hook providing toggle action handlers for map and AI assistant in top navigation.

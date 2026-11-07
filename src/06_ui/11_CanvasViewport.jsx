@@ -1540,8 +1540,11 @@ function executeBackgroundTreeTransition({
     setFocusId(prev => (prev && newTree.get(prev) ? prev : null));
 }
 
+const LIVE_SYNC_MIN_COOLDOWN_MS = 15000;
+
 /**
- * Executes a silent background fetch cycle if no other sync is currently in progress.
+ * Executes a silent background fetch cycle if no other sync is currently in progress
+ * and at least `LIVE_SYNC_MIN_COOLDOWN_MS` has elapsed since the previous foreground or background sync.
  *
  * @param {Object} options
  * @param {Function} options.fetchFromUrl - Network fetch dispatcher
@@ -1549,6 +1552,7 @@ function executeBackgroundTreeTransition({
  * @param {Function} options.onBackgroundUpdate - Handler for updated tree models
  * @param {React.MutableRefObject<boolean>} options.isSyncingRef - Reentrancy lock ref
  * @param {boolean} options.isLoading - Whether a foreground load is currently active
+ * @param {React.MutableRefObject<number>} [options.lastSyncAtRef={ current: 0 }] - Timestamp of last completed sync
  * @returns {Promise<void>}
  *
  * @example
@@ -1569,8 +1573,11 @@ function executeBackgroundTreeTransition({
  *   isLoading: true
  * });
  */
-async function performLiveSyncFetch({ fetchFromUrl, sheetUrl, onBackgroundUpdate, isSyncingRef, isLoading }) {
+async function performLiveSyncFetch({
+    fetchFromUrl, sheetUrl, onBackgroundUpdate, isSyncingRef, isLoading, lastSyncAtRef = { current: 0 }
+}) {
     if (isSyncingRef.current || isLoading || !sheetUrl) return;
+    if (Date.now() - (lastSyncAtRef.current || 0) < LIVE_SYNC_MIN_COOLDOWN_MS) return;
     isSyncingRef.current = true;
     try {
         await fetchFromUrl(sheetUrl, { 
@@ -1578,6 +1585,7 @@ async function performLiveSyncFetch({ fetchFromUrl, sheetUrl, onBackgroundUpdate
             skipCache: true, 
             onBackgroundUpdate 
         });
+        lastSyncAtRef.current = Date.now();
     } catch (err) {
         console.log('[LiveSync] Silent background check note:', err);
     } finally {
@@ -1626,6 +1634,10 @@ function useLiveSync({
     getPpy, siblingGap, setIsShifting, sheetUrl, isLoading, fetchFromUrl
 }) {
     const isSyncingRef = useRef(false);
+    const lastSyncAtRef = useRef(Date.now());
+    useEffect(() => {
+        if (!isLoading) lastSyncAtRef.current = Date.now();
+    }, [isLoading]);
     const liveParamsRef = useRef();
     liveParamsRef.current = {
         tree, layoutConfig, camera, containerEl: containerRef ? containerRef.current : null,
@@ -1646,7 +1658,7 @@ function useLiveSync({
     const triggerBackgroundSync = useCallback(async () => {
         await performLiveSyncFetch({
             fetchFromUrl, sheetUrl, onBackgroundUpdate: applyBackgroundTreeUpdate,
-            isSyncingRef, isLoading
+            isSyncingRef, isLoading, lastSyncAtRef
         });
     }, [isLoading, sheetUrl, fetchFromUrl, applyBackgroundTreeUpdate]);
 
@@ -2842,24 +2854,97 @@ function useGlobalFocusPersonListener(onFocusPerson) {
 }
 
 /**
- * Automatically fits the tree to the screen upon initial tree load and keeps camera
+/**
+ * Resolves the person card and readable zoom level to frame as soon as partial or initial tree
+ * nodes mount: honors any `#hash` focus/anchor person already present in `tree` (so deep links
+ * preview the requested relative immediately without camera whip), falling back to `tree.rootId`
+ * at `0.70` zoom instead of zooming out to microscopic dots on large multi-sheet trees.
+ *
+ * @param {FamilyTree|null} tree - Current partial or complete tree model
+ * @param {string} [initialHash=resolveInitialViewStateHash()] - Initial URL/stored view-state hash
+ * @returns {{ personId: string, zoom: number }|null} Target person and zoom, or `null` when empty
+ *
+ * @example
+ * resolveInitialPreviewTarget(new FamilyTree(), '');
+ * // => null
+ *
+ * @example
+ * resolveInitialPreviewTarget(new FamilyTree({ r1: { id: 'r1', name: 'Root' } }, 'r1'), '');
+ * // => { personId: 'r1', zoom: 0.7 }
+ */
+function resolveInitialPreviewTarget(tree, initialHash = resolveInitialViewStateHash()) {
+    if (!tree || !tree.rootId) return null;
+    const state = parseViewStateHash(initialHash);
+    const wantedRef = state && !state.showMap ? (state.focusId || state.anchorId) : null;
+    const resolvedTarget = wantedRef ? resolveViewStatePersonId(tree, wantedRef) : null;
+    const zoom = (resolvedTarget && Number.isFinite(state.zoom) && state.zoom > 0) ? state.zoom : 0.70;
+    return { personId: resolvedTarget || tree.rootId, zoom };
+}
+
+/**
+ * Decides whether `applyImportSuccessFocus` should center `newRootId` after import completes.
+ * Returns `false` when an initial `#hash` (or saved view state) already targets a person, anchor,
+ * filter, or map view so `useUrlViewStateRestore` frames the target directly without a camera whip.
+ *
+ * @param {string} [initialHash=resolveInitialViewStateHash()] - Initial URL/stored view-state hash
+ * @returns {boolean} `true` when import completion should center `newRootId`
+ *
+ * @example
+ * shouldCenterRootAfterImport('');
+ * // => true
+ *
+ * @example
+ * shouldCenterRootAfterImport('#p=Anto_1955_166&z=0.8');
+ * // => false
+ */
+function shouldCenterRootAfterImport(initialHash = resolveInitialViewStateHash()) {
+    const state = parseViewStateHash(initialHash);
+    return !Boolean(state && (state.focusId || state.anchorId || state.showMap || state.activeFilter));
+}
+
+/**
+ * Decides whether the System Logs drawer should auto-open while spreadsheet data is loading.
+ * Enabled on desktop (where the side drawer leaves ~72% of the wide canvas visible) and disabled
+ * on compact mobile phones (`<= 639px`, where a `45vh` bottom sheet would cover half the portrait screen).
+ *
+ * @param {boolean} [isCompact=isCompactViewportWidth()] - Whether compact mobile layout is active
+ * @returns {boolean} `true` on desktop, `false` on compact viewports
+ *
+ * @example
+ * shouldAutoOpenLogsOnLoad(false);
+ * // => true
+ *
+ * @example
+ * shouldAutoOpenLogsOnLoad(true);
+ * // => false
+ */
+function shouldAutoOpenLogsOnLoad(isCompact = isCompactViewportWidth()) {
+    return !Boolean(isCompact);
+}
+
+/**
+ * Automatically frames a readable preview upon initial/partial tree load and keeps camera
  * framed or centered when the tree root changes (e.g., following re-rooting or import).
- * 
+ *
  * @param {Object} options
+ * @param {FamilyTree|null} [options.tree=null] - Active tree model used to resolve initial preview targets.
  * @param {React.RefObject} options.treeRef - Reference to the tree DOM container element.
  * @param {string|null} options.rootId - Currently active root person ID in the family tree.
  * @param {number} options.collapsedCount - Number of currently collapsed nodes.
  * @param {string|null} options.focusId - ID of currently focused person, if any.
+ * @param {boolean} [options.isLoading=false] - Whether progressive sheet loading is still in progress.
  * @param {Function} options.onFitToScreen - Callback to auto-fit tree in viewport.
  * @param {Function} options.onCenterPerson - Callback to center viewport on a specific person.
  * @returns {{ resetInitialFit: Function }}
- * 
+ *
  * @example
  *   const { resetInitialFit } = useTreeAutoFit({
+ *       tree,
  *       treeRef,
  *       rootId: tree.rootId,
  *       collapsedCount: collapsedNodes.size,
  *       focusId,
+ *       isLoading,
  *       onFitToScreen: handleFitToScreen,
  *       onCenterPerson: centerOnPerson
  *   });
@@ -2875,27 +2960,33 @@ function useGlobalFocusPersonListener(onFocusPerson) {
  *   });
  *   resetInitialFit();
  */
-function useTreeAutoFit({ treeRef, rootId, collapsedCount, focusId, onFitToScreen, onCenterPerson }) {
+function useTreeAutoFit({ tree = null, treeRef, rootId, collapsedCount, focusId, isLoading = false, onFitToScreen, onCenterPerson }) {
     const hasInitialFitDone = useRef(false);
+
+    const frameReadablePreview = useCallback(() => {
+        const preview = resolveInitialPreviewTarget(tree);
+        if (preview) onCenterPerson(preview.personId, preview.zoom);
+        else onFitToScreen();
+    }, [tree, onCenterPerson, onFitToScreen]);
 
     useLayoutEffect(() => {
         if (!hasInitialFitDone.current && treeRef.current && rootId && !collapsedCount && !focusId) {
             hasInitialFitDone.current = true;
-            onFitToScreen();
+            frameReadablePreview();
         }
-    }, [rootId, collapsedCount, focusId, onFitToScreen, treeRef]);
+    }, [rootId, collapsedCount, focusId, frameReadablePreview, treeRef]);
 
     const prevRootIdRef = useRef(rootId);
     useLayoutEffect(() => {
         if (prevRootIdRef.current !== rootId) {
+            const wasEmpty = !prevRootIdRef.current;
             prevRootIdRef.current = rootId;
-            if (focusId) {
-                onCenterPerson(focusId);
-            } else {
-                onFitToScreen();
-            }
+            if (!rootId) return;
+            if (focusId) onCenterPerson(focusId);
+            else if (wasEmpty || isLoading) frameReadablePreview();
+            else onFitToScreen();
         }
-    }, [rootId, focusId, onCenterPerson, onFitToScreen]);
+    }, [rootId, focusId, isLoading, onCenterPerson, onFitToScreen, frameReadablePreview]);
 
     const resetInitialFit = useCallback(() => {
         hasInitialFitDone.current = false;
@@ -3097,7 +3188,7 @@ function useAppPanels(isLoading) {
     const { isSidebarVisible, showLogs, setShowLogs, showAI, showMap, activeFilter, setIsSidebarVisible, setShowAI, setShowMap, setActiveFilter } = panelStates;
 
     useEffect(() => {
-        if (isLoading) {
+        if (isLoading && shouldAutoOpenLogsOnLoad()) {
             setShowLogs(true);
         }
     }, [isLoading, setShowLogs]);
@@ -3480,7 +3571,7 @@ function initiateImportUIState({
 }) {
     setSheetUrl(urlToLoad);
     resetInitialFit();
-    setShowLogs(true);
+    setShowLogs(shouldAutoOpenLogsOnLoad());
     setShowAI(false);
     setActiveFilter(null);
     resetNavHistory();
@@ -3514,7 +3605,9 @@ function applyImportSuccessFocus({
     centerOnPerson, setShowLogs
 }) {
     clearAllFocusSelection({ setFocusId, setActiveFilter, setIsSidebarVisible });
-    setTimeout(() => centerOnPerson(newRootId, 0.70), 200);
+    if (shouldCenterRootAfterImport()) {
+        setTimeout(() => centerOnPerson(newRootId, 0.70), 200);
+    }
     setTimeout(() => setShowLogs(false), 1500);
 }
 
@@ -4343,8 +4436,9 @@ function useTreeSearchState(openAiPanel) {
  * />
  */
 /**
- * Decides what the tree canvas displays: the large brand splash while loading (even if cached or
- * preliminary rows have already arrived), the import prompt when idle with no tree, or the tree.
+ * Decides what the tree canvas displays: renders `'tree'` immediately as soon as cached or
+ * preliminary partial nodes exist (so users can browse partial data while linked sheets finish
+ * loading), `'loading-splash'` only while `isLoading` with zero nodes yet, or `'empty-prompt'`.
  *
  * @param {FamilyTree|null} tree - Current tree model
  * @param {boolean} isLoading - Whether a foreground spreadsheet import is running
@@ -4355,22 +4449,23 @@ function useTreeSearchState(openAiPanel) {
  * // => 'loading-splash'
  *
  * @example
- * resolveCanvasDisplayMode(populatedTree, false);
+ * resolveCanvasDisplayMode(populatedTree, true);
  * // => 'tree'
  */
 function resolveCanvasDisplayMode(tree, isLoading) {
+    if (tree?.rootId && tree?.root) return 'tree';
     if (isLoading) return 'loading-splash';
-    if (!tree?.rootId || !tree?.root) return 'empty-prompt';
-    return 'tree';
+    return 'empty-prompt';
 }
 
 const TreeCanvasContent = ({
     tree, isStandalone, dynamicYears, treeStats, camera, ppy,
-    isDragging, isShifting, treeRef, layoutConfig, isLoading, timelineGutterWidth = 48
+    isDragging, isShifting, treeRef, layoutConfig, isLoading,
+    timelineGutterWidth = 48, logs = [], sheetUrl = ''
 }) => {
     const mode = resolveCanvasDisplayMode(tree, isLoading);
     if (mode === 'loading-splash') {
-        return <TreeLoadingBrandSplash />;
+        return <TreeLoadingBrandSplash logs={logs} sheetUrl={sheetUrl} />;
     }
 
     if (mode === 'empty-prompt') {
@@ -4383,6 +4478,13 @@ const TreeCanvasContent = ({
 
     return (
         <>
+            {isLoading && (
+                <TreeLoadingProgressBanner
+                    logs={logs}
+                    sheetUrl={sheetUrl}
+                    loadedProfileCount={countRealTreeProfiles(tree)}
+                />
+            )}
             {!isStandalone && <TimelineLabels dynamicYears={dynamicYears} rootNodeYob={treeStats.rootNodeYob} maxYear={treeStats.maxYear} camera={camera} ppy={ppy} gutterWidth={timelineGutterWidth} />}
             <TimelineGrid dynamicYears={dynamicYears} rootNodeYob={treeStats.rootNodeYob} camera={camera} ppy={ppy} isStandalone={isStandalone} gutterWidth={timelineGutterWidth} />
             {/* `--camera-z` lets zoom-independent hit areas (sibling bus-bars) size themselves in screen pixels. */}
@@ -4577,10 +4679,10 @@ const MainCanvasViewport = (props) => {
         handlePointerUp, handleWheel, tree, activeFilter, handleFilterBy,
         handleExportMapCSV, setShowMap, sidebarWidth, isAnySidebarOpen,
         isStandalone, dynamicYears, treeStats, camera, ppy, isShifting,
-        treeRef, layoutConfig, isLoading, timelineGutterWidth
+        treeRef, layoutConfig, isLoading, timelineGutterWidth, logs, sheetUrl
     } = props;
     const mapOverlayProps = { showMap, tree, activeFilter, handleFilterBy, handleExportMapCSV, setShowMap, sidebarWidth, isAnySidebarOpen };
-    const canvasContentProps = { tree, isStandalone, dynamicYears, treeStats, camera, ppy, isDragging, isShifting, treeRef, layoutConfig, isLoading, timelineGutterWidth };
+    const canvasContentProps = { tree, isStandalone, dynamicYears, treeStats, camera, ppy, isDragging, isShifting, treeRef, layoutConfig, isLoading, timelineGutterWidth, logs, sheetUrl };
 
     return (
         <div 

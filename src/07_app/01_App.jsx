@@ -254,8 +254,8 @@ function useAppFocusAndNavigation(params) {
         stepHistory: params.stepHistory, handleSetFocusId
     });
     const { resetInitialFit } = useTreeAutoFit({
-        treeRef: params.treeRef, rootId: params.tree.rootId, collapsedCount: params.collapsedCount,
-        focusId: params.focusId, onFitToScreen: params.handleFitToScreen, onCenterPerson: params.centerOnPerson
+        tree: params.tree, treeRef: params.treeRef, rootId: params.tree.rootId, collapsedCount: params.collapsedCount,
+        focusId: params.focusId, isLoading: params.isLoading, onFitToScreen: params.handleFitToScreen, onCenterPerson: params.centerOnPerson
     });
     const handleImport = useTreeImportHandler({
         setSheetUrl: params.setSheetUrl, resetInitialFit, setShowLogs: params.setShowLogs,
@@ -372,7 +372,7 @@ function buildViewportProps(core, viewport, focusNav, layoutExp) {
         isStandalone: core.isStandalone, dynamicYears: viewport.dynamicYears, treeStats: core.treeStats,
         camera: viewport.camera, ppy: viewport.ppy, isShifting: viewport.isShifting,
         treeRef: viewport.treeRef, layoutConfig: layoutExp.layoutConfig, isLoading: core.isLoading,
-        timelineGutterWidth: core.timelineGutterWidth
+        timelineGutterWidth: core.timelineGutterWidth, logs: core.logs, sheetUrl: core.sheetUrl
     };
 }
 

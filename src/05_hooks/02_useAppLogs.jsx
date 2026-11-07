@@ -107,6 +107,56 @@ function applyConstructedTree({
 }
 
 /**
+ * Creates a throttled progressive tree updater that renders the first incoming sheet immediately
+ * and coalesces subsequent linked-sheet arrivals so users can browse partial branches smoothly.
+ *
+ * @param {Object} sheetTags - Live map from sheet ID to display tag
+ * @param {Function} setTree - Active tree state setter
+ * @param {number} [minIntervalMs=220] - Minimum interval between partial rebuilds after the first paint
+ * @returns {{ pushRows: Function, cancel: Function }} Progressive update controller
+ *
+ * @example
+ * const updater = createProgressiveTreeUpdater({ s1: 'Root sheet' }, setTree, 220);
+ * updater.pushRows([{ Name: 'Thomas', 'Year of Birth': '1920', _sourceId: 's1', _sheetRow: 2 }]);
+ * updater.cancel();
+ *
+ * @example
+ * const updater = createProgressiveTreeUpdater({}, () => {}, 0);
+ * updater.cancel();
+ */
+function createProgressiveTreeUpdater(sheetTags, setTree, minIntervalMs = 220) {
+    let hasPaintedFirst = false;
+    let lastPaintTime = 0;
+    let pendingTimer = null;
+    let latestRows = null;
+    const flush = (rows) => {
+        if (!rows || rows.length === 0) return;
+        const snapshot = [...rows];
+        sortSpreadsheetRows(snapshot);
+        lastPaintTime = Date.now();
+        hasPaintedFirst = true;
+        renderPreliminaryRootTree(snapshot, sheetTags, setTree);
+    };
+    const cancel = () => {
+        if (pendingTimer !== null) { clearTimeout(pendingTimer); pendingTimer = null; }
+        latestRows = null;
+    };
+    const pushRows = (rows) => {
+        latestRows = rows;
+        const elapsed = Date.now() - lastPaintTime;
+        if (!hasPaintedFirst || minIntervalMs <= 0 || elapsed >= minIntervalMs) {
+            cancel();
+            flush(rows);
+            return;
+        }
+        if (pendingTimer === null) {
+            pendingTimer = setTimeout(() => { pendingTimer = null; flush(latestRows); }, minIntervalMs - elapsed);
+        }
+    };
+    return { pushRows, cancel };
+}
+
+/**
  * Coordinates recursive discovery and parallel crawling of linked spreadsheet trees,
  * reporting real-time hierarchical progress into the audit logs.
  *
@@ -145,6 +195,7 @@ async function executeSpreadsheetCrawl({
     const visited = new Set();
     const sheetTags = { [startId]: 'Root sheet' };
     const rootTreeNode = { id: startId, tag: 'Root sheet', status: 'loading', count: 0, children: [] };
+    const progressiveUpdater = createProgressiveTreeUpdater(sheetTags, setTree);
 
     const refreshTreeInLogs = () => {
         if (background) return;
@@ -152,12 +203,16 @@ async function executeSpreadsheetCrawl({
         setLogs(prev => mergeTreeLogEntries(prev, buildSheetTreeLogItems(lines)));
     };
 
-    const allRows = await crawlLinkedSpreadsheets({
-        rootTreeNode, visited, sheetTags, skipCache, background, hasLoadedFromCache,
-        onPreliminaryRoot: (rootRows) => renderPreliminaryRootTree(rootRows, sheetTags, setTree),
-        onRefreshTreeInLogs: refreshTreeInLogs
-    });
-    return { allRows, visited, sheetTags };
+    try {
+        const allRows = await crawlLinkedSpreadsheets({
+            rootTreeNode, visited, sheetTags, skipCache, background, hasLoadedFromCache,
+            onPreliminaryRoot: (rows) => progressiveUpdater.pushRows(rows),
+            onRefreshTreeInLogs: refreshTreeInLogs
+        });
+        return { allRows, visited, sheetTags };
+    } finally {
+        progressiveUpdater.cancel();
+    }
 }
 
 /**

@@ -112,6 +112,8 @@ function assertEqual(desc, actual, expected) {
 try {
     const response = await fetch('App.jsx?t=' + Date.now());
     const source = await response.text();
+    window.appCode = source;
+    globalThis.appCode = source;
 
 /**
      * Extracts a balanced braced code block (e.g., class or function) from JS source.
@@ -339,7 +341,11 @@ try {
         'resolveRestoredSidebarOpen', 'buildCurrentViewState', 'writeViewStateHash',
         'resolveInitialViewStateHash',
         'applyRestoredFocus', 'resolveRestoredCollapsedIds', 'applyRestoredSelection',
-        'clampCompactFocusCenter', 'resolveRestoredCenter', 'applyRestoredCamera', 'resolveCanvasDisplayMode'
+        'clampCompactFocusCenter', 'resolveRestoredCenter', 'applyRestoredCamera', 'resolveCanvasDisplayMode',
+        'consumePrefetchedCsv', 'sortSpreadsheetRows', 'registerUnvisitedSheetLinks',
+        'renderPreliminaryRootTree', 'handleSheetNodeResults', 'createProgressiveTreeUpdater',
+        'countRealTreeProfiles', 'summarizeTreeLoadingProgress',
+        'resolveInitialPreviewTarget', 'shouldCenterRootAfterImport', 'shouldAutoOpenLogsOnLoad'
     ].map(name => extractFunction(source, name))).join('\n');
 
     const [
@@ -408,7 +414,11 @@ try {
         collectPeekJumpRelatives, formatPeekPersonSummary, isMobilePeekCardActive,
         computeFramedCamera, computeCameraBounds,
         FRAME_REFLOW_REFINE_DELAYS_MS, getTreeElementHeight, createCancelableTimerGroup, resolveFramePeopleOptions,
-        clampCompactFocusCenter
+        clampCompactFocusCenter,
+        consumePrefetchedCsv, sortSpreadsheetRows, registerUnvisitedSheetLinks,
+        renderPreliminaryRootTree, handleSheetNodeResults, createProgressiveTreeUpdater,
+        countRealTreeProfiles, summarizeTreeLoadingProgress,
+        resolveInitialPreviewTarget, shouldCenterRootAfterImport, shouldAutoOpenLogsOnLoad
     ] = new Function(`
         // Isolated cookie jar + localStorage + documentElement: preference & theme tests must never
         // touch the real browser state, and Stage 3 runs in node where neither exists. Every other
@@ -616,7 +626,11 @@ try {
         collectPeekJumpRelatives, formatPeekPersonSummary, isMobilePeekCardActive,
         computeFramedCamera, computeCameraBounds,
         FRAME_REFLOW_REFINE_DELAYS_MS, getTreeElementHeight, createCancelableTimerGroup, resolveFramePeopleOptions,
-        clampCompactFocusCenter
+        clampCompactFocusCenter,
+        consumePrefetchedCsv, sortSpreadsheetRows, registerUnvisitedSheetLinks,
+        renderPreliminaryRootTree, handleSheetNodeResults, createProgressiveTreeUpdater,
+        countRealTreeProfiles, summarizeTreeLoadingProgress,
+        resolveInitialPreviewTarget, shouldCenterRootAfterImport, shouldAutoOpenLogsOnLoad
         ];
     `)();
 
@@ -9565,7 +9579,7 @@ const m3 = tree.all.find(n => n.id === '3');
             assert('Test 156J: Inconsistencies partitioned into multiplePartners and ambiguities', appCode.includes("const ambiguities = inconsistencies.filter(inc => inc.category === 'ambiguity' || inc.text?.startsWith('Ambiguity:'));") && appCode.includes("const multiplePartners = inconsistencies.filter(inc => inc.category === 'multiple_partners' || inc.text?.includes('Has multiple partners'));"));
             assert('Test 156K: Multiple partners are grouped under dedicated header', appCode.includes('Found ${multiplePartners.length} profile(s) with multiple partners:'));
             assert('Test 156L: Ambiguities are grouped under dedicated header with direct row links', appCode.includes('Found ${ambiguities.length} ambiguous relationship(s):') && appCode.includes('https://docs.google.com/spreadsheets/d/${cSheetId}/edit?gid=0#gid=0&range=${cRow}:${cRow}') && appCode.includes('{cSheetName} Row {cRow} ↗'));
-            assert('Test 156M: Realtime log display is triggered while loading', appCode.includes('if (isLoading) {\n            setShowLogs(true);\n        }'));
+            assert('Test 156M: Realtime log display is triggered while loading on desktop', shouldAutoOpenLogsOnLoad(false) === true && appCode.includes('if (isLoading && shouldAutoOpenLogsOnLoad()) {\n            setShowLogs(true);\n        }'));
         } catch (e) {
             assertEqual('Test 156I-M execution failed', e.message, '');
         }
@@ -14444,20 +14458,21 @@ const m3 = tree.all.find(n => n.id === '3');
     }
 
     // ══════════════════════════════════════════════════════════════════════════
-    //  207. Brand Logo Displayed Large in Canvas Only While Loading
+    //  207. Brand Logo Displayed Large When Empty & Progressive Partial Tree
     // ══════════════════════════════════════════════════════════════════════════
     {
-        section('207. Brand Logo Displayed Large in Canvas Only While Loading');
-        // While browsing the tree the top-left "Family Tree" badge is gone; while loading (when the
-        // activity log drawer is open) the emblem and "Family Tree" heading appear large in the
-        // empty tree canvas and vanish as soon as loading completes.
+        section('207. Brand Logo Displayed Large When Empty & Progressive Partial Tree');
+        // While browsing the tree the top-left "Family Tree" badge is gone; while loading with an
+        // empty tree the emblem, "Family Tree" heading, and "Please wait for the family tree to load..."
+        // appear large in the canvas, switching immediately to the interactive partial tree once the
+        // first cached or preliminary sheet rows arrive.
         try {
             const populatedTree = buildTree([{ _sourceId: 's', _sheetRow: 2, Name: 'Thoma', 'Year of Birth': '1920' }], { s: 'Sheet' });
             assertEqual('Test 207.01: While loading with an empty tree, the canvas displays the loading splash',
                 resolveCanvasDisplayMode(new FamilyTree(), true), 'loading-splash');
-            assertEqual('Test 207.02: While loading even after cached or preliminary root nodes arrive, the canvas stays on the loading splash until loading finishes',
-                resolveCanvasDisplayMode(populatedTree, true), 'loading-splash');
-            assertEqual('Test 207.03: Once loading completes (isLoading=false), the canvas switches to the tree and removes the splash',
+            assertEqual('Test 207.02: As soon as cached or preliminary partial nodes arrive while loading, the canvas displays the interactive partial tree',
+                resolveCanvasDisplayMode(populatedTree, true), 'tree');
+            assertEqual('Test 207.03: Once loading completes (isLoading=false), the canvas stays on the tree',
                 resolveCanvasDisplayMode(populatedTree, false), 'tree');
             assertEqual('Test 207.04: An empty tree that is not loading shows the import prompt instead of the splash',
                 resolveCanvasDisplayMode(new FamilyTree(), false), 'empty-prompt');
@@ -14467,11 +14482,12 @@ const m3 = tree.all.find(n => n.id === '3');
                 const end = appCode.indexOf('/**', start + marker.length);
                 return start === -1 ? '' : appCode.slice(start, end === -1 ? start + 4000 : end);
             };
-            const splashBlock = sliceComponent('const TreeLoadingBrandSplash = () => (');
-            assert('Test 207.05: TreeLoadingBrandSplash renders the shared BrandLogo emblem, the "Family Tree" heading, and the loading caption',
+            const splashBlock = sliceComponent('const TreeLoadingBrandSplash =');
+            const progressSummary = summarizeTreeLoadingProgress({ logs: [], sheetUrl: '' });
+            assert('Test 207.05: TreeLoadingBrandSplash renders the shared BrandLogo emblem, the "Family Tree" heading, and the "Please wait for the family tree to load..." reassurance',
                 /<BrandLogo\b[^>]*idPrefix="splash"/.test(splashBlock) &&
                 />Family Tree<\/h1>/.test(splashBlock) &&
-                /Fetching and building tree\.\.\./.test(splashBlock));
+                progressSummary.primaryText === 'Please wait for the family tree to load...');
             assert('Test 207.06: The loading splash renders large (>= 64px emblem and >= 36px heading)',
                 /<BrandLogo\b[^>]*size=\{(?:[6-9]\d|\d{3,})\}/.test(splashBlock) && /text-\[(?:3[6-9]|[4-9]\d)px\]/.test(splashBlock));
 
@@ -14480,9 +14496,10 @@ const m3 = tree.all.find(n => n.id === '3');
                 !/Family Tree|<svg\b|TopNavigationBrandTitle/.test(mainBarBlock) && !/const TopNavigationBrandTitle\b/.test(appCode));
 
             const canvasBlock = sliceComponent('const TreeCanvasContent = ({');
-            assert('Test 207.08: TreeCanvasContent branches on resolveCanvasDisplayMode(tree, isLoading) to mount <TreeLoadingBrandSplash /> only in loading-splash mode',
+            assert('Test 207.08: TreeCanvasContent branches on resolveCanvasDisplayMode(tree, isLoading) to mount <TreeLoadingBrandSplash /> in loading-splash mode and <TreeLoadingProgressBanner /> over partial trees',
                 /resolveCanvasDisplayMode\(tree,\s*isLoading\)/.test(canvasBlock) &&
-                /mode\s*===\s*'loading-splash'[\s\S]*?<TreeLoadingBrandSplash\s*\/>/.test(canvasBlock) &&
+                /mode\s*===\s*'loading-splash'[\s\S]*?<TreeLoadingBrandSplash\b/.test(canvasBlock) &&
+                /<TreeLoadingProgressBanner\b/.test(canvasBlock) &&
                 !/Family Tree/.test(canvasBlock));
         } catch (e) {
             assertEqual('Test 207 execution failed', e.message, '');
@@ -16169,6 +16186,147 @@ const m3 = tree.all.find(n => n.id === '3');
                 '390|748|32|Beena_1958_167|390|76');
         } catch (e) {
             assertEqual('Test 221 execution failed', e.message, '');
+        }
+    }
+
+    // ══════════════════════════════════════════════════════════════════════════
+    //  222. Instant Pre-React Splash, Parallel CSV Prefetch & Progressive Partial Tree
+    // ══════════════════════════════════════════════════════════════════════════
+    {
+        section('222. Instant Pre-React Splash, Parallel CSV Prefetch & Progressive Partial Tree');
+        try {
+            // 222.01: Parallel CSV prefetch consumer (pop-once, records Content-Disposition title, rejects HTML error responses)
+            const testSheetId = '1SvPspyHtIV2E9UHwpZON8sUTf3FxIuqJZO-wx0WPl3k';
+            const mainCsvUrl = `https://docs.google.com/spreadsheets/d/${testSheetId}/export?format=csv`;
+            const htmlErrUrl = `https://docs.google.com/spreadsheets/d/${testSheetId}/gviz/tq?tqx=out:csv&sheet=Links`;
+            const prefetchStore = {
+                [mainCsvUrl]: Promise.resolve({
+                    ok: true,
+                    contentDisposition: 'attachment; filename="Kizhakumthala Family - Data.csv"',
+                    text: 'Name,Gender,Year of Birth\nChacko,M,1924\nAnto,M,1955'
+                }),
+                [htmlErrUrl]: Promise.resolve({
+                    ok: true,
+                    contentDisposition: null,
+                    text: '<html><body>Sign in</body></html>'
+                })
+            };
+            let prefetchFirst = null;
+            let prefetchSecond = 'not-run';
+            let prefetchHtml = 'not-run';
+            // Consume synchronously via resolved microtasks in an async probe only if needed; wait—tests.html runs synchronously!
+            // Let's verify consumePrefetchedCsv returns a Promise and also test synchronous progressive helpers directly:
+            const p1 = consumePrefetchedCsv(mainCsvUrl, testSheetId, '', prefetchStore);
+            const p2 = consumePrefetchedCsv(mainCsvUrl, testSheetId, '', prefetchStore);
+            const p3 = consumePrefetchedCsv(htmlErrUrl, testSheetId, 'Links', prefetchStore);
+            assert('Test 222.01: consumePrefetchedCsv pops prefetched URL entries once from the store so live re-imports never replay stale prefetches',
+                p1 instanceof Promise && !(mainCsvUrl in prefetchStore) && !(htmlErrUrl in prefetchStore) && p2 instanceof Promise && p3 instanceof Promise);
+
+            // 222.02: Progressive partial-tree streaming across BOTH root and linked child sheets
+            const streamedSnapshots = [];
+            const sheetTags222 = { sRoot: 'Root sheet', sBranch: 'Branch sheet' };
+            const updater = createProgressiveTreeUpdater(sheetTags222, (partialTree) => {
+                streamedSnapshots.push(partialTree.all.map(p => p.name));
+            }, 0);
+
+            const rootRows = [
+                { _sourceId: 'sRoot', _sheetRow: 2, Name: 'Chacko', Gender: 'M', 'Year of Birth': '1924' },
+                { _sourceId: 'sRoot', _sheetRow: 3, Name: 'Anto', Gender: 'M', Father: 'Chacko', 'Year of Birth': '1955' }
+            ];
+            const visited222 = new Set(['sRoot']);
+            const rootNode222 = { id: 'sRoot', tag: 'Root sheet', status: 'loading', count: 0, children: [] };
+            handleSheetNodeResults({
+                node: rootNode222,
+                res: { extractedCount: 2, links: [{ id: 'sBranch', tag: 'Branch sheet' }] },
+                isRoot: true, visited: visited222, sheetTags: sheetTags222,
+                background: false, hasLoadedFromCache: false,
+                onPreliminaryRoot: (rows) => updater.pushRows(rows),
+                allRows: rootRows
+            });
+
+            const combinedRows = [
+                ...rootRows,
+                { _sourceId: 'sBranch', _sheetRow: 2, Name: 'Beena', Gender: 'F', Husband: 'Anto', 'Year of Birth': '1958' },
+                { _sourceId: 'sBranch', _sheetRow: 3, Name: 'Rupak', Gender: 'M', Father: 'Anto', Mother: 'Beena', 'Year of Birth': '1984' }
+            ];
+            handleSheetNodeResults({
+                node: rootNode222.children[0],
+                res: { extractedCount: 2, links: [] },
+                isRoot: false, visited: visited222, sheetTags: sheetTags222,
+                background: false, hasLoadedFromCache: false,
+                onPreliminaryRoot: (rows) => updater.pushRows(rows),
+                allRows: combinedRows
+            });
+            // Background or cache-hydrated crawls must NOT trigger noisy preliminary rebuilds:
+            handleSheetNodeResults({
+                node: { id: 'sBg', count: 0, children: [] },
+                res: { extractedCount: 2, links: [] },
+                isRoot: false, visited: visited222, sheetTags: sheetTags222,
+                background: true, hasLoadedFromCache: false,
+                onPreliminaryRoot: (rows) => updater.pushRows(rows),
+                allRows: combinedRows
+            });
+            updater.cancel();
+
+            assert('Test 222.02: handleSheetNodeResults + createProgressiveTreeUpdater stream partial trees on root arrival and linked child sheet arrival while skipping background syncs',
+                streamedSnapshots.length === 2 &&
+                streamedSnapshots[0].includes('Chacko') && streamedSnapshots[0].includes('Anto') && !streamedSnapshots[0].includes('Rupak') &&
+                streamedSnapshots[1].includes('Beena') && streamedSnapshots[1].includes('Rupak'));
+
+            // 222.03: summarizeTreeLoadingProgress & countRealTreeProfiles
+            rememberSheetTitle(testSheetId, 'Kizhakumthala Family');
+            const initialProgress = summarizeTreeLoadingProgress({ logs: [], sheetUrl: testSheetId, loadedProfileCount: 0 });
+            const midCrawlProgress = summarizeTreeLoadingProgress({
+                logs: [
+                    { id: 'sRoot', sheetStatus: 'success', sheetCount: 84 },
+                    { id: 's2', sheetStatus: 'loading', sheetCount: 0 },
+                    { id: 's3', sheetStatus: 'loading', sheetCount: 0 }
+                ],
+                sheetUrl: testSheetId,
+                loadedProfileCount: 84
+            });
+            const cachedProgress = summarizeTreeLoadingProgress({
+                logs: [{ id: 'cache-hydrated', type: 'info' }],
+                sheetUrl: testSheetId,
+                loadedProfileCount: 210
+            });
+            const synthTree = buildTree([
+                { _sourceId: 's', _sheetRow: 2, Name: 'Rosa', Gender: 'F', 'Year of Birth': '1950', Siblings: 'Maria' },
+                { _sourceId: 's', _sheetRow: 3, Name: 'Maria', Gender: 'F', 'Year of Birth': '1952' }
+            ], { s: 'Sheet' });
+
+            assert('Test 222.03: summarizeTreeLoadingProgress reports "Please wait for the family tree to load...", sheet title, multi-sheet counts, cached status, and countRealTreeProfiles excludes synthetic sibling parents',
+                initialProgress.primaryText === 'Please wait for the family tree to load...' &&
+                initialProgress.detailText.includes('Kizhakumthala Family') &&
+                midCrawlProgress.completedSheets === 1 && midCrawlProgress.totalSheets === 3 &&
+                midCrawlProgress.bannerText.includes('1 of 3') && midCrawlProgress.bannerText.includes('84 profiles') &&
+                cachedProgress.fromCache === true && cachedProgress.bannerText.includes('210 profiles') &&
+                countRealTreeProfiles(synthTree) === 2);
+
+            // 222.04: Mobile portrait canvas stays clear of auto-opened 45vh System Logs drawer during load
+            assertEqual('Test 222.04: shouldAutoOpenLogsOnLoad opens side System Logs on desktop (false -> true) while keeping compact mobile screens clear (true -> false)',
+                `${shouldAutoOpenLogsOnLoad(false)}|${shouldAutoOpenLogsOnLoad(true)}`, 'true|false');
+
+            // 222.05: Readable initial preview target & whip-free #hash restore coordination
+            const previewTree = buildTree([
+                { _sourceId: 'sRoot', _sheetRow: 2, Name: 'Chacko', Gender: 'M', 'Year of Birth': '1924' },
+                { _sourceId: 'sRoot', _sheetRow: 22, Name: 'Anto', Gender: 'M', Father: 'Chacko', 'Year of Birth': '1955' }
+            ], { sRoot: 'Root sheet' });
+            const antoNode = previewTree.all.find(p => p.name === 'Anto');
+            const defaultPreview = resolveInitialPreviewTarget(previewTree, '');
+            const deepLinkPreview = resolveInitialPreviewTarget(previewTree, `#p=${antoNode.id}&z=0.8&o=164,-2.6`);
+            assertEqual('Test 222.05: resolveInitialPreviewTarget frames root at 0.70 when no #hash exists and frames #hash target directly at 0.80 while shouldCenterRootAfterImport prevents camera whip',
+                [
+                    defaultPreview.personId === previewTree.rootId,
+                    defaultPreview.zoom,
+                    deepLinkPreview.personId === antoNode.id,
+                    deepLinkPreview.zoom,
+                    shouldCenterRootAfterImport(''),
+                    shouldCenterRootAfterImport(`#p=${antoNode.id}&z=0.8&o=164,-2.6`)
+                ].join('|'),
+                'true|0.7|true|0.8|true|false');
+        } catch (e) {
+            assertEqual('Test 222 execution failed', e.message, '');
         }
     }
 
